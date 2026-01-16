@@ -7,7 +7,6 @@
 import { render } from "preact";
 import { useCallback } from "preact/hooks";
 import type {
-  FloatingButtonPosition,
   ResolvedConfig,
   SidebarTabConfig,
   ThemeColors,
@@ -277,6 +276,8 @@ function EdgeTriggerContent({
   );
 }
 
+export type EdgeTriggerPosition = "left" | "right";
+
 /**
  * EdgeTrigger class that manages the edge trigger lifecycle
  * The trigger stays visible when panel opens, sliding out with it
@@ -319,11 +320,10 @@ export class EdgeTrigger {
   };
 
   /**
-   * Get position as 'left' or 'right' from the floating button position config
+   * Get position as 'left' or 'right' from the panel position config
    */
   private getEdgePosition(): "left" | "right" {
-    const pos = this.config.floatingButton.position;
-    return pos.includes("left") ? "left" : "right";
+    return this.config.panel.position;
   }
 
   /**
@@ -501,18 +501,10 @@ export class EdgeTrigger {
   /**
    * Update trigger position
    */
-  setPosition(position: FloatingButtonPosition): void {
+  setPosition(position: EdgeTriggerPosition): void {
     this.removeLayoutPadding();
-    this.config.floatingButton.position = position;
+    this.config.panel.position = position;
     this.applyLayoutPadding();
-    this.render();
-  }
-
-  /**
-   * Update trigger label
-   */
-  setLabel(label: string): void {
-    this.config.floatingButton.label = label;
     this.render();
   }
 

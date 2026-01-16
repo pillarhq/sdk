@@ -60,11 +60,6 @@ export interface ServerEmbedConfig {
     position?: 'left' | 'right';
     width?: number;
   };
-  floatingButton?: {
-    enabled?: boolean;
-    position?: string;
-    label?: string;
-  };
   features?: {
     aiChatEnabled?: boolean;
     searchEnabled?: boolean;

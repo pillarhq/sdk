@@ -2,6 +2,4 @@
  * Button Components Index
  */
 
-export { FloatingButton } from './FloatingButton';
-export { EdgeTrigger } from './EdgeTrigger';
-
+export { EdgeTrigger, type EdgeTriggerPosition } from './EdgeTrigger';

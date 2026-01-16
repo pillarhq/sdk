@@ -5,8 +5,6 @@ import type { Platform } from '../actions/types';
 
 export type PanelPosition = 'left' | 'right';
 export type PanelMode = 'overlay' | 'push';
-export type FloatingButtonPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
-export type FloatingButtonStyle = 'floating' | 'edge';
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
 /**
@@ -100,19 +98,6 @@ export interface PanelConfig {
   hoverBackdrop?: boolean;
 }
 
-export interface FloatingButtonConfig {
-  enabled?: boolean;
-  position?: FloatingButtonPosition;
-  label?: string;
-  /**
-   * Button style:
-   * - 'edge': Slim vertical tab on screen edge, expands on hover (default)
-   * - 'floating': Traditional floating pill button
-   * @default 'edge'
-   */
-  style?: FloatingButtonStyle;
-}
-
 export interface UrlParamsConfig {
   /** Whether to check URL params for auto-opening the panel (default: true) */
   enabled?: boolean;
@@ -127,6 +112,15 @@ export interface TextSelectionConfig {
   enabled?: boolean;
   /** Label for the popover button (default: 'Ask AI') */
   label?: string;
+}
+
+export interface EdgeTriggerConfig {
+  /**
+   * Whether to show the edge trigger sidebar tab.
+   * When enabled, a slim vertical tab appears on the screen edge that opens the panel.
+   * @default true
+   */
+  enabled?: boolean;
 }
 
 export interface UserContext {
@@ -156,8 +150,8 @@ export interface PillarConfig {
   // Panel settings
   panel?: PanelConfig;
   
-  // Floating button
-  floatingButton?: FloatingButtonConfig;
+  // Edge trigger (sidebar tab that opens the panel)
+  edgeTrigger?: EdgeTriggerConfig;
   
   // URL params for auto-opening the panel
   urlParams?: UrlParamsConfig;
@@ -228,7 +222,7 @@ export interface ResolvedConfig {
   version?: string;
   
   panel: ResolvedPanelConfig;
-  floatingButton: Required<FloatingButtonConfig>;
+  edgeTrigger: Required<EdgeTriggerConfig>;
   urlParams: Required<UrlParamsConfig>;
   textSelection: Required<TextSelectionConfig>;
   sidebarTabs: SidebarTabConfig[];
@@ -258,11 +252,8 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'helpCenter' | 'publicKey'> = 
     hoverBackdrop: true,
   },
   
-  floatingButton: {
+  edgeTrigger: {
     enabled: true,
-    position: 'bottom-right',
-    label: 'Assistant',
-    style: 'edge',
   },
   
   urlParams: {
@@ -332,9 +323,9 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
       ...config.panel,
     },
     
-    floatingButton: {
-      ...DEFAULT_CONFIG.floatingButton,
-      ...config.floatingButton,
+    edgeTrigger: {
+      ...DEFAULT_CONFIG.edgeTrigger,
+      ...config.edgeTrigger,
     },
     
     urlParams: {
@@ -373,11 +364,6 @@ export interface ServerEmbedConfig {
     enabled?: boolean;
     position?: 'left' | 'right';
     width?: number;
-  };
-  floatingButton?: {
-    enabled?: boolean;
-    position?: string;
-    label?: string;
   };
   features?: {
     aiChatEnabled?: boolean;
@@ -420,14 +406,6 @@ export function mergeServerConfig(
       ...serverConfig.panel,
       ...localConfig.panel,
     };
-  }
-  
-  // Floating button: server provides defaults, local overrides
-  if (serverConfig.floatingButton) {
-    merged.floatingButton = {
-      ...serverConfig.floatingButton,
-      ...localConfig.floatingButton,
-    } as FloatingButtonConfig;
   }
   
   // Sidebar tabs: use server tabs if local not specified

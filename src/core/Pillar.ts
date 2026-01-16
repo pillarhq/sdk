@@ -7,7 +7,6 @@ import { getActionDefinition, getHandler, hasAction, setClientInfo } from '../ac
 import { APIClient } from '../api/client';
 import { MCPClient } from '../api/mcp-client';
 import { EdgeTrigger } from '../components/Button/EdgeTrigger';
-import { FloatingButton } from '../components/Button/FloatingButton';
 import { Panel } from '../components/Panel/Panel';
 import { TextSelectionManager } from '../components/TextSelection/TextSelectionManager';
 import { resetChat } from '../store/chat';
@@ -70,7 +69,7 @@ export class Pillar {
   private _planExecutor: PlanExecutor | null = null;
   private _textSelectionManager: TextSelectionManager | null = null;
   private _panel: Panel | null = null;
-  private _floatingButton: FloatingButton | EdgeTrigger | null = null;
+  private _edgeTrigger: EdgeTrigger | null = null;
   private _initPromise: Promise<void> | null = null;
   private _rootContainer: HTMLElement | null = null;
   private _unsubscribeHoverMode: (() => void) | null = null;
@@ -1134,15 +1133,10 @@ export class Pillar {
         await this._panel.init();
       }
 
-      // Initialize floating button if enabled
-      if (this._config.floatingButton.enabled) {
-        // Choose button style based on config
-        if (this._config.floatingButton.style === 'edge') {
-          this._floatingButton = new EdgeTrigger(this._config, () => this.toggle(), this._rootContainer);
-        } else {
-          this._floatingButton = new FloatingButton(this._config, () => this.toggle());
-        }
-        this._floatingButton.init();
+      // Initialize edge trigger if enabled
+      if (this._config.edgeTrigger.enabled) {
+        this._edgeTrigger = new EdgeTrigger(this._config, () => this.toggle(), this._rootContainer);
+        this._edgeTrigger.init();
       }
 
       // Initialize text selection "Ask AI" popover if enabled
@@ -1206,7 +1200,7 @@ export class Pillar {
   private _destroy(): void {
     this._textSelectionManager?.destroy();
     this._panel?.destroy();
-    this._floatingButton?.destroy();
+    this._edgeTrigger?.destroy();
     this._api?.cancelAllRequests();
     this._events.removeAllListeners();
 
@@ -1236,7 +1230,7 @@ export class Pillar {
 
     this._textSelectionManager = null;
     this._panel = null;
-    this._floatingButton = null;
+    this._edgeTrigger = null;
     this._api = null;
     this._mcpClient = null;
     this._planExecutor = null;
