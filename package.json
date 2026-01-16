@@ -1,6 +1,6 @@
 {
   "name": "@pillar-ai/sdk",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Pillar Embedded Help SDK - Add contextual help and AI chat to your application",
   "type": "module",
   "main": "./dist/pillar.esm.js",
