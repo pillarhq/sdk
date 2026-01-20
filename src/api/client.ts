@@ -60,17 +60,11 @@ export interface ServerEmbedConfig {
     position?: 'left' | 'right';
     width?: number;
   };
-  features?: {
-    aiChatEnabled?: boolean;
-    searchEnabled?: boolean;
-    tooltipsEnabled?: boolean;
+  floatingButton?: {
+    enabled?: boolean;
+    position?: string;
+    label?: string;
   };
-  sidebarTabs?: Array<{
-    id: string;
-    label: string;
-    enabled: boolean;
-    order: number;
-  }>;
   theme?: {
     colors?: {
       primary?: string;

@@ -15,6 +15,8 @@ export interface SidebarTabConfig {
   label: string;
   enabled: boolean;
   order: number;
+  /** Preset icon for this tab */
+  icon?: 'help' | 'support' | 'settings' | 'feedback' | 'chat' | 'calendar' | 'mail';
 }
 
 export const DEFAULT_SIDEBAR_TABS: SidebarTabConfig[] = [
@@ -365,12 +367,11 @@ export interface ServerEmbedConfig {
     position?: 'left' | 'right';
     width?: number;
   };
-  features?: {
-    aiChatEnabled?: boolean;
-    searchEnabled?: boolean;
-    tooltipsEnabled?: boolean;
+  floatingButton?: {
+    enabled?: boolean;
+    position?: string;
+    label?: string;
   };
-  sidebarTabs?: SidebarTabConfig[];
   theme?: {
     colors?: {
       primary?: string;
@@ -408,12 +409,6 @@ export function mergeServerConfig(
     };
   }
   
-  // Sidebar tabs: use server tabs if local not specified
-  // If local specifies tabs, those take priority
-  if (serverConfig.sidebarTabs && !localConfig.sidebarTabs) {
-    merged.sidebarTabs = serverConfig.sidebarTabs;
-  }
-  
   // Theme: merge colors from server if local doesn't specify
   if (serverConfig.theme?.colors?.primary) {
     merged.theme = {
@@ -424,10 +419,6 @@ export function mergeServerConfig(
       },
     };
   }
-  
-  // Features could map to tooltips enabled, etc.
-  // Currently we don't have a direct mapping, but this is where
-  // serverConfig.features would be applied if needed
   
   return merged;
 }

@@ -11,6 +11,7 @@ import type {
   SidebarTabConfig,
   ThemeColors,
 } from "../../core/config";
+import type { EventEmitter } from "../../core/events";
 import {
   activeTab,
   isHoverMode,
@@ -20,17 +21,31 @@ import {
 } from "../../store/panel";
 import { injectStyles } from "../../utils/dom";
 
-const HELP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+// Preset icons for sidebar tabs (Lucide icon set)
+const PRESET_ICONS = {
+  help: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+  support: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
+  feedback: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
+  chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>`,
+  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
+  mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`,
+} as const;
 
-const SUPPORT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>`;
-
-// Map of tab ids to their icons
+// Map of tab ids to their default icons (for backward compatibility)
 const TAB_ICONS: Record<string, string> = {
-  assistant: HELP_ICON,
-  support: SUPPORT_ICON,
+  assistant: PRESET_ICONS.help,
+  support: PRESET_ICONS.support,
 };
 
-const getTabIcon = (tabId: string): string => TAB_ICONS[tabId] || HELP_ICON;
+const getTabIcon = (tabId: string, icon?: string): string => {
+  // First check if a custom icon preset is specified
+  if (icon && icon in PRESET_ICONS) {
+    return PRESET_ICONS[icon as keyof typeof PRESET_ICONS];
+  }
+  // Fall back to tab id mapping, then default to help icon
+  return TAB_ICONS[tabId] || PRESET_ICONS.help;
+};
 
 // Width of the sidebar trigger
 const TRIGGER_WIDTH = 48;
@@ -266,7 +281,7 @@ function EdgeTriggerContent({
           >
             <span
               class="pillar-edge-trigger__icon"
-              dangerouslySetInnerHTML={{ __html: getTabIcon(tab.id) }}
+              dangerouslySetInnerHTML={{ __html: getTabIcon(tab.id, tab.icon) }}
             />
             <span class="pillar-edge-trigger__label">{tab.label}</span>
           </button>
@@ -284,6 +299,7 @@ export type EdgeTriggerPosition = "left" | "right";
  */
 export class EdgeTrigger {
   private config: ResolvedConfig;
+  private events: EventEmitter;
   private onClick: () => void;
   private rootContainer: HTMLElement | null;
   private container: HTMLElement | null = null;
@@ -299,18 +315,35 @@ export class EdgeTrigger {
 
   constructor(
     config: ResolvedConfig,
+    events: EventEmitter,
     onClick: () => void,
     rootContainer?: HTMLElement | null
   ) {
     this.config = config;
+    this.events = events;
     this.onClick = onClick;
     this.rootContainer = rootContainer || null;
   }
 
   /**
    * Handle tab click - sets active tab and opens panel
+   * For non-assistant tabs, emits event for customer's code to handle (e.g., Intercom, Zendesk)
    */
   private handleTabClick = (tabId: string) => {
+    // For any non-assistant tab, emit sidebar:click event for customer code to handle
+    if (tabId !== 'assistant') {
+      const tab = this.config.sidebarTabs.find(t => t.id === tabId);
+      this.events.emit('sidebar:click', { tabId, label: tab?.label || tabId });
+      
+      // Backward compatibility: also emit support:request for 'support' tab
+      if (tabId === 'support') {
+        this.events.emit('support:request', { tabId });
+      }
+      
+      // Don't open panel - let customer's code handle UI
+      return;
+    }
+
     setActiveTab(tabId);
     // Always open panel when clicking a tab
     if (!isOpen.value) {

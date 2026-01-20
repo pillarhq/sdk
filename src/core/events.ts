@@ -163,6 +163,13 @@ export interface PillarEvents {
 
   // Text selection feature toggle
   'textSelection:change': { enabled: boolean };
+
+  // Sidebar tab click events - for triggering custom actions on non-assistant tabs
+  // Customers use this to integrate their own support systems (Intercom, Zendesk, etc.)
+  'sidebar:click': { tabId: string; label: string };
+  
+  /** @deprecated Use 'sidebar:click' instead. Will be removed in next major version. */
+  'support:request': { tabId: string };
 }
 
 export class EventEmitter {

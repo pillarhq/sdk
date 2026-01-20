@@ -1135,7 +1135,7 @@ export class Pillar {
 
       // Initialize edge trigger if enabled
       if (this._config.edgeTrigger.enabled) {
-        this._edgeTrigger = new EdgeTrigger(this._config, () => this.toggle(), this._rootContainer);
+        this._edgeTrigger = new EdgeTrigger(this._config, this._events, () => this.toggle(), this._rootContainer);
         this._edgeTrigger.init();
       }
 
