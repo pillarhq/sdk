@@ -9,7 +9,7 @@ import { MCPClient } from '../api/mcp-client';
 import { EdgeTrigger } from '../components/Button/EdgeTrigger';
 import { Panel } from '../components/Panel/Panel';
 import { TextSelectionManager } from '../components/TextSelection/TextSelectionManager';
-import { resetChat } from '../store/chat';
+import { resetChat, messages as chatMessages, conversationId as chatConversationId, type StoredChatMessage } from '../store/chat';
 import {
   resetContext,
   clearErrorState as storeClearErrorState,
@@ -57,6 +57,19 @@ import { PlanExecutor } from './plan-executor';
 import type { Workflow, WorkflowStep } from './workflow';
 
 export type PillarState = 'uninitialized' | 'initializing' | 'ready' | 'error';
+
+/**
+ * Chat context for escalation to human support.
+ */
+export interface ChatContext {
+  /** Server-assigned conversation ID, or null if not yet assigned */
+  conversationId: string | null;
+  /** Messages in the conversation */
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+}
 
 export class Pillar {
   private static instance: Pillar | null = null;
@@ -257,6 +270,39 @@ export class Pillar {
     if (this._config) {
       this._config.context = { ...this._config.context, ...context };
     }
+  }
+
+  /**
+   * Get the current chat context (conversation ID and messages).
+   * Useful for escalation to human support with conversation history.
+   * 
+   * @returns Chat context with conversation ID and messages, or null if no conversation
+   * 
+   * @example
+   * // Get chat context for escalation
+   * const context = pillar.getChatContext();
+   * if (context) {
+   *   const summary = context.messages
+   *     .map(m => `${m.role}: ${m.content.slice(0, 100)}`)
+   *     .join('\n');
+   *   showIntercom(`Escalating from AI assistant:\n${summary}`);
+   * }
+   */
+  getChatContext(): ChatContext | null {
+    const messages = chatMessages.value;
+    const conversationId = chatConversationId.value;
+    
+    if (messages.length === 0) {
+      return null;
+    }
+    
+    return {
+      conversationId,
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    };
   }
 
   /**

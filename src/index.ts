@@ -22,7 +22,7 @@
  */
 
 // Core
-export { Pillar, type PillarState } from './core/Pillar';
+export { Pillar, type PillarState, type ChatContext } from './core/Pillar';
 export { EventEmitter, type PillarEvents, type TaskExecutePayload, type CardRenderer, type CardCallbacks } from './core/events';
 
 // Configuration
