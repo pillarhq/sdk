@@ -37,7 +37,7 @@ export interface MessageInputAreaProps {
 
 export function MessageInputArea({
   onSubmit,
-  placeholder = "Ask a question... (paste or drop images)",
+  placeholder = "Ask a question...",
   disabled = false,
   inputRef: externalInputRef,
   showBorder = true,

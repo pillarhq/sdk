@@ -83,7 +83,7 @@ export function ChatInput() {
       <div class="_pillar-chat-input-area pillar-chat-input-area">
         <MessageInputArea
           onSubmit={handleSubmit}
-          placeholder="Ask a question... (paste or drop images)"
+          placeholder="Ask a question..."
           inputRef={inputRef}
           showBorder={false}
         />

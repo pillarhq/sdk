@@ -473,7 +473,7 @@ export function ChatView() {
       {/* Input area */}
       <div class="_pillar-chat-view-input-area pillar-chat-view-input-area">
         <UnifiedChatInput
-          placeholder="Ask a question... (paste or drop images)"
+          placeholder="Ask a question..."
           disabled={isLoading.value}
           onSubmit={handleInputSubmit}
         />

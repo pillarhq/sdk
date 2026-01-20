@@ -82,7 +82,7 @@ export function HomeView() {
 
       {/* Input Area - pushed to bottom with margin-top: auto */}
       <div style={{ marginTop: 'auto' }}>
-        <UnifiedChatInput placeholder="Ask anything... (paste or drop images)" />
+        <UnifiedChatInput placeholder="Ask anything..." />
       </div>
     </div>
   );
