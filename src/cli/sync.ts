@@ -13,7 +13,7 @@
  *   PILLAR_SECRET - Secret token for authentication
  *
  * Environment (optional):
- *   PILLAR_API_URL - Pillar API URL (defaults to https://api.trypillar.com)
+ *   PILLAR_API_URL - Pillar API URL (defaults to https://help-api.trypillar.com)
  *   PILLAR_PLATFORM - Platform identifier (web, ios, android, desktop)
  *   PILLAR_VERSION - App version (semver or git SHA)
  *   GIT_SHA - Git commit SHA (optional, for traceability)
@@ -123,7 +123,7 @@ interface StatusResponse {
 // ============================================================================
 
 // Default API URL for production
-const DEFAULT_API_URL = 'https://api.trypillar.com';
+const DEFAULT_API_URL = 'https://help-api.trypillar.com';
 const LOCAL_API_URL = 'http://localhost:8003';
 
 function parseArgs(args: string[]): Record<string, string | boolean> {
@@ -163,7 +163,7 @@ Arguments:
 Environment Variables:
   PILLAR_SLUG        Your help center slug (required)
   PILLAR_SECRET      Secret token for authentication (required)
-  PILLAR_API_URL     API URL (default: https://api.trypillar.com)
+  PILLAR_API_URL     API URL (default: https://help-api.trypillar.com)
   PILLAR_PLATFORM    Platform: web, ios, android, desktop (default: web)
   PILLAR_VERSION     App version (default: from package.json)
   GIT_SHA            Git commit SHA for traceability

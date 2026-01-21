@@ -47,6 +47,23 @@ export type ActionType =
 export type Platform = 'web' | 'ios' | 'android' | 'desktop';
 
 /**
+ * Schema property definition for a single field.
+ * Supports nested objects and arrays with items.
+ */
+export interface ActionDataSchemaProperty {
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  description?: string;
+  enum?: string[];
+  default?: unknown;
+  /** Items schema for array types */
+  items?: ActionDataSchemaProperty;
+  /** Nested properties for object types */
+  properties?: Record<string, ActionDataSchemaProperty>;
+  /** Required fields for nested object types */
+  required?: string[];
+}
+
+/**
  * JSON Schema definition for action data.
  *
  * When provided, the AI will extract data from the user's query
@@ -54,15 +71,7 @@ export type Platform = 'web' | 'ios' | 'android' | 'desktop';
  */
 export interface ActionDataSchema {
   type: 'object';
-  properties: Record<
-    string,
-    {
-      type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-      description?: string;
-      enum?: string[];
-      default?: unknown;
-    }
-  >;
+  properties: Record<string, ActionDataSchemaProperty>;
   required?: string[];
 }
 
