@@ -14,6 +14,7 @@ import {
   effectiveMode,
   hoverBackdrop,
   initViewportListener,
+  isFullWidth,
   isHoverMode,
   isOpen,
   openPanel,
@@ -306,10 +307,20 @@ export class Panel {
       updatePanelUI();
     });
 
+    // Subscribe to isFullWidth changes (viewport below fullWidthBreakpoint)
+    const unsubscribeFullWidth = isFullWidth.subscribe((fullWidth) => {
+      if (fullWidth) {
+        this.panelElement?.classList.add('_pillar-panel--full-width', 'pillar-panel--full-width');
+      } else {
+        this.panelElement?.classList.remove('_pillar-panel--full-width', 'pillar-panel--full-width');
+      }
+    });
+
     // Combined cleanup
     this.unsubscribe = () => {
       unsubscribeOpen();
       unsubscribeMode();
+      unsubscribeFullWidth();
     };
   }
 

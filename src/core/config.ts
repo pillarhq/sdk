@@ -98,6 +98,11 @@ export interface PanelConfig {
    * @default true
    */
   hoverBackdrop?: boolean;
+  /**
+   * Viewport width below which the panel takes full screen width.
+   * @default 500
+   */
+  fullWidthBreakpoint?: number;
 }
 
 export interface UrlParamsConfig {
@@ -123,6 +128,66 @@ export interface EdgeTriggerConfig {
    * @default true
    */
   enabled?: boolean;
+}
+
+export type MobileTriggerPosition = 'bottom-right' | 'bottom-left';
+export type MobileTriggerIcon = 'sparkle' | 'question' | 'help' | 'chat' | 'support';
+export type MobileTriggerSize = 'small' | 'medium' | 'large';
+
+export interface MobileTriggerConfig {
+  /**
+   * Whether to show the mobile floating button on small screens.
+   * When enabled, a floating action button appears when viewport is below mobileBreakpoint.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Viewport width below which the edge trigger hides and mobile trigger shows.
+   * @default 700
+   */
+  breakpoint?: number;
+  /**
+   * Position of the floating button.
+   * @default 'bottom-right'
+   */
+  position?: MobileTriggerPosition;
+  /**
+   * Preset icon to display in the button.
+   * @default 'sparkle'
+   */
+  icon?: MobileTriggerIcon;
+  /**
+   * Custom SVG icon string. Overrides the icon preset if provided.
+   */
+  customIcon?: string;
+  /**
+   * Background color of the button (CSS value).
+   * Defaults to the theme's primary color.
+   */
+  backgroundColor?: string;
+  /**
+   * Icon color (CSS value).
+   * @default 'white'
+   */
+  iconColor?: string;
+  /**
+   * Button size - preset name or pixel value.
+   * - 'small': 44px
+   * - 'medium': 56px (default)
+   * - 'large': 68px
+   * @default 'medium'
+   */
+  size?: MobileTriggerSize | number;
+  /**
+   * Tooltip text and aria-label for accessibility.
+   * @default 'Get help'
+   */
+  label?: string;
+  /**
+   * Offset from screen edges in pixels.
+   * @default 24
+   */
+  offset?: number;
 }
 
 export interface UserContext {
@@ -153,6 +218,9 @@ export interface PillarConfig {
   
   // Edge trigger (sidebar tab that opens the panel)
   edgeTrigger?: EdgeTriggerConfig;
+  
+  // Mobile trigger (floating button on small screens)
+  mobileTrigger?: MobileTriggerConfig;
   
   // URL params for auto-opening the panel
   urlParams?: UrlParamsConfig;
@@ -204,6 +272,21 @@ export interface ResolvedPanelConfig {
   hoverBreakpoint: number | false;
   /** Whether to show backdrop when in hover mode */
   hoverBackdrop: boolean;
+  /** Viewport width below which panel takes full screen width */
+  fullWidthBreakpoint: number;
+}
+
+export interface ResolvedMobileTriggerConfig {
+  enabled: boolean;
+  breakpoint: number;
+  position: MobileTriggerPosition;
+  icon: MobileTriggerIcon;
+  customIcon?: string;
+  backgroundColor?: string;
+  iconColor: string;
+  size: MobileTriggerSize | number;
+  label: string;
+  offset: number;
 }
 
 export interface ResolvedThemeConfig {
@@ -223,6 +306,7 @@ export interface ResolvedConfig {
   
   panel: ResolvedPanelConfig;
   edgeTrigger: Required<EdgeTriggerConfig>;
+  mobileTrigger: ResolvedMobileTriggerConfig;
   urlParams: Required<UrlParamsConfig>;
   textSelection: Required<TextSelectionConfig>;
   sidebarTabs: SidebarTabConfig[];
@@ -250,10 +334,22 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'helpCenter' | 'publicKey'> = 
     useShadowDOM: false,
     hoverBreakpoint: 1200,
     hoverBackdrop: true,
+    fullWidthBreakpoint: 500,
   },
   
   edgeTrigger: {
     enabled: true,
+  },
+  
+  mobileTrigger: {
+    enabled: true,
+    breakpoint: 700,
+    position: 'bottom-right',
+    icon: 'sparkle',
+    iconColor: 'white',
+    size: 'medium',
+    label: 'Get help',
+    offset: 24,
   },
   
   urlParams: {
@@ -325,6 +421,11 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     edgeTrigger: {
       ...DEFAULT_CONFIG.edgeTrigger,
       ...config.edgeTrigger,
+    },
+    
+    mobileTrigger: {
+      ...DEFAULT_CONFIG.mobileTrigger,
+      ...config.mobileTrigger,
     },
     
     urlParams: {

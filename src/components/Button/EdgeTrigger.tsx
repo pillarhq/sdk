@@ -15,6 +15,7 @@ import type { EventEmitter } from "../../core/events";
 import {
   activeTab,
   isHoverMode,
+  isMobileMode,
   isOpen,
   width as panelWidth,
   setActiveTab,
@@ -309,6 +310,7 @@ export class EdgeTrigger {
   private unsubscribeOpen: (() => void) | null = null;
   private unsubscribeWidth: (() => void) | null = null;
   private unsubscribeHoverMode: (() => void) | null = null;
+  private unsubscribeMobileMode: (() => void) | null = null;
   private unsubscribeActiveTab: (() => void) | null = null;
   private themeObserver: MutationObserver | null = null;
   private currentTheme: "light" | "dark" = "light";
@@ -439,6 +441,20 @@ export class EdgeTrigger {
       queueMicrotask(() => this.applyLayoutPadding());
     });
 
+    // Subscribe to mobile mode changes (edge trigger hides on mobile)
+    this.unsubscribeMobileMode = isMobileMode.subscribe((inMobileMode) => {
+      if (inMobileMode) {
+        this.hide();
+      } else {
+        this.show();
+      }
+    });
+
+    // Apply initial mobile mode state
+    if (isMobileMode.value) {
+      this.hide();
+    }
+
     // Subscribe to active tab changes
     this.unsubscribeActiveTab = activeTab.subscribe(() => {
       this.render();
@@ -518,6 +534,7 @@ export class EdgeTrigger {
       this.container.style.display = "";
     }
     this.applyLayoutPadding();
+    this.render();
   }
 
   /**
@@ -551,6 +568,8 @@ export class EdgeTrigger {
     this.unsubscribeWidth = null;
     this.unsubscribeHoverMode?.();
     this.unsubscribeHoverMode = null;
+    this.unsubscribeMobileMode?.();
+    this.unsubscribeMobileMode = null;
     this.unsubscribeActiveTab?.();
     this.unsubscribeActiveTab = null;
     this.themeObserver?.disconnect();

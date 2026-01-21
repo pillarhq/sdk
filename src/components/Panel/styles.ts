@@ -250,6 +250,11 @@ export const PANEL_STYLES = `
   height: 100%;
 }
 
+._pillar-panel--full-width {
+  width: 100vw;
+  max-width: 100vw;
+}
+
 ._pillar-panel-root {
   display: flex;
   flex-direction: column;

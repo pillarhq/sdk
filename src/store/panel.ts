@@ -28,6 +28,12 @@ export const hoverBreakpoint = signal<number | false>(1200);
 // Whether to show backdrop when in hover mode
 export const hoverBackdrop = signal(true);
 
+// Viewport width below which the edge trigger hides and mobile trigger shows
+export const mobileBreakpoint = signal(700);
+
+// Viewport width below which the panel takes full screen width
+export const fullWidthBreakpoint = signal(500);
+
 // Current viewport width (updated by resize listener)
 export const viewportWidth = signal(typeof window !== 'undefined' ? window.innerWidth : 1920);
 
@@ -44,6 +50,22 @@ export const isHoverMode = computed(() => {
   if (bp === false) return false;
   // Check if viewport is below breakpoint
   return viewportWidth.value < bp;
+});
+
+/**
+ * Whether we're in mobile mode (below mobileBreakpoint)
+ * When true, edge trigger hides and mobile trigger shows
+ */
+export const isMobileMode = computed(() => {
+  return viewportWidth.value < mobileBreakpoint.value;
+});
+
+/**
+ * Whether the panel should take full screen width
+ * Returns true when viewport is below fullWidthBreakpoint
+ */
+export const isFullWidth = computed(() => {
+  return viewportWidth.value < fullWidthBreakpoint.value;
 });
 
 /**
@@ -109,6 +131,14 @@ export const setHoverBreakpoint = (bp: number | false) => {
 
 export const setHoverBackdrop = (show: boolean) => {
   hoverBackdrop.value = show;
+};
+
+export const setMobileBreakpoint = (bp: number) => {
+  mobileBreakpoint.value = bp;
+};
+
+export const setFullWidthBreakpoint = (bp: number) => {
+  fullWidthBreakpoint.value = bp;
 };
 
 export const setActiveTab = (tabId: string) => {

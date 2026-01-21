@@ -7,6 +7,7 @@ import { getActionDefinition, hasAction, setClientInfo } from '../actions';
 import { APIClient } from '../api/client';
 import { MCPClient } from '../api/mcp-client';
 import { EdgeTrigger } from '../components/Button/EdgeTrigger';
+import { MobileTrigger } from '../components/Button/MobileTrigger';
 import { Panel } from '../components/Panel/Panel';
 import { TextSelectionManager } from '../components/TextSelection/TextSelectionManager';
 import { conversationId as chatConversationId, messages as chatMessages, resetChat } from '../store/chat';
@@ -22,7 +23,9 @@ import {
 import {
     isHoverMode,
     isOpen as panelIsOpen,
-    resetPanel
+    resetPanel,
+    setFullWidthBreakpoint,
+    setMobileBreakpoint,
 } from '../store/panel';
 import {
     activePlan,
@@ -83,6 +86,7 @@ export class Pillar {
   private _textSelectionManager: TextSelectionManager | null = null;
   private _panel: Panel | null = null;
   private _edgeTrigger: EdgeTrigger | null = null;
+  private _mobileTrigger: MobileTrigger | null = null;
   private _initPromise: Promise<void> | null = null;
   private _rootContainer: HTMLElement | null = null;
   private _unsubscribeHoverMode: (() => void) | null = null;
@@ -1173,6 +1177,10 @@ export class Pillar {
       // Uses isolation: isolate to create a new stacking context
       this._rootContainer = this._createRootContainer();
 
+      // Set breakpoints for responsive behavior
+      setMobileBreakpoint(this._config.mobileTrigger.breakpoint);
+      setFullWidthBreakpoint(this._config.panel.fullWidthBreakpoint);
+
       // Initialize panel if enabled
       if (this._config.panel.enabled) {
         this._panel = new Panel(this._config, this._api, this._events, this._rootContainer);
@@ -1183,6 +1191,12 @@ export class Pillar {
       if (this._config.edgeTrigger.enabled) {
         this._edgeTrigger = new EdgeTrigger(this._config, this._events, () => this.toggle(), this._rootContainer);
         this._edgeTrigger.init();
+      }
+
+      // Initialize mobile trigger if enabled (shows on small screens when edge trigger is hidden)
+      if (this._config.mobileTrigger.enabled) {
+        this._mobileTrigger = new MobileTrigger(this._config, this._events, () => this.toggle(), this._rootContainer);
+        this._mobileTrigger.init();
       }
 
       // Initialize text selection "Ask AI" popover if enabled
@@ -1247,6 +1261,7 @@ export class Pillar {
     this._textSelectionManager?.destroy();
     this._panel?.destroy();
     this._edgeTrigger?.destroy();
+    this._mobileTrigger?.destroy();
     this._api?.cancelAllRequests();
     this._events.removeAllListeners();
 
@@ -1277,6 +1292,7 @@ export class Pillar {
     this._textSelectionManager = null;
     this._panel = null;
     this._edgeTrigger = null;
+    this._mobileTrigger = null;
     this._api = null;
     this._mcpClient = null;
     this._planExecutor = null;
