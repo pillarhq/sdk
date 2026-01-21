@@ -147,7 +147,6 @@ export class APIClient {
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Pillar-Key': this.config.publicKey,
       'x-customer-id': this.config.helpCenter, // Help center subdomain for middleware resolution
       'x-visitor-id': this.getVisitorId(),
       'x-session-id': this.getSessionId(),
@@ -226,7 +225,6 @@ export class APIClient {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'X-Pillar-Key': this.config.publicKey,
           },
         }
       );

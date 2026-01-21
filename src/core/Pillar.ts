@@ -3,53 +3,53 @@
  * Entry point for all SDK functionality
  */
 
-import { getActionDefinition, getHandler, hasAction, setClientInfo } from '../actions';
+import { getActionDefinition, hasAction, setClientInfo } from '../actions';
 import { APIClient } from '../api/client';
 import { MCPClient } from '../api/mcp-client';
 import { EdgeTrigger } from '../components/Button/EdgeTrigger';
 import { Panel } from '../components/Panel/Panel';
 import { TextSelectionManager } from '../components/TextSelection/TextSelectionManager';
-import { resetChat, messages as chatMessages, conversationId as chatConversationId, type StoredChatMessage } from '../store/chat';
+import { conversationId as chatConversationId, messages as chatMessages, resetChat } from '../store/chat';
 import {
-  resetContext,
-  clearErrorState as storeClearErrorState,
-  reportAction as storeReportAction,
-  setErrorState as storeSetErrorState,
-  setProductContext as storeSetProductContext,
-  setUserProfile as storeSetUserProfile,
-  updateContext as storeUpdateContext,
+    resetContext,
+    clearErrorState as storeClearErrorState,
+    reportAction as storeReportAction,
+    setErrorState as storeSetErrorState,
+    setProductContext as storeSetProductContext,
+    setUserProfile as storeSetUserProfile,
+    updateContext as storeUpdateContext,
 } from '../store/context';
 import {
-  isHoverMode,
-  isOpen as panelIsOpen,
-  resetPanel
+    isHoverMode,
+    isOpen as panelIsOpen,
+    resetPanel
 } from '../store/panel';
 import {
-  activePlan,
-  resetPlanStore,
+    activePlan,
+    resetPlanStore,
 } from '../store/plan';
 import {
-  resetRouter
+    resetRouter
 } from '../store/router';
 import {
-  activeWorkflow,
-  advanceToNextStep,
-  resetWorkflow,
-  cancelWorkflow as storeCancelWorkflow,
-  completeWorkflow as storeCompleteWorkflow,
-  startWorkflow as storeStartWorkflow,
-  updateStepStatus
+    activeWorkflow,
+    advanceToNextStep,
+    resetWorkflow,
+    cancelWorkflow as storeCancelWorkflow,
+    completeWorkflow as storeCompleteWorkflow,
+    startWorkflow as storeStartWorkflow,
+    updateStepStatus
 } from '../store/workflow';
 import { domReady } from '../utils/dom';
 import { clearPillarUrlParams, parsePillarUrlParams } from '../utils/urlParams';
-import { resolveConfig, mergeServerConfig, type PillarConfig, type ResolvedConfig, type ThemeConfig } from './config';
+import { mergeServerConfig, resolveConfig, type PillarConfig, type ResolvedConfig, type ThemeConfig } from './config';
 import {
-  DEFAULT_PRODUCT_CONTEXT,
-  DEFAULT_USER_PROFILE,
-  MAX_RECENT_ACTIONS,
-  type ProductContext,
-  type Suggestion,
-  type UserProfile,
+    DEFAULT_PRODUCT_CONTEXT,
+    DEFAULT_USER_PROFILE,
+    MAX_RECENT_ACTIONS,
+    type ProductContext,
+    type Suggestion,
+    type UserProfile,
 } from './context';
 import { EventEmitter, type CardRenderer, type PillarEvents, type TaskExecutePayload } from './events';
 import type { ExecutionPlan } from './plan';
@@ -152,8 +152,8 @@ export class Pillar {
    * Initialize the Pillar SDK
    */
   static async init(config: PillarConfig): Promise<Pillar> {
-    if (!config.helpCenter || !config.publicKey) {
-      throw new Error('[Pillar] helpCenter and publicKey are required');
+    if (!config.helpCenter) {
+      throw new Error('[Pillar] helpCenter is required');
     }
 
     // Create singleton if doesn't exist

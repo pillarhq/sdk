@@ -15,7 +15,6 @@ import { Pillar } from "@pillar-ai/sdk";
 
 await Pillar.init({
   helpCenter: "your-help-center",
-  publicKey: "pk_live_xxx",
 });
 ```
 
@@ -25,27 +24,23 @@ await Pillar.init({
 Pillar.init({
   // Required
   helpCenter: "your-help-center",
-  publicKey: "pk_live_xxx",
 
   // Optional configuration
-  config: {
-    // Panel configuration
-    panel: {
-      position: "right", // 'left' | 'right'
-      mode: "push", // 'overlay' | 'push'
-    },
+  panel: {
+    position: "right", // 'left' | 'right'
+    mode: "push", // 'overlay' | 'push'
+  },
 
-    // Edge trigger (sidebar tab that opens the panel)
-    edgeTrigger: {
-      enabled: true, // Set to false to use your own custom button
-    },
+  // Edge trigger (sidebar tab that opens the panel)
+  edgeTrigger: {
+    enabled: true, // Set to false to use your own custom button
+  },
 
-    // Theme
-    theme: {
-      mode: "auto", // 'light' | 'dark' | 'auto'
-      colors: {
-        primary: "#6366f1",
-      },
+  // Theme
+  theme: {
+    mode: "auto", // 'light' | 'dark' | 'auto'
+    colors: {
+      primary: "#6366f1",
     },
   },
 });
@@ -58,7 +53,6 @@ To use your own button instead of the built-in edge trigger:
 ```javascript
 Pillar.init({
   helpCenter: "your-help-center",
-  publicKey: "pk_live_xxx",
   edgeTrigger: { enabled: false },
 });
 

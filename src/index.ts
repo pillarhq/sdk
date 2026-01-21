@@ -7,7 +7,6 @@
  * <script>
  *   Pillar.init({
  *     helpCenter: 'your-help-center',
- *     publicKey: 'pk_live_xxx',
  *   });
  * </script>
  *
@@ -17,7 +16,6 @@
  *
  * await Pillar.init({
  *   helpCenter: 'your-help-center',
- *   publicKey: 'pk_live_xxx',
  * });
  */
 
@@ -127,10 +125,9 @@ if (typeof window !== 'undefined') {
     const script = document.currentScript as HTMLScriptElement | null;
     if (script) {
       const helpCenter = script.dataset.helpCenter;
-      const publicKey = script.dataset.publicKey;
 
-      if (helpCenter && publicKey) {
-        Pillar.init({ helpCenter, publicKey }).catch(console.error);
+      if (helpCenter) {
+        Pillar.init({ helpCenter }).catch(console.error);
       }
     }
   };
@@ -141,14 +138,13 @@ if (typeof window !== 'undefined') {
   } else {
     // Script is being executed after DOM is ready (async/defer)
     // Try to find the script tag by searching for one with our data attributes
-    const scripts = document.querySelectorAll('script[data-help-center][data-public-key]');
+    const scripts = document.querySelectorAll('script[data-help-center]');
     if (scripts.length > 0) {
       const script = scripts[scripts.length - 1] as HTMLScriptElement;
       const helpCenter = script.dataset.helpCenter;
-      const publicKey = script.dataset.publicKey;
 
-      if (helpCenter && publicKey) {
-        Pillar.init({ helpCenter, publicKey }).catch(console.error);
+      if (helpCenter) {
+        Pillar.init({ helpCenter }).catch(console.error);
       }
     }
   }

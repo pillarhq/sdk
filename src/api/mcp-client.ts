@@ -132,7 +132,6 @@ export class MCPClient {
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Pillar-Key': this.config.publicKey,
       'x-customer-id': this.config.helpCenter,
     };
 

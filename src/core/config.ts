@@ -133,7 +133,6 @@ export interface UserContext {
 
 export interface PillarConfig {
   helpCenter: string;
-  publicKey: string;
   
   /**
    * Platform identifier for code-first actions.
@@ -215,7 +214,6 @@ export interface ResolvedThemeConfig {
 
 export interface ResolvedConfig {
   helpCenter: string;
-  publicKey: string;
   apiBaseUrl: string;
   
   /** Platform for code-first actions (default: 'web') */
@@ -315,7 +313,6 @@ function mergeSidebarTabs(userTabs?: SidebarTabConfig[]): SidebarTabConfig[] {
 export function resolveConfig(config: PillarConfig): ResolvedConfig {
   return {
     helpCenter: config.helpCenter,
-    publicKey: config.publicKey,
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     platform: config.platform || 'web',
     version: config.version,
