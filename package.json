@@ -7,7 +7,7 @@
   "module": "./dist/pillar.esm.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "pillar-sync": "./src/cli/sync.ts"
+    "pillar-sync": "./dist/cli/sync.js"
   },
   "exports": {
     ".": {
@@ -19,12 +19,13 @@
   "files": [
     "dist/pillar.esm.js",
     "dist/**/*.d.ts",
-    "src/cli",
+    "dist/cli/sync.js",
     "src/actions/types.ts",
     "README.md"
   ],
   "scripts": {
-    "build": "rollup -c && npm run build:types",
+    "build": "rollup -c && npm run build:cli && npm run build:types",
+    "build:cli": "npx esbuild src/cli/sync.ts --bundle --platform=node --target=node18 --outfile=dist/cli/sync.js --format=esm --banner:js='#!/usr/bin/env node'",
     "build:types": "tsc --emitDeclarationOnly --outDir dist",
     "dev": "rollup -c -w",
     "clean": "rm -rf dist",
@@ -68,6 +69,7 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
     "rollup": "^4.9.0",
     "tslib": "^2.6.2",
     "tsx": "^4.7.0",
