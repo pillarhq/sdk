@@ -5,7 +5,7 @@
 
 import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
-import type { ProductContext, Suggestion, UserProfile } from '../core/context';
+import type { Context, Suggestion, UserProfile } from '../core/context';
 import type { ExecutionPlan } from '../core/plan';
 import type { Workflow } from '../core/workflow';
 import type { UserContextItem } from '../types/user-context';
@@ -367,7 +367,6 @@ userContext?: UserContextItem[],
       body: JSON.stringify({
         message,
         history,
-        context: this.config.context,
         ...(articleSlug && { article_slug: articleSlug }),
         ...(existingConversationId && { conversation_id: existingConversationId }),
       }),
@@ -546,7 +545,7 @@ userContext?: UserContextItem[],
    * Returns relevant articles, videos, and actions.
    */
   async getSuggestions(
-    productContext: ProductContext,
+    ctx: Context,
     userProfile: UserProfile
   ): Promise<Suggestion[]> {
     try {
@@ -555,7 +554,7 @@ userContext?: UserContextItem[],
         {
           method: 'POST',
           body: JSON.stringify({
-            context: productContext,
+            context: ctx,
             user_profile: userProfile,
           }),
         }
@@ -576,7 +575,7 @@ userContext?: UserContextItem[],
   async chatWithContext(
     message: string,
     history: ChatMessage[] = [],
-    productContext: ProductContext,
+    ctx: Context,
     userProfile: UserProfile,
     onChunk?: (chunk: string) => void,
     existingConversationId?: string | null,
@@ -593,7 +592,7 @@ userContext?: UserContextItem[],
         {
           query: message,
           context: {
-            product: productContext,
+            product: ctx,
             user_profile: userProfile,
           },
           ...(existingConversationId && { conversation_id: existingConversationId }),

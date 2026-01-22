@@ -190,12 +190,6 @@ export interface MobileTriggerConfig {
   offset?: number;
 }
 
-export interface UserContext {
-  id?: string;
-  persona?: string;
-  [key: string]: unknown;
-}
-
 export interface PillarConfig {
   helpCenter: string;
   
@@ -230,12 +224,6 @@ export interface PillarConfig {
   
   // Sidebar tabs configuration
   sidebarTabs?: SidebarTabConfig[];
-  
-  // User context for personalization
-  context?: {
-    page?: string;
-    user?: UserContext;
-  };
   
   // API base URL (defaults to production)
   apiBaseUrl?: string;
@@ -313,11 +301,6 @@ export interface ResolvedConfig {
   theme: ResolvedThemeConfig;
   customCSS?: string;
   
-  context: {
-    page?: string;
-    user?: UserContext;
-  };
-  
   onReady?: () => void;
   onError?: (error: Error) => void;
 }
@@ -370,8 +353,6 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'helpCenter' | 'publicKey'> = 
     colors: {},
     darkColors: {},
   },
-  
-  context: {},
 };
 
 /**
@@ -448,8 +429,6 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     },
     
     customCSS: config.customCSS,
-    
-    context: config.context || {},
     
     onReady: config.onReady,
     onError: config.onError,

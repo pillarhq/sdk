@@ -3,7 +3,7 @@
  */
 
 import type { ResolvedThemeConfig } from './config';
-import type { ProductContext, UserProfile } from './context';
+import type { Context, UserProfile } from './context';
 import type { ExecutionPlan, ExecutionStep } from './plan';
 import type { Workflow, WorkflowStep } from './workflow';
 
@@ -128,7 +128,7 @@ export interface PillarEvents {
   'textSelection:shown': { text: string };
   'textSelection:click': { text: string };
   // Context events
-  'context:change': { context: ProductContext };
+  'context:change': { context: Context };
   'profile:change': { profile: UserProfile };
   'action:report': { action: string; metadata?: Record<string, unknown> };
   // Query action events - for actions that return data to the agent

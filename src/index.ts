@@ -37,7 +37,6 @@ export {
   type MobileTriggerSize,
   type UrlParamsConfig,
   type TextSelectionConfig,
-  type UserContext,
   type PanelPosition,
   type PanelMode,
   type ThemeMode,
@@ -50,7 +49,7 @@ export {
 
 // Context types
 export {
-  type ProductContext,
+  type Context,
   type UserProfile,
   type Suggestion,
   type AssistantContext,

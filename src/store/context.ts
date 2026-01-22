@@ -1,23 +1,21 @@
 /**
  * Context Store
- * Signal-based state for product context and user profile
- * 
- * Phase 3: Product Integration - Context-aware assistance
+ * Signal-based state for context and user profile
  */
 
 import { signal, computed } from '@preact/signals';
-import type { ProductContext, UserProfile } from '../core/context';
-import { DEFAULT_PRODUCT_CONTEXT, DEFAULT_USER_PROFILE, MAX_RECENT_ACTIONS } from '../core/context';
+import type { Context, InternalContext, UserProfile } from '../core/context';
+import { DEFAULT_CONTEXT, DEFAULT_USER_PROFILE, MAX_RECENT_ACTIONS } from '../core/context';
 
-// Product context state
-export const productContext = signal<ProductContext>({ ...DEFAULT_PRODUCT_CONTEXT });
+// Context state (uses InternalContext internally to track recentActions)
+export const context = signal<InternalContext>({ ...DEFAULT_CONTEXT });
 
 // User profile state
 export const userProfile = signal<UserProfile>({ ...DEFAULT_USER_PROFILE });
 
 // Computed: has context (more than defaults)
 export const hasContext = computed(() => {
-  const ctx = productContext.value;
+  const ctx = context.value;
   return !!(
     ctx.currentPage ||
     ctx.currentFeature ||
@@ -28,27 +26,17 @@ export const hasContext = computed(() => {
 });
 
 // Computed: has error state
-export const hasError = computed(() => !!productContext.value.errorState);
+export const hasError = computed(() => !!context.value.errorState);
 
 // Actions
 
 /**
- * Set the complete product context.
+ * Set context fields (merges with existing).
  */
-export const setProductContext = (context: ProductContext) => {
-  productContext.value = {
-    ...context,
-    recentActions: context.recentActions || [],
-  };
-};
-
-/**
- * Update specific product context fields.
- */
-export const updateContext = (updates: Partial<ProductContext>) => {
-  productContext.value = {
-    ...productContext.value,
-    ...updates,
+export const setContext = (ctx: Partial<Context>) => {
+  context.value = {
+    ...context.value,
+    ...ctx,
   };
 };
 
@@ -60,13 +48,13 @@ export const setUserProfile = (profile: UserProfile) => {
 };
 
 /**
- * Report a user action.
+ * Report a user action (tracked internally).
  */
 export const reportAction = (action: string) => {
-  const recentActions = productContext.value.recentActions || [];
+  const recentActions = context.value.recentActions || [];
   
-  productContext.value = {
-    ...productContext.value,
+  context.value = {
+    ...context.value,
     recentActions: [
       ...recentActions.slice(-(MAX_RECENT_ACTIONS - 1)),
       action,
@@ -78,8 +66,8 @@ export const reportAction = (action: string) => {
  * Set error state.
  */
 export const setErrorState = (code: string, message: string) => {
-  productContext.value = {
-    ...productContext.value,
+  context.value = {
+    ...context.value,
     errorState: { code, message },
   };
 };
@@ -88,15 +76,15 @@ export const setErrorState = (code: string, message: string) => {
  * Clear error state.
  */
 export const clearErrorState = () => {
-  const { errorState: _, ...rest } = productContext.value;
-  productContext.value = rest as ProductContext;
+  const { errorState: _, ...rest } = context.value;
+  context.value = rest as InternalContext;
 };
 
 /**
  * Get the full assistant context for API calls.
  */
 export const getAssistantContext = () => ({
-  product: productContext.value,
+  product: context.value,
   user_profile: userProfile.value,
 });
 
@@ -104,7 +92,7 @@ export const getAssistantContext = () => ({
  * Reset all context state.
  */
 export const resetContext = () => {
-  productContext.value = { ...DEFAULT_PRODUCT_CONTEXT };
+  context.value = { ...DEFAULT_CONTEXT };
   userProfile.value = { ...DEFAULT_USER_PROFILE };
 };
 

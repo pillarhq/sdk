@@ -16,9 +16,8 @@ import {
     clearErrorState as storeClearErrorState,
     reportAction as storeReportAction,
     setErrorState as storeSetErrorState,
-    setProductContext as storeSetProductContext,
+    setContext as storeSetContext,
     setUserProfile as storeSetUserProfile,
-    updateContext as storeUpdateContext,
 } from '../store/context';
 import {
     isHoverMode,
@@ -47,10 +46,11 @@ import { domReady } from '../utils/dom';
 import { clearPillarUrlParams, parsePillarUrlParams } from '../utils/urlParams';
 import { mergeServerConfig, resolveConfig, type PillarConfig, type ResolvedConfig, type ThemeConfig } from './config';
 import {
-    DEFAULT_PRODUCT_CONTEXT,
+    DEFAULT_CONTEXT,
     DEFAULT_USER_PROFILE,
     MAX_RECENT_ACTIONS,
-    type ProductContext,
+    type Context,
+    type InternalContext,
     type Suggestion,
     type UserProfile,
 } from './context';
@@ -91,8 +91,8 @@ export class Pillar {
   private _rootContainer: HTMLElement | null = null;
   private _unsubscribeHoverMode: (() => void) | null = null;
 
-  // Product context state
-  private _productContext: ProductContext = { ...DEFAULT_PRODUCT_CONTEXT };
+  // Context state (uses InternalContext to track recentActions internally)
+  private _context: InternalContext = { ...DEFAULT_CONTEXT };
   private _userProfile: UserProfile = { ...DEFAULT_USER_PROFILE };
 
   // Task handlers
@@ -268,12 +268,28 @@ export class Pillar {
   }
 
   /**
-   * Update the user context
+   * Set context for the assistant.
+   * Use this to tell Pillar what the user is doing for smarter, more relevant assistance.
+   * 
+   * @param ctx - Context fields to set (merges with existing context)
+   * 
+   * @example
+   * ```typescript
+   * pillar.setContext({
+   *   currentPage: '/settings/billing',
+   *   currentFeature: 'Billing Settings',
+   *   userRole: 'admin',
+   * });
+   * ```
    */
-  setContext(context: ResolvedConfig['context']): void {
-    if (this._config) {
-      this._config.context = { ...this._config.context, ...context };
-    }
+  setContext(ctx: Partial<Context>): void {
+    this._context = {
+      ...this._context,
+      ...ctx,
+    };
+    // Sync to store for components
+    storeSetContext(ctx);
+    this._events.emit('context:change', { context: this._context });
   }
 
   /**
@@ -405,14 +421,14 @@ export class Pillar {
   }
 
   // ============================================================================
-  // Product Context API
+  // Context API
   // ============================================================================
 
   /**
-   * Get the current product context
+   * Get the current context
    */
-  get productContext(): ProductContext {
-    return { ...this._productContext };
+  get context(): Context {
+    return { ...this._context };
   }
 
   /**
@@ -420,34 +436,6 @@ export class Pillar {
    */
   get userProfile(): UserProfile {
     return { ...this._userProfile };
-  }
-
-  /**
-   * Set the complete product context.
-   * Use this when navigating to a new page or starting a new session.
-   */
-  setProductContext(context: ProductContext): void {
-    this._productContext = {
-      ...context,
-      recentActions: context.recentActions || [],
-    };
-    // Sync to store for components
-    storeSetProductContext(this._productContext);
-    this._events.emit('context:change', { context: this._productContext });
-  }
-
-  /**
-   * Update specific product context fields without replacing the entire context.
-   * Use this for incremental updates like tracking actions.
-   */
-  updateContext(updates: Partial<ProductContext>): void {
-    this._productContext = {
-      ...this._productContext,
-      ...updates,
-    };
-    // Sync to store for components
-    storeUpdateContext(updates);
-    this._events.emit('context:change', { context: this._productContext });
   }
 
   /**
@@ -468,7 +456,7 @@ export class Pillar {
    * @param metadata - Optional metadata about the action
    */
   reportAction(action: string, metadata?: Record<string, unknown>): void {
-    const recentActions = this._productContext.recentActions || [];
+    const recentActions = this._context.recentActions || [];
     
     // Keep only the most recent actions
     const updatedActions = [
@@ -476,8 +464,8 @@ export class Pillar {
       action,
     ];
 
-    this._productContext = {
-      ...this._productContext,
+    this._context = {
+      ...this._context,
       recentActions: updatedActions,
     };
 
@@ -490,12 +478,12 @@ export class Pillar {
    * Clear any error state from the context.
    */
   clearErrorState(): void {
-    if (this._productContext.errorState) {
-      const { errorState: _, ...rest } = this._productContext;
-      this._productContext = rest as ProductContext;
+    if (this._context.errorState) {
+      const { errorState: _, ...rest } = this._context;
+      this._context = rest as InternalContext;
       // Sync to store for components
       storeClearErrorState();
-      this._events.emit('context:change', { context: this._productContext });
+      this._events.emit('context:change', { context: this._context });
     }
   }
 
@@ -504,17 +492,17 @@ export class Pillar {
    * The assistant will use this to provide relevant troubleshooting help.
    */
   setErrorState(code: string, message: string): void {
-    this._productContext = {
-      ...this._productContext,
+    this._context = {
+      ...this._context,
       errorState: { code, message },
     };
     // Sync to store for components
     storeSetErrorState(code, message);
-    this._events.emit('context:change', { context: this._productContext });
+    this._events.emit('context:change', { context: this._context });
   }
 
   /**
-   * Get contextual help suggestions based on current product context.
+   * Get contextual help suggestions based on current context.
    * Returns relevant articles, videos, and actions.
    */
   async getSuggestions(): Promise<Suggestion[]> {
@@ -524,7 +512,7 @@ export class Pillar {
     }
 
     try {
-      return await this._api.getSuggestions(this._productContext, this._userProfile);
+      return await this._api.getSuggestions(this._context, this._userProfile);
     } catch (error) {
       console.error('[Pillar] Failed to get suggestions:', error);
       return [];
@@ -535,9 +523,9 @@ export class Pillar {
    * Get the full context object to send to the backend.
    * Used internally by the API client.
    */
-  getAssistantContext(): { product: ProductContext; user: UserProfile } {
+  getAssistantContext(): { product: Context; user: UserProfile } {
     return {
-      product: this._productContext,
+      product: this._context,
       user: this._userProfile,
     };
   }
@@ -1282,7 +1270,7 @@ export class Pillar {
     resetPlanStore();
 
     // Reset internal context state
-    this._productContext = { ...DEFAULT_PRODUCT_CONTEXT };
+    this._context = { ...DEFAULT_CONTEXT };
     this._userProfile = { ...DEFAULT_USER_PROFILE };
 
     // Clear task handlers

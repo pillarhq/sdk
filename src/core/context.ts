@@ -1,15 +1,24 @@
 /**
- * Product Context Types for Pillar SDK
+ * Context Types for Pillar SDK
  * 
  * These types enable context-aware assistance by providing
  * information about what the user is doing in the product.
  */
 
 /**
- * Product context for the assistant.
+ * Context for the assistant.
  * Pass this to help the assistant understand what the user is doing.
+ * 
+ * @example
+ * ```typescript
+ * pillar.setContext({
+ *   currentPage: '/settings/billing',
+ *   currentFeature: 'Billing Settings',
+ *   userRole: 'admin',
+ * });
+ * ```
  */
-export interface ProductContext {
+export interface Context {
   /** Current page path (e.g., "/settings/billing") */
   currentPage?: string;
 
@@ -22,9 +31,6 @@ export interface ProductContext {
   /** Current user state or mode (e.g., "onboarding", "trial") */
   userState?: string;
 
-  /** Recent user actions for context */
-  recentActions?: string[];
-
   /** Any error state the user is experiencing */
   errorState?: {
     code: string;
@@ -33,6 +39,15 @@ export interface ProductContext {
 
   /** Custom context data */
   custom?: Record<string, unknown>;
+}
+
+/**
+ * Internal context with tracking fields.
+ * @internal
+ */
+export interface InternalContext extends Context {
+  /** Recent user actions for context (managed internally via reportAction) */
+  recentActions?: string[];
 }
 
 /**
@@ -71,14 +86,14 @@ export interface Suggestion {
  * Combined context sent to the backend.
  */
 export interface AssistantContext {
-  product: ProductContext;
+  product: Context;
   user: UserProfile;
 }
 
 /**
  * Default empty context.
  */
-export const DEFAULT_PRODUCT_CONTEXT: ProductContext = {
+export const DEFAULT_CONTEXT: InternalContext = {
   recentActions: [],
 };
 
