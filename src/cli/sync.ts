@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Pillar Action Sync CLI
  *
@@ -184,7 +183,55 @@ async function loadActions(actionsPath: string): Promise<SyncActionDefinitions> 
     throw new Error(`Actions file not found: ${absolutePath}`);
   }
 
-  // Convert to file URL for ESM compatibility
+  const isTypeScript = absolutePath.endsWith('.ts') || absolutePath.endsWith('.tsx');
+
+  if (isTypeScript) {
+    // For TypeScript files, use tsx to evaluate and extract the actions
+    try {
+      // Create a temporary script file that imports and prints the actions as JSON
+      const tempDir = path.dirname(absolutePath);
+      const tempFile = path.join(tempDir, `.pillar-sync-temp-${Date.now()}.mjs`);
+      const importPath = absolutePath.replace(/\\/g, '/');
+      
+      const extractScript = `import actions from '${importPath}';
+const result = actions.default || actions;
+console.log(JSON.stringify(result));`;
+      
+      fs.writeFileSync(tempFile, extractScript, 'utf-8');
+      
+      try {
+        const result = execSync(`npx tsx "${tempFile}"`, {
+          encoding: 'utf-8',
+          cwd: process.cwd(),
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        const actions = JSON.parse(result.trim());
+
+        if (!actions || typeof actions !== 'object') {
+          throw new Error(
+            'Actions file must export an actions object as default or named export "actions"'
+          );
+        }
+
+        return actions;
+      } finally {
+        // Clean up temp file
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('tsx')) {
+        console.error('[pillar-sync] TypeScript files require tsx.');
+        console.error('[pillar-sync] Make sure tsx is installed: npm install -D tsx');
+        console.error('[pillar-sync] Then run: npx pillar-sync --actions ./actions.ts');
+      }
+      throw error;
+    }
+  }
+
+  // For JavaScript files, use dynamic import directly
   const fileUrl = pathToFileURL(absolutePath).href;
 
   try {
@@ -201,11 +248,6 @@ async function loadActions(actionsPath: string): Promise<SyncActionDefinitions> 
 
     return actions;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Unknown file extension')) {
-      console.error('[pillar-sync] TypeScript files require tsx.');
-      console.error('[pillar-sync] Make sure tsx is installed: npm install -D tsx');
-      console.error('[pillar-sync] Then run: npx pillar-sync --actions ./actions.ts');
-    }
     throw error;
   }
 }

@@ -135,6 +135,11 @@ export class MCPClient {
       'x-customer-id': this.config.helpCenter,
     };
 
+    // Add browser language for multilingual AI responses
+    if (typeof navigator !== 'undefined') {
+      headers['Accept-Language'] = navigator.language || navigator.languages?.[0] || 'en';
+    }
+
     // Add platform/version headers for code-first action filtering
     if (this.config.platform) {
       headers['X-Pillar-Platform'] = this.config.platform;
