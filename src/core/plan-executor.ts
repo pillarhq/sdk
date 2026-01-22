@@ -175,9 +175,13 @@ export class PlanExecutor {
 
       if (allDone) {
         console.log(`[PlanExecutor] Plan ${plan.id} complete`);
-        this.events.emit('plan:complete', plan);
-        clearPlan();
+        // Update plan status to 'completed' so UI shows done state
+        // Don't clear immediately - let UI show the completed state
+        updatePlan({ ...plan, status: 'completed' });
+        this.events.emit('plan:complete', activePlan.value!);
+        // Clear from localStorage so it won't be recovered on refresh
         clearSavedPlan(this.siteId);
+        // Note: UI can call dismissPlan() when user wants to dismiss the completed plan
       }
       return;
     }
@@ -191,6 +195,15 @@ export class PlanExecutor {
 
     // If step is awaiting confirmation, wait for confirmStep()
     if (step.status === 'awaiting_confirmation') {
+      return;
+    }
+
+    // For inline_ui actions, stay in 'ready' and let the UI render the card
+    // User will interact with the card and confirm via confirmInlineStep()
+    const actionType = (step as unknown as { action_type?: string }).action_type;
+    if (actionType === 'inline_ui' && step.status === 'ready') {
+      console.log(`[PlanExecutor] Step ${step.index} is inline_ui - waiting for user card interaction`);
+      this.events.emit('plan:step:active', { plan: activePlan.value!, step });
       return;
     }
 
@@ -233,6 +246,39 @@ export class PlanExecutor {
   }
 
   /**
+   * User confirms an inline_ui step via the inline card.
+   * 
+   * This is called when an inline_ui card completes its work (e.g., after
+   * making an API call, filling a form, etc.). The card has already done
+   * the action - this just marks the step as complete and advances the plan.
+   *
+   * @param stepId - UUID of the step to confirm
+   * @param data - Result data from the inline card (e.g., email address, form fields)
+   */
+  async confirmInlineStep(
+    stepId: string,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    const plan = activePlan.value;
+    if (!plan) {
+      console.warn('[PlanExecutor] No active plan for inline confirmation');
+      return;
+    }
+
+    const step = plan.steps.find((s) => s.id === stepId);
+    if (!step) {
+      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      return;
+    }
+
+    console.log(`[PlanExecutor] Inline step ${step.index} completed with data:`, data);
+
+    // The inline card has already done the work (made API calls, etc.)
+    // Just mark the step as complete and advance to the next step
+    await this.markStepComplete(stepId, data);
+  }
+
+  /**
    * User skips a step.
    *
    * @param stepId - UUID of the step to skip
@@ -259,6 +305,17 @@ export class PlanExecutor {
       console.error('[PlanExecutor] Failed to skip step:', error);
       // Update locally even if server call fails
       updatePlanStep(stepId, { status: 'skipped' });
+      
+      // Activate the next pending step so executeNextStep can find it
+      const nextStepIndex = step.index + 1;
+      const updatedPlan = activePlan.value;
+      if (updatedPlan && nextStepIndex < updatedPlan.steps.length) {
+        const nextStep = updatedPlan.steps[nextStepIndex];
+        if (nextStep.status === 'pending') {
+          updatePlanStep(nextStep.id, { status: 'ready' });
+        }
+      }
+      
       this.events.emit('plan:step:skip', { plan: activePlan.value!, step });
       await this.executeNextStep();
     }
@@ -337,6 +394,30 @@ export class PlanExecutor {
       clearPlan(true);
       clearSavedPlan(this.siteId);
     }
+  }
+
+  /**
+   * Dismiss a completed plan from the UI.
+   * 
+   * Called when user wants to close a plan that's in 'completed' status.
+   * Unlike cancel(), this doesn't notify the server since the plan is already done.
+   */
+  dismissPlan(): void {
+    const plan = activePlan.value;
+    if (!plan) {
+      console.warn('[PlanExecutor] No active plan to dismiss');
+      return;
+    }
+
+    if (plan.status !== 'completed' && plan.status !== 'failed') {
+      console.warn(`[PlanExecutor] Plan ${plan.id} is not completed/failed (status: ${plan.status}), use cancel() instead`);
+      return;
+    }
+
+    console.log(`[PlanExecutor] Dismissing completed plan ${plan.id}`);
+    // Use plan:complete event (plan:dismissed isn't in PillarEvents)
+    this.events.emit('plan:complete', plan);
+    clearPlan(true);
   }
 
   /**
@@ -430,8 +511,17 @@ export class PlanExecutor {
     const updatedPlan = activePlan.value!;
     const updatedStep = updatedPlan.steps.find((s) => s.id === stepId)!;
 
+    // Activate the next pending step so executeNextStep can find it
+    const nextStepIndex = updatedStep.index + 1;
+    if (nextStepIndex < updatedPlan.steps.length) {
+      const nextStep = updatedPlan.steps[nextStepIndex];
+      if (nextStep.status === 'pending') {
+        updatePlanStep(nextStep.id, { status: 'ready' });
+      }
+    }
+
     this.events.emit('plan:step:complete', {
-      plan: updatedPlan,
+      plan: activePlan.value!,
       step: updatedStep,
       success: true,
     });
@@ -446,8 +536,42 @@ export class PlanExecutor {
     const plan = activePlan.value;
     if (!plan) return;
 
+    // Handle guidance steps - they don't execute, just get acknowledged
+    if (step.step_type === 'guidance') {
+      console.log(
+        `[PlanExecutor] Guidance step ${step.index}: ${step.description}`
+      );
+      
+      // Mark as completed immediately (user acknowledges by viewing)
+      updatePlanStep(step.id, { status: 'completed' });
+      
+      const updatedPlan = activePlan.value!;
+      const updatedStep = updatedPlan.steps.find((s) => s.id === step.id)!;
+      
+      // Activate the next pending step
+      const nextStepIndex = step.index + 1;
+      if (nextStepIndex < updatedPlan.steps.length) {
+        const nextStep = updatedPlan.steps[nextStepIndex];
+        if (nextStep.status === 'pending') {
+          updatePlanStep(nextStep.id, { status: 'ready' });
+        }
+      }
+      
+      this.events.emit('plan:step:complete', {
+        plan: activePlan.value!,
+        step: updatedStep,
+        success: true,
+      });
+      
+      // Continue to next step
+      await this.executeNextStep();
+      return;
+    }
+
+    const actionName = step.action_name || 'unknown';
+    
     console.log(
-      `[PlanExecutor] Executing step ${step.index}: ${step.action_name}`
+      `[PlanExecutor] Executing step ${step.index}: ${actionName}`
     );
 
     updatePlanStep(step.id, { status: 'executing' });
@@ -455,8 +579,12 @@ export class PlanExecutor {
 
     try {
       // Get handler and definition from action registry
-      const actionDefinition = hasAction(step.action_name) ? getActionDefinition(step.action_name) : undefined;
+      const actionDefinition = actionName && hasAction(actionName) ? getActionDefinition(actionName) : undefined;
       const handler = actionDefinition?.handler;
+      
+      // Extract action type for wizard detection (needed for auto_complete logic below)
+      const actionType = (step as unknown as { action_type?: string }).action_type as 
+        'navigate' | 'open_modal' | 'fill_form' | 'trigger_action' | 'copy_text' | 'external_link' | 'start_tutorial' | 'inline_ui' | undefined;
       
       let result: unknown = undefined;
       
@@ -469,7 +597,7 @@ export class PlanExecutor {
           const { default: Pillar } = await import('./Pillar');
           const pillar = Pillar.getInstance();
           if (pillar) {
-            pillar.sendActionResult(step.action_name, result);
+            pillar.sendActionResult(actionName, result);
           }
         }
       } else {
@@ -479,26 +607,24 @@ export class PlanExecutor {
         const pillar = Pillar.getInstance();
         
         if (pillar) {
-          const actionType = (step as unknown as { action_type?: string }).action_type as 
-            'navigate' | 'open_modal' | 'fill_form' | 'trigger_action' | 'copy_text' | 'external_link' | 'start_tutorial' | 'inline_ui' | undefined;
           const path = step.action_data?.path as string | undefined;
           const externalUrl = step.action_data?.url as string | undefined;
           
-          console.log(`[PlanExecutor] Executing via Pillar.executeTask: ${step.action_name}`);
+          console.log(`[PlanExecutor] Executing via Pillar.executeTask: ${actionName}`);
           
           // executeTask will look for registered handlers (onTask) and use built-in fallbacks
           pillar.executeTask({
             id: step.id,
-            name: step.action_name,
+            name: actionName,
             taskType: actionType,
             path,
             externalUrl,
             data: step.action_data || {},
           });
           
-          result = { executed: true, action: step.action_name };
+          result = { executed: true, action: actionName };
         } else {
-          throw new Error(`No handler for action: ${step.action_name} (Pillar not initialized)`);
+          throw new Error(`No handler for action: ${actionName} (Pillar not initialized)`);
         }
       }
 
@@ -515,21 +641,44 @@ export class PlanExecutor {
         updatePlan(response.plan);
         this.events.emit('plan:updated', response.plan);
       } else if (step.auto_complete) {
-        // Mark step complete locally and advance
-        updatePlanStep(step.id, { status: 'completed', result });
+        // Check if this is a navigation/modal action that used the fallback executeTask
+        // These actions open wizards/pages that require user interaction, so we should
+        // NOT auto-complete even if auto_complete is true from the backend
+        const usedFallback = !handler;
+        const isWizardAction = actionType === 'navigate' || actionType === 'open_modal';
         
-        // Get the updated step for the event
-        const updatedPlan = activePlan.value;
-        const updatedStep = updatedPlan?.steps.find((s) => s.id === step.id);
+        if (usedFallback && isWizardAction) {
+          console.log(`[PlanExecutor] Step ${step.index} is wizard action (${actionType}) - awaiting callback despite auto_complete=true`);
+          updatePlanStep(step.id, { status: 'awaiting_result', result });
+          this.events.emit('plan:step:active', { plan: activePlan.value!, step });
+          // Don't advance - wait for completePlanStep() or markStepDone() to be called
+        } else {
+          // Mark step complete locally and advance
+          updatePlanStep(step.id, { status: 'completed', result });
+          
+          // Get the updated step for the event
+          let updatedPlan = activePlan.value;
+          const updatedStep = updatedPlan?.steps.find((s) => s.id === step.id);
 
-        this.events.emit('plan:step:complete', {
-          plan: updatedPlan!,
-          step: updatedStep || step,
-          success: true,
-        });
+          // Activate the next pending step so executeNextStep can find it
+          const nextStepIndex = step.index + 1;
+          if (updatedPlan && nextStepIndex < updatedPlan.steps.length) {
+            const nextStep = updatedPlan.steps[nextStepIndex];
+            if (nextStep.status === 'pending') {
+              updatePlanStep(nextStep.id, { status: 'ready' });
+              updatedPlan = activePlan.value; // Refresh after update
+            }
+          }
 
-        // Continue to next step
-        await this.executeNextStep();
+          this.events.emit('plan:step:complete', {
+            plan: updatedPlan!,
+            step: updatedStep || step,
+            success: true,
+          });
+
+          // Continue to next step
+          await this.executeNextStep();
+        }
       } else {
         // Step has auto_complete=false - wait for host app to call completePlanStep()
         // This is used for wizard actions that require user to complete a flow

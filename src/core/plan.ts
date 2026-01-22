@@ -46,6 +46,24 @@ export type StepStatus =
 export type ExecutionLocation = 'client' | 'server';
 
 /**
+ * Step type for hybrid plans.
+ * - action: Executable action that the SDK can run
+ * - guidance: Manual step with documentation/instructions (no action available)
+ * - external: Step that requires external action (e.g., third-party integration)
+ */
+export type StepType = 'action' | 'guidance' | 'external';
+
+/**
+ * Source reference for guidance steps.
+ */
+export interface GuidanceSource {
+  /** Title of the source document */
+  title: string;
+  /** URL to the source document */
+  url: string;
+}
+
+/**
  * A multi-step execution plan.
  * Matches ExecutionPlan.to_dict() output.
  */
@@ -85,8 +103,10 @@ export interface ExecutionStep {
   index: number;
   /** Human-readable step description */
   description: string;
-  /** Name of the action to execute */
-  action_name: string;
+  /** Name of the action to execute (null for guidance steps) */
+  action_name: string | null;
+  /** Type of action (navigate, inline_ui, trigger_action, etc.) */
+  action_type?: string;
   /** Data payload for the action */
   action_data: Record<string, unknown>;
   /** Where this step executes (client or server) */
@@ -122,6 +142,24 @@ export interface ExecutionStep {
    * This field is no longer populated by the backend.
    */
   awaiting_instruction?: string;
+  
+  // === NEW: Hybrid plan fields ===
+  
+  /**
+   * Type of step: 'action' (executable), 'guidance' (manual with docs), or 'external'.
+   * Defaults to 'action' for backward compatibility.
+   */
+  step_type?: StepType;
+  
+  /**
+   * For guidance steps: documentation links to help the user complete the step manually.
+   */
+  guidance_sources?: GuidanceSource[];
+  
+  /**
+   * For guidance steps: human-readable help text explaining what the user needs to do.
+   */
+  guidance_message?: string;
 }
 
 /**

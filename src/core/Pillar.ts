@@ -1008,6 +1008,19 @@ export class Pillar {
   }
 
   /**
+   * Confirm an inline_ui step with data from the inline card.
+   * 
+   * This is called when the user interacts with an inline card (e.g., invite form)
+   * within a plan step and clicks confirm.
+   *
+   * @param stepId - UUID of the step to confirm
+   * @param data - Data from the inline card (e.g., email, form fields)
+   */
+  async confirmInlinePlanStep(stepId: string, data?: Record<string, unknown>): Promise<void> {
+    await this._planExecutor?.confirmInlineStep(stepId, data);
+  }
+
+  /**
    * Skip a plan step.
    *
    * @param stepId - UUID of the step to skip

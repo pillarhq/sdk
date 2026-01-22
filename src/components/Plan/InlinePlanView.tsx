@@ -10,8 +10,12 @@
  */
 
 import { h } from 'preact';
+import { useRef, useEffect } from 'preact/hooks';
 import type { ExecutionPlan, ExecutionStep, StepStatus } from '../../core/plan';
+import type { CardCallbacks } from '../../core/events';
 import Pillar from '../../core/Pillar';
+import { createDefaultConfirmCard } from '../Cards/ConfirmActionCard';
+import type { TaskButtonData } from '../Panel/TaskButton';
 
 // ============================================================================
 // Constants
@@ -33,6 +37,7 @@ const ICONS = {
   completed: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9,12 12,15 16,10"/></svg>`,
   skipped: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-dasharray="4,2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
   failed: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+  guidance: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
 };
 
 function getStatusIcon(status: StepStatus): string {
@@ -49,29 +54,126 @@ interface InlineStepItemProps {
   onSkip: (stepId: string) => void;
   onRetry: (stepId: string) => void;
   onDone: (stepId: string) => void;
+  onInlineConfirm?: (stepId: string, data?: Record<string, unknown>) => void;
 }
 
-function InlineStepItem({ step, onConfirm, onSkip, onRetry, onDone }: InlineStepItemProps) {
+function InlineStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlineConfirm }: InlineStepItemProps) {
+  // Ref for inline_ui card container
+  const inlineCardRef = useRef<HTMLDivElement>(null);
+  
   const canRetry = step.status === 'failed' && step.is_retriable && step.retry_count < step.max_retries;
   const isAwaitingResult = step.status === 'awaiting_result';
+  const isGuidance = step.step_type === 'guidance';
+  
+  // Check if this is an inline_ui action that should render a card
+  const isInlineUI = step.action_type === 'inline_ui';
+  const shouldShowInlineCard = isInlineUI && (step.status === 'ready' || step.status === 'awaiting_result');
+  
+  // Render inline_ui card when step is active
+  useEffect(() => {
+    if (!shouldShowInlineCard || !inlineCardRef.current) return;
+    
+    // Clear existing content
+    inlineCardRef.current.innerHTML = '';
+    
+    const pillar = Pillar.getInstance();
+    const cardType = (step.action_data?.card_type as string) || step.action_name || 'default';
+    const customRenderer = pillar?.getCardRenderer(cardType);
+    
+    // Create TaskButtonData-like object for the card
+    const actionForCard: TaskButtonData = {
+      id: step.id,
+      name: step.action_name || 'action',
+      taskType: 'inline_ui',
+      data: step.action_data || {},
+    };
+    
+    const callbacks: CardCallbacks = {
+      onConfirm: (data) => {
+        console.log('[InlineStepItem] Inline card confirmed with data:', data);
+        if (onInlineConfirm) {
+          onInlineConfirm(step.id, data);
+        } else if (pillar) {
+          pillar.executeTask({
+            id: step.id,
+            name: step.action_name || 'action',
+            taskType: 'inline_ui',
+            data: data || step.action_data || {},
+          });
+        }
+      },
+      onCancel: () => {
+        console.log('[InlineStepItem] Inline card cancelled');
+        onSkip(step.id);
+      },
+      onStateChange: (state, message) => {
+        console.log(`[InlineStepItem] Card state: ${state}${message ? ` - ${message}` : ''}`);
+      },
+    };
+    
+    if (customRenderer) {
+      try {
+        customRenderer(inlineCardRef.current, step.action_data || {}, callbacks);
+      } catch (err) {
+        console.error('[InlineStepItem] Custom card renderer error:', err);
+      }
+    } else {
+      const defaultCard = createDefaultConfirmCard(actionForCard, callbacks);
+      inlineCardRef.current.appendChild(defaultCard);
+    }
+  }, [shouldShowInlineCard, step.id, step.action_data, step.action_name]);
+
+  // For guidance steps, use the guidance icon; otherwise use status icon
+  const icon = isGuidance && step.status !== 'completed' 
+    ? ICONS.guidance 
+    : getStatusIcon(step.status);
 
   return (
-    <div class={`pillar-inline-plan__step pillar-inline-plan__step--${step.status}`}>
+    <div class={`pillar-inline-plan__step pillar-inline-plan__step--${step.status} ${isGuidance ? 'pillar-inline-plan__step--guidance' : ''}`}>
       <span
         class="pillar-inline-plan__step-icon"
-        dangerouslySetInnerHTML={{ __html: getStatusIcon(step.status) }}
+        dangerouslySetInnerHTML={{ __html: icon }}
       />
       <div class="pillar-inline-plan__step-content">
         <span class="pillar-inline-plan__step-text">{step.description}</span>
         
-        {isAwaitingResult && (
+        {/* Inline UI card for inline_ui action types */}
+        {shouldShowInlineCard && (
+          <div 
+            ref={inlineCardRef} 
+            class="pillar-inline-plan__inline-card"
+          />
+        )}
+        
+        {/* Guidance step: show message and source links */}
+        {isGuidance && step.guidance_message && step.status !== 'completed' && (
+          <span class="pillar-inline-plan__guidance-text">{step.guidance_message}</span>
+        )}
+        
+        {isGuidance && step.guidance_sources && step.guidance_sources.length > 0 && step.status !== 'completed' && (
+          <div class="pillar-inline-plan__guidance-sources">
+            {step.guidance_sources.map((source, idx) => (
+              <a
+                key={idx}
+                href={source.url}
+                class="pillar-inline-plan__source-link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {source.title}
+              </a>
+            ))}
+          </div>
+        )}
+        
+        {isAwaitingResult && !isInlineUI && (
           <div class="pillar-inline-plan__step-instruction">
             <span class="pillar-inline-plan__action-badge">In Progress</span>
           </div>
         )}
       </div>
 
-      {step.status === 'awaiting_confirmation' && (
+      {step.status === 'awaiting_confirmation' && !isInlineUI && (
         <div class="pillar-inline-plan__step-actions">
           <button
             type="button"
@@ -90,7 +192,7 @@ function InlineStepItem({ step, onConfirm, onSkip, onRetry, onDone }: InlineStep
         </div>
       )}
 
-      {isAwaitingResult && (
+      {isAwaitingResult && !isInlineUI && (
         <button
           type="button"
           class="pillar-inline-plan__btn pillar-inline-plan__btn--done"
@@ -140,6 +242,10 @@ export function InlinePlanView({ plan }: InlinePlanViewProps) {
     pillar?.markPlanStepDone(stepId);
   };
 
+  const handleInlineConfirm = (stepId: string, data?: Record<string, unknown>) => {
+    pillar?.confirmInlinePlanStep(stepId, data);
+  };
+
   const handleStart = () => {
     pillar?.startPlan();
   };
@@ -165,6 +271,7 @@ export function InlinePlanView({ plan }: InlinePlanViewProps) {
             onSkip={handleSkip}
             onRetry={handleRetry}
             onDone={handleDone}
+            onInlineConfirm={handleInlineConfirm}
           />
         ))}
       </div>
@@ -345,6 +452,64 @@ export const INLINE_PLAN_STYLES = `
 
 .pillar-inline-plan__step--failed .pillar-inline-plan__step-icon {
   color: var(--pillar-danger, #dc2626);
+}
+
+/* Guidance step styles */
+.pillar-inline-plan__step--guidance {
+  background: var(--pillar-bg-info-subtle, rgba(59, 130, 246, 0.08));
+  border-left: 2px solid var(--pillar-info, #3b82f6);
+  padding-left: 10px;
+}
+
+.pillar-inline-plan__step--guidance .pillar-inline-plan__step-icon {
+  color: var(--pillar-info, #3b82f6);
+}
+
+.pillar-inline-plan__step--guidance.pillar-inline-plan__step--completed {
+  background: transparent;
+  border-left-color: var(--pillar-success, #059669);
+}
+
+.pillar-inline-plan__guidance-text {
+  font-size: 11px;
+  color: var(--pillar-text-secondary, #6b7280);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.pillar-inline-plan__guidance-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Inline UI Card Container */
+.pillar-inline-plan__inline-card {
+  margin-top: 6px;
+}
+
+.pillar-inline-plan__inline-card .pillar-confirm-card {
+  margin: 0;
+}
+
+.pillar-inline-plan__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--pillar-primary, #2563eb);
+  background: var(--pillar-bg-primary-subtle, rgba(37, 99, 235, 0.1));
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.pillar-inline-plan__source-link:hover {
+  background: var(--pillar-bg-primary-subtle-hover, rgba(37, 99, 235, 0.15));
+  text-decoration: underline;
 }
 
 /* Buttons */

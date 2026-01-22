@@ -162,7 +162,7 @@ export const addAssistantMessage = (content: string, messageId?: string) => {
 };
 
 export const updateLastAssistantMessage = (
-  content: string,
+  content: string | undefined,
   messageId?: string,
   actions?: TaskButtonData[],
   sources?: ArticleSummary[]
@@ -174,7 +174,8 @@ export const updateLastAssistantMessage = (
       ...msgs.slice(0, -1),
       {
         role: 'assistant',
-        content,
+        // If content is undefined, preserve existing content (for plan scenarios)
+        content: content !== undefined ? content : existingMsg.content,
         id: messageId ?? existingMsg.id,
         actions: actions ?? existingMsg.actions,
         sources: sources ?? existingMsg.sources,

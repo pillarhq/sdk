@@ -129,6 +129,11 @@ export function ChatView() {
     if (pillar) {
       pillar.handlePlanReceived(plan);
     }
+    
+    // Update the assistant message so the thinking spinner goes away
+    // The plan UI will be displayed separately via PlanView component
+    const planMessage = `I'll help you with that. Here's my plan:`;
+    updateLastAssistantMessage(planMessage);
   }, []);
 
   /**
@@ -243,13 +248,25 @@ export function ChatView() {
         finalActions = handleActionsReceived(response.actions);
       }
 
-      // Update with final response, message ID, actions, and sources
-      updateLastAssistantMessage(
-        response.message,
-        response.messageId,
-        finalActions,
-        response.sources
-      );
+      // Skip final message update if there's an active plan and no text response
+      // (plan already set the message via handlePlanReceived)
+      if (hasActivePlan.value && !response.message) {
+        // Still update messageId, actions, sources without overwriting content
+        updateLastAssistantMessage(
+          undefined,  // Don't overwrite content
+          response.messageId,
+          finalActions,
+          response.sources
+        );
+      } else {
+        // Update with final response, message ID, actions, and sources
+        updateLastAssistantMessage(
+          response.message,
+          response.messageId,
+          finalActions,
+          response.sources
+        );
+      }
       
       // Store conversation ID for subsequent messages
       if (response.conversationId) {

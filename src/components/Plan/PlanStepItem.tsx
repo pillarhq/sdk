@@ -3,10 +3,18 @@
  *
  * Renders a single step in an execution plan.
  * Shows status icon, description, and action buttons for confirmation/skip.
+ * 
+ * For inline_ui action types, renders an inline card for user interaction
+ * (e.g., invite form, confirmation dialog).
  */
 
 import { h } from 'preact';
+import { useRef, useEffect } from 'preact/hooks';
+import Pillar from '../../core/Pillar';
+import type { CardCallbacks } from '../../core/events';
 import type { ExecutionStep, StepStatus } from '../../core/plan';
+import { createDefaultConfirmCard } from '../Cards/ConfirmActionCard';
+import type { TaskButtonData } from '../Panel/TaskButton';
 
 // ============================================================================
 // Icons
@@ -56,9 +64,14 @@ interface PlanStepItemProps {
   onSkip: (stepId: string) => void;
   onRetry?: (stepId: string) => void;
   onDone?: (stepId: string) => void;
+  /** Called when an inline_ui action is confirmed with data */
+  onInlineConfirm?: (stepId: string, data?: Record<string, unknown>) => void;
 }
 
-export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone }: PlanStepItemProps) {
+export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlineConfirm }: PlanStepItemProps) {
+  // Ref for inline_ui card container
+  const inlineCardRef = useRef<HTMLDivElement>(null);
+  
   const handleConfirm = () => {
     onConfirm(step.id);
   };
@@ -80,6 +93,68 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone }: PlanS
     step.status === 'executing' ||
     step.status === 'awaiting_confirmation' ||
     step.status === 'awaiting_result';
+  
+  // Check if this is an inline_ui action that should render a card
+  const isInlineUI = step.action_type === 'inline_ui';
+  const shouldShowInlineCard = isInlineUI && (step.status === 'ready' || step.status === 'awaiting_result');
+
+  // Render inline_ui card when step is active
+  useEffect(() => {
+    if (!shouldShowInlineCard || !inlineCardRef.current) return;
+    
+    // Clear existing content
+    inlineCardRef.current.innerHTML = '';
+    
+    const pillar = Pillar.getInstance();
+    const cardType = (step.action_data?.card_type as string) || step.action_name || 'default';
+    const customRenderer = pillar?.getCardRenderer(cardType);
+    
+    // Create TaskButtonData-like object for the card
+    const actionForCard: TaskButtonData = {
+      id: step.id,
+      name: step.action_name || 'action',
+      taskType: 'inline_ui',
+      data: step.action_data || {},
+    };
+    
+    const callbacks: CardCallbacks = {
+      onConfirm: (data) => {
+        console.log('[PlanStepItem] Inline card confirmed with data:', data);
+        // Call the inline confirm handler which will execute the step
+        if (onInlineConfirm) {
+          onInlineConfirm(step.id, data);
+        } else if (pillar) {
+          // Execute the task with the data
+          pillar.executeTask({
+            id: step.id,
+            name: step.action_name || 'action',
+            taskType: 'inline_ui',
+            data: data || step.action_data || {},
+          });
+        }
+      },
+      onCancel: () => {
+        console.log('[PlanStepItem] Inline card cancelled');
+        onSkip(step.id);
+      },
+      onStateChange: (state, message) => {
+        console.log(`[PlanStepItem] Card state: ${state}${message ? ` - ${message}` : ''}`);
+      },
+    };
+    
+    if (customRenderer) {
+      // Use custom renderer registered by host app
+      try {
+        customRenderer(inlineCardRef.current, step.action_data || {}, callbacks);
+      } catch (err) {
+        console.error('[PlanStepItem] Custom card renderer error:', err);
+      }
+    } else {
+      // Use default confirm card
+      const defaultCard = createDefaultConfirmCard(actionForCard, callbacks);
+      inlineCardRef.current.appendChild(defaultCard);
+    }
+  }, [shouldShowInlineCard, step.id, step.action_data, step.action_name]);
 
   const canRetry = step.status === 'failed' && step.is_retriable && step.retry_count < step.max_retries;
   const statusClass = `pillar-plan-step pillar-plan-step--${step.status}`;
@@ -92,7 +167,15 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone }: PlanS
       <div class="pillar-plan-step__content">
         <div class="pillar-plan-step__description">{step.description}</div>
 
-        {step.status === 'awaiting_confirmation' && (
+        {/* Inline UI card for inline_ui action types */}
+        {shouldShowInlineCard && (
+          <div 
+            ref={inlineCardRef} 
+            class="pillar-plan-step__inline-card"
+          />
+        )}
+
+        {step.status === 'awaiting_confirmation' && !isInlineUI && (
           <div class="pillar-plan-step__actions">
             <button
               type="button"
@@ -111,11 +194,11 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone }: PlanS
           </div>
         )}
 
-        {step.status === 'executing' && (
+        {step.status === 'executing' && !isInlineUI && (
           <div class="pillar-plan-step__status-text">Running...</div>
         )}
 
-        {step.status === 'awaiting_result' && (
+        {step.status === 'awaiting_result' && !isInlineUI && (
           <div class="pillar-plan-step__awaiting-container">
             <div class="pillar-plan-step__instruction-row">
               <span class="pillar-plan-step__action-badge">In Progress</span>
@@ -428,6 +511,15 @@ export const PLAN_STEP_STYLES = `
 
 .pillar-plan-step__done-btn:hover {
   background: var(--pillar-primary-hover, #1d4ed8);
+}
+
+/* Inline Card Container */
+.pillar-plan-step__inline-card {
+  margin-top: 8px;
+}
+
+.pillar-plan-step__inline-card .pillar-confirm-card {
+  margin: 0;
 }
 
 /* Spinner Animation for Executing Step */

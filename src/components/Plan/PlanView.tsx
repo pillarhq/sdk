@@ -57,6 +57,10 @@ export function PlanView() {
     pillar?.markPlanStepDone(stepId);
   };
 
+  const handleInlineConfirm = (stepId: string, data?: Record<string, unknown>) => {
+    pillar?.confirmInlinePlanStep(stepId, data);
+  };
+
   return (
     <div class="pillar-plan">
       <div class="pillar-plan__header">
@@ -88,6 +92,7 @@ export function PlanView() {
             onSkip={handleSkipStep}
             onRetry={handleRetryStep}
             onDone={handleDoneStep}
+            onInlineConfirm={handleInlineConfirm}
           />
         ))}
       </div>
