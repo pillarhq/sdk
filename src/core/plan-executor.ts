@@ -437,7 +437,7 @@ export class PlanExecutor {
   ): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan');
+      // No active plan - this is fine, action was standalone
       return;
     }
 
@@ -447,9 +447,7 @@ export class PlanExecutor {
     );
 
     if (!step) {
-      console.warn(
-        `[PlanExecutor] No awaiting step found for action: ${actionName}`
-      );
+      // No active plan step waiting for this action - that's fine, it was standalone
       return;
     }
 

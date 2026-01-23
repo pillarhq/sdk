@@ -7,7 +7,7 @@ import { render } from 'preact';
 import type { APIClient } from '../../api/client';
 import type { ResolvedConfig } from '../../core/config';
 import type { EventEmitter } from '../../core/events';
-import { resetChat, triggerInputFocus } from '../../store/chat';
+import { resetChat, setPendingMessage, triggerInputFocus, triggerSubmitPending } from '../../store/chat';
 import {
   closePanel,
   destroyViewportListener,
@@ -122,7 +122,17 @@ export class Panel {
   /**
    * Open the panel
    */
-  open(options?: { view?: string; focusInput?: boolean }): void {
+  open(options?: { view?: string; search?: string; focusInput?: boolean }): void {
+    // Handle search option - set pending message and navigate to chat
+    if (options?.search) {
+      setPendingMessage(options.search);
+      // Navigate to chat view to process the search query
+      navigate('chat');
+      // Trigger ChatView to process the pending message
+      // This works whether ChatView is already mounted or will mount after navigation
+      triggerSubmitPending();
+    }
+
     if (isOpen.value) {
       // If already open, just navigate
       if (options?.view) {
@@ -138,8 +148,8 @@ export class Panel {
     // Update state - the subscription will handle DOM updates
     openPanel();
 
-    // Handle initial view
-    if (options?.view) {
+    // Handle initial view (if not already handled by search)
+    if (options?.view && !options?.search) {
       navigate(options.view as ViewType);
     }
 

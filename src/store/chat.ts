@@ -65,6 +65,10 @@ export const prefillText = signal<string>('');
 // Pending message to be sent after navigation to chat view
 export const pendingMessage = signal<string | null>(null);
 
+// Signal to trigger processing of pending message (incremented to trigger effect)
+// This decouples message sending from ChatView's mount lifecycle
+export const submitPendingTrigger = signal<number>(0);
+
 // Signal to trigger input focus (incremented to trigger effect)
 export const focusInputTrigger = signal<number>(0);
 
@@ -322,6 +326,12 @@ export const clearPendingMessage = () => {
   pendingMessage.value = null;
 };
 
+// Trigger ChatView to process any pending message
+// This works whether ChatView is already mounted or will mount soon
+export const triggerSubmitPending = () => {
+  submitPendingTrigger.value += 1;
+};
+
 export const triggerInputFocus = () => {
   focusInputTrigger.value += 1;
 };
@@ -358,6 +368,7 @@ export const resetChat = () => {
   currentActions.value = [];
   prefillText.value = '';
   pendingMessage.value = null;
+  submitPendingTrigger.value = 0;
   userContext.value = [];
   pendingUserContext.value = [];
   clearPendingImages();

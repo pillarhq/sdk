@@ -683,6 +683,38 @@ export class Pillar {
   }
 
   /**
+   * Signal that an action has completed.
+   * 
+   * For simple actions, this emits the completion event.
+   * For wizard actions (modals, multi-step flows), call this when the user
+   * finishes the flow.
+   * 
+   * If there's an active plan waiting on this action, the plan automatically
+   * advances to the next step.
+   * 
+   * @param actionName - The action identifier
+   * @param success - Whether the action completed successfully (default: true)
+   * @param data - Optional result data
+   * 
+   * @example
+   * // In your wizard completion handler:
+   * pillar.completeAction('add_source', true, { sourceId: source.id });
+   */
+  async completeAction(
+    actionName: string,
+    success: boolean = true,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    // Emit the task:complete event for standalone action tracking
+    this._events.emit('task:complete', { name: actionName, success, data });
+    
+    // If there's an active plan with this action awaiting, advance it
+    if (this._planExecutor) {
+      await this._planExecutor.completeStepByAction(actionName, success, data);
+    }
+  }
+
+  /**
    * Confirm task execution result.
    * Call this after your task handler completes to report success/failure
    * back to Pillar for implementation status tracking.
@@ -1043,28 +1075,6 @@ export class Pillar {
    */
   async cancelPlan(): Promise<void> {
     await this._planExecutor?.cancel();
-  }
-
-  /**
-   * Complete a plan step by action name.
-   * 
-   * Use this when the host app completes a wizard or flow that was started
-   * by a plan step. The plan will advance to the next step.
-   * 
-   * @param actionName - The action name (e.g., 'add_new_source')
-   * @param success - Whether the action completed successfully (default: true)
-   * @param data - Optional result data
-   * 
-   * @example
-   * // In your source creation success handler:
-   * pillar.completePlanStepByAction('add_new_source');
-   */
-  async completePlanStepByAction(
-    actionName: string,
-    success: boolean = true,
-    data?: Record<string, unknown>
-  ): Promise<void> {
-    await this._planExecutor?.completeStepByAction(actionName, success, data);
   }
 
   /**

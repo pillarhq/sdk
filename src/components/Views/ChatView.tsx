@@ -25,6 +25,7 @@ import {
   setLoading,
   setMessageFeedback,
   setProgressStatus,
+  submitPendingTrigger,
   updateActionMessageContent,
   updateLastAssistantMessage,
   type ChatImage,
@@ -79,21 +80,19 @@ function getCompletionText(actionName: string, success: boolean): string {
 export function ChatView() {
   const api = useAPI();
   const messagesRef = useRef<HTMLDivElement>(null);
-  const hasProcessedPending = useRef(false);
 
-  // Process pending message on mount
+  // Process pending message when triggered
+  // The trigger signal is incremented by Panel.open() when a search query is passed
+  // This works whether ChatView is already mounted or just mounting
   useEffect(() => {
-    if (hasProcessedPending.current) return;
-
     const pending = pendingMessage.value;
     const pendingContext = pendingUserContext.value;
     if (pending) {
-      hasProcessedPending.current = true;
       clearPendingMessage();
       clearPendingUserContext();
       sendMessage(pending, pendingContext.length > 0 ? pendingContext : undefined);
     }
-  }, []);
+  }, [submitPendingTrigger.value]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
