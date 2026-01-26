@@ -95,8 +95,19 @@ export interface StreamCallbacks {
   onError?: (error: string) => void;
   /** Called when stream is complete */
   onComplete?: (conversationId?: string, queryLogId?: string) => void;
-  /** Called for progress updates */
-  onProgress?: (progress: { kind: string; message?: string }) => void;
+  /** Called for progress updates (search, query, generating, etc.) */
+  onProgress?: (progress: {
+    kind: string;
+    message?: string;
+    progress_id?: string;
+    metadata?: {
+      sources?: Array<{title: string; url: string; score?: number}>;
+      result_count?: number;
+      query?: string;
+      action_name?: string;
+      no_sources_used?: boolean;
+    };
+  }) => void;
 }
 
 /** Image for chat requests (from upload-image endpoint) */
@@ -288,8 +299,19 @@ export class MCPClient {
                       // Stream was cancelled
                       break;
                     } else {
-                      // Other progress types (search, generating, thinking)
-                      callbacks.onProgress?.(progress);
+                      // Other progress types (processing, search, search_complete, query, query_complete, query_failed, generating)
+                      callbacks.onProgress?.({
+                        kind: progress.kind,
+                        message: progress.message,
+                        progress_id: progress.progress_id,
+                        metadata: {
+                          sources: progress.sources || progress.metadata?.sources,
+                          result_count: progress.result_count ?? progress.metadata?.result_count,
+                          query: progress.query || progress.metadata?.query,
+                          action_name: progress.action_name || progress.metadata?.action_name,
+                          no_sources_used: progress.no_sources_used ?? progress.metadata?.no_sources_used,
+                        },
+                      });
                     }
                   }
                 }

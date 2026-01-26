@@ -6,10 +6,12 @@
 import { h } from 'preact';
 import { canGoBack, isAtHome, goBack, goHome, type ViewType } from '../../store/router';
 import { closePanel } from '../../store/panel';
+import { hasMessages } from '../../store/chat';
 
 const BACK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>`;
 const HOME_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>`;
 const CLOSE_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>`;
+const NEW_CHAT_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>`;
 
 const VIEW_TITLES: Record<ViewType, string> = {
   home: 'Assistant',
@@ -26,6 +28,8 @@ interface HeaderProps {
 export function Header({ currentView, customTitle, hideNavigation = false }: HeaderProps) {
   const showBack = !hideNavigation && canGoBack.value;
   const showHome = !hideNavigation && !isAtHome.value;
+  // Show new chat button in chat view when there are messages
+  const showNewChat = currentView === 'chat' && hasMessages.value;
   const title = customTitle || VIEW_TITLES[currentView];
 
   const handleBack = () => {
@@ -33,6 +37,10 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
   };
 
   const handleHome = () => {
+    goHome();
+  };
+
+  const handleNewChat = () => {
     goHome();
   };
 
@@ -52,7 +60,7 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
             dangerouslySetInnerHTML={{ __html: BACK_ICON }}
           />
         )}
-        {showHome && (
+        {showHome && !showNewChat && (
           <button
             class="_pillar-icon-btn pillar-icon-btn pillar-home-btn"
             onClick={handleHome}
@@ -63,13 +71,25 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
         )}
         <span class="_pillar-header-title pillar-header-title">{title}</span>
       </div>
-      <button
-        class="_pillar-icon-btn pillar-icon-btn pillar-close-btn"
-        onClick={handleClose}
-        aria-label="Close assistant panel"
-        type="button"
-        dangerouslySetInnerHTML={{ __html: CLOSE_ICON }}
-      />
+      <div class="_pillar-header-right pillar-header-right">
+        {showNewChat && (
+          <button
+            class="_pillar-icon-btn pillar-icon-btn pillar-new-chat-btn"
+            onClick={handleNewChat}
+            aria-label="New chat"
+            title="New chat"
+            type="button"
+            dangerouslySetInnerHTML={{ __html: NEW_CHAT_ICON }}
+          />
+        )}
+        <button
+          class="_pillar-icon-btn pillar-icon-btn pillar-close-btn"
+          onClick={handleClose}
+          aria-label="Close assistant panel"
+          type="button"
+          dangerouslySetInnerHTML={{ __html: CLOSE_ICON }}
+        />
+      </div>
     </header>
   );
 }

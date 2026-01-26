@@ -321,10 +321,18 @@ export const PANEL_STYLES = `
   color: var(--pillar-text);
 }
 
+._pillar-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--pillar-spacing-xs);
+}
+
 /* Public override classes */
 .pillar-header {}
 .pillar-header-left {}
+.pillar-header-right {}
 .pillar-header-title {}
+.pillar-new-chat-btn {}
 
 /* ============================================================================
    Icon Buttons (back, home, close)
@@ -2043,4 +2051,160 @@ export const PANEL_STYLES = `
 .pillar-unified-input {}
 .pillar-unified-input-row {}
 .pillar-unified-send-btn {}
+
+/* ============================================================================
+   Progress Row (for search, query, generating events)
+   Internal: _pillar-progress-row | Public: pillar-progress-row
+   ============================================================================ */
+
+._pillar-progress-events {
+  margin: 4px 0;
+}
+
+._pillar-progress-row {
+  margin: 1px 0;
+  padding: 1px 0;
+  font-size: 12px;
+  animation: pillar-progress-row-fade-in 0.3s ease-in-out;
+}
+
+._pillar-progress-row--error {
+  color: #dc2626;
+}
+
+@keyframes pillar-progress-row-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+._pillar-progress-row-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+._pillar-progress-expand-icon {
+  font-size: 10px;
+  color: var(--pillar-text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+._pillar-progress-row-header[style*="cursor: pointer"]:hover ._pillar-progress-expand-icon {
+  color: var(--pillar-text-secondary);
+}
+
+._pillar-progress-row-header[data-expanded="true"] ._pillar-progress-expand-icon {
+  transform: rotate(90deg);
+}
+
+._pillar-progress-message {
+  flex: 1;
+  color: var(--pillar-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+._pillar-progress-no-results {
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+._pillar-progress-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+._pillar-progress-source-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+._pillar-progress-source-link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  overflow: hidden;
+  color: inherit;
+}
+
+._pillar-progress-source-link:hover ._pillar-progress-source-title {
+  text-decoration: underline;
+}
+
+._pillar-progress-source-title {
+  font-weight: 400;
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+}
+
+._pillar-progress-content-wrapper {
+  position: relative;
+  padding-left: 16px;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out;
+}
+
+._pillar-progress-content-wrapper--expanded {
+  grid-template-rows: 1fr;
+  margin-top: 6px;
+}
+
+._pillar-progress-content-container {
+  overflow: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pillar-scrollbar-thumb) transparent;
+}
+
+._pillar-progress-content-wrapper--expanded ._pillar-progress-content-container {
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar-thumb {
+  background-color: var(--pillar-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+._pillar-progress-content-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(transparent, var(--pillar-bg));
+  pointer-events: none;
+}
+
+.pillar-progress-events {}
+.pillar-progress-row {}
+.pillar-progress-row-header {}
+.pillar-progress-expand-icon {}
+.pillar-progress-message {}
+.pillar-progress-no-results {}
+.pillar-progress-sources {}
+.pillar-progress-source-item {}
+.pillar-progress-source-link {}
+.pillar-progress-source-title {}
+.pillar-progress-content-wrapper {}
+.pillar-progress-content-container {}
+.pillar-progress-content-gradient {}
 `;

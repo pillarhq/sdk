@@ -42,11 +42,28 @@ export const isLoading = signal(false);
 
 // Current progress status during loading (e.g., "Searching...", "Generating answer...")
 export interface ProgressStatus {
-  kind: 'search' | 'search_complete' | 'generating' | 'thinking' | null;
+  kind: 'processing' | 'search' | 'search_complete' | 'query' | 'query_complete' | 'query_failed' | 'generating' | null;
   message?: string;
 }
 
 export const progressStatus = signal<ProgressStatus>({ kind: null });
+
+// Progress event for accumulating all progress events during a response
+export interface ProgressEvent {
+  kind: 'processing' | 'search' | 'search_complete' | 'query' | 'query_complete' | 'query_failed' | 'generating';
+  message?: string;
+  progress_id?: string;
+  metadata?: {
+    sources?: Array<{title: string; url: string; score?: number}>;  // for search_complete
+    result_count?: number;   // for search_complete
+    query?: string;          // for search
+    action_name?: string;    // for query events
+    no_sources_used?: boolean;
+  };
+}
+
+// Accumulated progress events for current message
+export const progressEvents = signal<ProgressEvent[]>([]);
 
 // Whether chat area is expanded (shows messages)
 export const isExpanded = signal(false);
@@ -302,6 +319,14 @@ export const clearProgressStatus = () => {
   progressStatus.value = { kind: null };
 };
 
+export const addProgressEvent = (event: ProgressEvent) => {
+  progressEvents.value = [...progressEvents.value, event];
+};
+
+export const clearProgressEvents = () => {
+  progressEvents.value = [];
+};
+
 export const expandChat = () => {
   isExpanded.value = true;
 };
@@ -363,6 +388,7 @@ export const resetChat = () => {
   conversationId.value = null;
   isLoading.value = false;
   progressStatus.value = { kind: null };
+  progressEvents.value = [];
   isExpanded.value = false;
   currentSources.value = [];
   currentActions.value = [];

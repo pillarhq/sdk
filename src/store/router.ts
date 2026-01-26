@@ -4,7 +4,7 @@
  */
 
 import { signal, computed } from '@preact/signals';
-import { resetChat } from './chat';
+import { resetChat, triggerSubmitPending } from './chat';
 
 export type ViewType = 'home' | 'chat';
 
@@ -63,7 +63,10 @@ export const resetRouter = () => {
   currentView.value = { type: 'home' };
 };
 
-// Navigate to chat view
+// Navigate to chat view and trigger pending message processing
 export const navigateToChat = () => {
   navigate('chat');
+  // Trigger processing of any pending message
+  // This ensures the effect runs even if ChatView was already mounted
+  triggerSubmitPending();
 };

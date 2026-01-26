@@ -9,15 +9,18 @@ import Pillar from '../../core/Pillar';
 import type { ExecutionPlan } from '../../core/plan';
 import {
   addAssistantMessage,
+  addProgressEvent,
   addUserMessage,
   clearPendingMessage,
   clearPendingUserContext,
+  clearProgressEvents,
   clearProgressStatus,
   conversationId,
   isLoading,
   messages,
   pendingMessage,
   pendingUserContext,
+  progressEvents,
   progressStatus,
   setActionComplete,
   setActionPending,
@@ -29,9 +32,10 @@ import {
   updateActionMessageContent,
   updateLastAssistantMessage,
   type ChatImage,
+  type ProgressEvent as StoreProgressEvent,
 } from '../../store/chat';
+import { ProgressRow } from '../Progress';
 import { hasActivePlan } from '../../store/plan';
-import { goHome } from '../../store/router';
 import type { UserContextItem } from '../../types/user-context';
 import { renderMarkdown } from '../../utils/markdown';
 import type { ProgressEvent } from '../../api/client';
@@ -41,8 +45,6 @@ import { ContextTagList } from '../Panel/ContextTag';
 import { createTaskButtonGroup, type TaskButtonData } from '../Panel/TaskButton';
 import { UnifiedChatInput } from '../Panel/UnifiedChatInput';
 import { PlanView } from '../Plan/PlanView';
-
-const NEW_CHAT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
 
 const THUMBS_UP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
 
@@ -200,6 +202,9 @@ export function ChatView() {
     // Add user message with context and images
     addUserMessage(message, userContext, images);
 
+    // Clear previous progress events before starting new response
+    clearProgressEvents();
+
     // Show loading state
     setLoading(true);
 
@@ -234,8 +239,11 @@ export function ChatView() {
         images,
         // Progress callback - show what AI is doing
         (progress: ProgressEvent) => {
+          // Add to progress events array for display
+          addProgressEvent(progress as StoreProgressEvent);
+          // Also update the single progress status (for backwards compatibility)
           setProgressStatus({
-            kind: progress.kind,
+            kind: progress.kind as StoreProgressEvent['kind'],
             message: progress.message,
           });
         }
@@ -277,6 +285,7 @@ export function ChatView() {
     } finally {
       setLoading(false);
       clearProgressStatus();
+      clearProgressEvents();
     }
   }, [api, handleActionsReceived]);
 
@@ -395,6 +404,23 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
+                  {/* Progress events (search, query, generating, etc.) */}
+                  {!msg.content && progressEvents.value.length > 0 && (
+                    <div class="_pillar-progress-events pillar-progress-events">
+                      {progressEvents.value.map((event, idx) => {
+                        const isLast = idx === progressEvents.value.length - 1;
+                        const isActive = isLast && !msg.content;
+                        
+                        return (
+                          <ProgressRow
+                            key={event.progress_id || idx}
+                            progress={event}
+                            isActive={isActive}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                   {msg.content ? (
                     <div
                       class="_pillar-message-assistant pillar-message-assistant"
@@ -403,12 +429,15 @@ export function ChatView() {
                       }}
                     />
                   ) : (
-                    <div class="_pillar-progress-indicator pillar-progress-indicator">
-                      <div class="_pillar-loading-spinner pillar-loading-spinner" />
-                      <span class="_pillar-progress-message pillar-progress-message">
-                        {progressStatus.value.message || 'Thinking...'}
-                      </span>
-                    </div>
+                    /* Only show simple loading if no progress events yet */
+                    progressEvents.value.length === 0 && (
+                      <div class="_pillar-progress-indicator pillar-progress-indicator">
+                        <div class="_pillar-loading-spinner pillar-loading-spinner" />
+                        <span class="_pillar-progress-message pillar-progress-message">
+                          {progressStatus.value.message || 'Processing...'}
+                        </span>
+                      </div>
+                    )
                   )}
                   {/* Action status indicator */}
                   {msg.actionStatus && Object.keys(msg.actionStatus).length > 0 && (
@@ -493,19 +522,6 @@ export function ChatView() {
           disabled={isLoading.value}
           onSubmit={handleInputSubmit}
         />
-        {/* New chat button - only show when there are messages */}
-        {messages.value.length > 0 && (
-          <div class="_pillar-chat-view-input-footer pillar-chat-view-input-footer">
-            <button
-              class="_pillar-chat-view-new-chat-btn pillar-chat-view-new-chat-btn"
-              onClick={goHome}
-              type="button"
-            >
-              <span class="_pillar-chat-view-new-chat-icon" dangerouslySetInnerHTML={{ __html: NEW_CHAT_ICON }} />
-              New chat
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

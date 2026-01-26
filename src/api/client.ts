@@ -45,9 +45,16 @@ export interface ChatResponse {
 }
 
 export interface ProgressEvent {
-  kind: 'search' | 'search_complete' | 'generating' | 'thinking';
+  kind: 'processing' | 'search' | 'search_complete' | 'query' | 'query_complete' | 'query_failed' | 'generating';
   message?: string;
   progress_id?: string;
+  metadata?: {
+    sources?: Array<{title: string; url: string; score?: number}>;
+    result_count?: number;
+    query?: string;
+    action_name?: string;
+    no_sources_used?: boolean;
+  };
 }
 
 /**
