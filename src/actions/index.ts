@@ -58,7 +58,6 @@ export type {
 
 // Registry
 export {
-  defineActions,
   setClientInfo,
   getClientInfo,
   getHandler,

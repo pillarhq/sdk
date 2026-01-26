@@ -587,7 +587,7 @@ export class PlanExecutor {
       let result: unknown = undefined;
       
       if (handler) {
-        // Use registered handler from defineActions()
+        // Use registered handler from action definition
         result = await handler(step.action_data);
         
         // If action returns data, send it back to the agent

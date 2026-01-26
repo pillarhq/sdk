@@ -2,15 +2,34 @@
  * Action Registry - Manages code-defined action handlers.
  *
  * This module provides the registration and lookup mechanism for
- * actions defined in code. Actions are registered using `defineActions()`
- * and can be looked up by name using `getHandler()`.
+ * actions defined in code. Actions are registered at runtime via
+ * `pillar.onTask()` and can be looked up by name using `getHandler()`.
  *
- * The registry also generates the manifest that gets synced to the server
- * during CI/CD builds.
+ * Action metadata is synced to the server during CI/CD builds using
+ * the `pillar-sync` CLI with a barrel file export pattern:
+ *
+ * @example
+ * ```ts
+ * // lib/pillar/actions/index.ts
+ * import type { SyncActionDefinitions } from '@pillar-ai/sdk';
+ *
+ * export const actions = {
+ *   open_settings: {
+ *     description: 'Navigate to the settings page',
+ *     type: 'navigate' as const,
+ *     path: '/settings',
+ *     autoRun: true,
+ *   },
+ * } as const satisfies SyncActionDefinitions;
+ *
+ * export default actions;
+ *
+ * // Sync via CI/CD:
+ * // npx pillar-sync --actions ./lib/pillar/actions/index.ts
+ * ```
  */
 import type {
   ActionDefinition,
-  ActionDefinitions,
   ActionManifest,
   ActionManifestEntry,
   ClientInfo,
@@ -29,47 +48,6 @@ const state: RegistryState = {
   actions: new Map(),
   clientInfo: null,
 };
-
-/**
- * Define and register actions with the SDK.
- *
- * Call this during app initialization to register your action handlers.
- * The metadata will be synced to the server during CI/CD builds.
- *
- * @example
- * ```ts
- * import { defineActions } from '@pillar-ai/sdk/actions';
- * import { router } from './router';
- *
- * export const actions = defineActions({
- *   open_settings: {
- *     description: 'Navigate to the settings page',
- *     type: 'navigate',
- *     path: '/settings',
- *     handler: () => router.push('/settings'),
- *   },
- *   open_billing: {
- *     description: 'Navigate to billing and subscription management',
- *     type: 'navigate',
- *     path: '/settings/billing',
- *     autoRun: true,
- *     handler: (data) => router.push('/settings/billing', data),
- *   },
- * });
- * ```
- *
- * @param actions - Map of action name to definition
- * @returns The same actions object (for re-export convenience)
- */
-export function defineActions<T extends ActionDefinitions>(actions: T): T {
-  for (const [name, definition] of Object.entries(actions)) {
-    if (state.actions.has(name)) {
-      console.warn(`[Pillar] Action "${name}" is already registered. Overwriting.`);
-    }
-    state.actions.set(name, definition);
-  }
-  return actions;
-}
 
 /**
  * Set client platform and version info.

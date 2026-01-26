@@ -6,16 +6,22 @@
  *
  * @example
  * ```ts
- * import { defineActions } from '@pillar-ai/sdk/actions';
+ * // lib/pillar/actions/index.ts
+ * import type { SyncActionDefinitions } from '@pillar-ai/sdk';
  *
- * const actions = defineActions({
+ * export const actions = {
  *   open_settings: {
  *     description: 'Navigate to the settings page',
- *     type: 'navigate',
+ *     type: 'navigate' as const,
  *     path: '/settings',
- *     handler: () => router.push('/settings'),
+ *     autoRun: true,
  *   },
- * });
+ * } as const satisfies SyncActionDefinitions;
+ *
+ * export default actions;
+ *
+ * // Sync via CI/CD: npx pillar-sync --actions ./lib/pillar/actions/index.ts
+ * // Register handlers at runtime: pillar.onTask('open_settings', () => router.push('/settings'));
  * ```
  */
 

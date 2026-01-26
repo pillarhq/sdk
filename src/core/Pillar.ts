@@ -601,7 +601,7 @@ export class Pillar {
     }
 
     // Look for handlers in this order:
-    // 1. Code-first action registry (via defineActions)
+    // 1. Code-first action registry (synced via pillar-sync CLI)
     // 2. Specific handler by action name (via onTask)
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
@@ -663,7 +663,7 @@ export class Pillar {
           }
           break;
         default:
-          console.warn(`[Pillar] No handler registered for task "${name}". Register one with pillar.onTask('${name}', handler) or defineActions()`);
+          console.warn(`[Pillar] No handler registered for task "${name}". Register one with pillar.onTask('${name}', handler)`);
           // Emit failure for unhandled tasks
           this._events.emit('task:complete', { name, success: false, data: { error: 'No handler registered' } });
       }

@@ -67,7 +67,6 @@ export {
 
 // Actions (code-first action definitions)
 export {
-  defineActions,
   setClientInfo,
   getClientInfo,
   getHandler,
