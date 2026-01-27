@@ -1,11 +1,33 @@
 # @pillar-ai/sdk
 
-Pillar Embedded Help SDK - Add contextual help and AI chat to your application.
+Pillar Embedded Help SDK — Add contextual help and AI-powered assistance to your application.
+
+[![npm version](https://img.shields.io/npm/v/@pillar-ai/sdk)](https://www.npmjs.com/package/@pillar-ai/sdk)
+[![npm downloads](https://img.shields.io/npm/dm/@pillar-ai/sdk)](https://www.npmjs.com/package/@pillar-ai/sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue)](https://www.typescriptlang.org/)
+
+## Features
+
+- **AI Chat** — Embedded AI assistant that understands your product
+- **Edge Trigger** — Built-in sidebar tab to open the help panel (or use your own button)
+- **Contextual Help** — Show relevant help based on user context
+- **Text Selection** — Allow users to ask questions about selected text
+- **Customizable UI** — Full control over positioning, theming, and behavior
+- **Framework Bindings** — First-class support for React, Vue, and Svelte
+
+## Documentation
+
+**[View Full Documentation](https://trypillar.com/docs)** | [Getting Started](https://trypillar.com/docs/getting-started/quick-start) | [API Reference](https://trypillar.com/docs/reference/core)
 
 ## Installation
 
 ```bash
 npm install @pillar-ai/sdk
+# or
+pnpm add @pillar-ai/sdk
+# or
+yarn add @pillar-ai/sdk
 ```
 
 ## Quick Start
@@ -62,47 +84,28 @@ document.getElementById("my-help-button").addEventListener("click", () => {
 });
 ```
 
-## Features
-
-- **AI Chat**: Embedded AI assistant that understands your product
-- **Edge Trigger**: Built-in sidebar tab to open the help panel (or use your own button)
-- **Contextual Help**: Show relevant help based on user context
-- **Text Selection**: Allow users to ask questions about selected text
-- **Customizable UI**: Full control over positioning, theming, and behavior
-
 ## API Reference
 
-### Pillar.init(config)
+| Method | Description |
+|--------|-------------|
+| `Pillar.init(config)` | Initialize the SDK with your configuration |
+| `Pillar.open()` | Open the help panel |
+| `Pillar.close()` | Close the help panel |
+| `Pillar.toggle()` | Toggle the help panel open/closed |
+| `Pillar.setContext(context)` | Update the user/product context |
+| `Pillar.on(event, callback)` | Subscribe to SDK events |
 
-Initialize the SDK with your configuration.
+For complete API documentation, see the [API Reference](https://trypillar.com/docs/reference/core).
 
-### Pillar.open()
+## Framework Integrations
 
-Open the help panel.
+For a more idiomatic integration with your framework of choice, use our framework-specific packages:
 
-### Pillar.close()
-
-Close the help panel.
-
-### Pillar.toggle()
-
-Toggle the help panel open/closed.
-
-### Pillar.setContext(context)
-
-Update the user/product context.
-
-### Pillar.on(event, callback)
-
-Subscribe to SDK events.
-
-## React Integration
-
-For React applications, use the `@pillar-ai/react` package for a more idiomatic integration with hooks and components.
-
-```bash
-npm install @pillar-ai/react
-```
+| Framework | Package | Installation |
+|-----------|---------|--------------|
+| React | [@pillar-ai/react](https://github.com/pillarhq/sdk-react) | `npm install @pillar-ai/react` |
+| Vue | [@pillar-ai/vue](https://github.com/pillarhq/sdk-vue) | `npm install @pillar-ai/vue` |
+| Svelte | [@pillar-ai/svelte](https://github.com/pillarhq/sdk-svelte) | `npm install @pillar-ai/svelte` |
 
 ## License
 
