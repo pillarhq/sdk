@@ -38,6 +38,9 @@ const X_CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 // Max height for 6 lines
 const MAX_INPUT_HEIGHT = 146;
 
+// Max message length (~8K tokens) to prevent large query blocking
+const MAX_MESSAGE_LENGTH = 32_000;
+
 interface UnifiedChatInputProps {
   /** Placeholder text for the input */
   placeholder?: string;
@@ -285,6 +288,7 @@ export function UnifiedChatInput({
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         disabled={disabled}
+        maxLength={MAX_MESSAGE_LENGTH}
         style={{ height: '41px' }}
       />
 

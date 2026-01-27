@@ -93,6 +93,8 @@ export interface StreamCallbacks {
   onPlan?: (plan: ExecutionPlan) => void;
   /** Called on error */
   onError?: (error: string) => void;
+  /** Called when conversation_started event is received (early conversation_id) */
+  onConversationStarted?: (conversationId: string, messageId?: string) => void;
   /** Called when stream is complete */
   onComplete?: (conversationId?: string, queryLogId?: string) => void;
   /** Called for progress updates (search, query, generating, etc.) */
@@ -292,6 +294,12 @@ export class MCPClient {
                     if (progress.kind === 'token' && progress.token) {
                       collectedText.push(progress.token);
                       callbacks.onToken?.(progress.token);
+                    } else if (progress.kind === 'conversation_started') {
+                      // Conversation started - early conversation_id from pre-generated UUID
+                      callbacks.onConversationStarted?.(
+                        progress.conversation_id,
+                        progress.message_id
+                      );
                     } else if (progress.kind === 'plan_created' && progress.plan) {
                       // Plan was created by the ReAct agent
                       callbacks.onPlan?.(progress.plan as ExecutionPlan);

@@ -246,6 +246,10 @@ export function ChatView() {
             kind: progress.kind as StoreProgressEvent['kind'],
             message: progress.message,
           });
+        },
+        // Conversation started callback - store ID early for optimistic UI
+        (convId) => {
+          setConversationId(convId);
         }
       );
 

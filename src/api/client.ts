@@ -297,9 +297,10 @@ export class APIClient {
     existingConversationId?: string | null,
     onActions?: (actions: TaskButtonData[]) => void,
     onPlan?: (plan: ExecutionPlan) => void,
-userContext?: UserContextItem[],
+    userContext?: UserContextItem[],
     images?: ChatImage[],
-    onProgress?: (progress: ProgressEvent) => void
+    onProgress?: (progress: ProgressEvent) => void,
+    onConversationStarted?: (conversationId: string, messageId?: string) => void
   ): Promise<ChatResponse> {
     // Use MCP client for chat via the 'ask' tool
     let fullMessage = '';
@@ -326,6 +327,9 @@ userContext?: UserContextItem[],
           },
           onProgress: (p) => {
             onProgress?.(p as ProgressEvent);
+          },
+          onConversationStarted: (convId, msgId) => {
+            onConversationStarted?.(convId, msgId);
           },
           onError: (error) => {
             console.error('[Pillar API] MCP chat error:', error);
