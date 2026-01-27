@@ -154,7 +154,7 @@ export class APIClient {
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-customer-id': this.config.helpCenter, // Help center subdomain for middleware resolution
+      'x-customer-id': this.config.productKey, // Product key for middleware resolution
       'x-visitor-id': this.getVisitorId(),
       'x-session-id': this.getSessionId(),
       'x-page-url': this.getPageUrl(),
@@ -227,7 +227,7 @@ export class APIClient {
   async fetchEmbedConfig(): Promise<ServerEmbedConfig | null> {
     try {
       const response = await fetch(
-        `${this.config.apiBaseUrl}/api/public/products/${this.config.helpCenter}/embed-config/`,
+        `${this.config.apiBaseUrl}/api/public/products/${this.config.productKey}/embed-config/`,
         {
           method: 'GET',
           headers: {

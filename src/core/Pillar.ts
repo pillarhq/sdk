@@ -156,8 +156,9 @@ export class Pillar {
    * Initialize the Pillar SDK
    */
   static async init(config: PillarConfig): Promise<Pillar> {
-    if (!config.helpCenter) {
-      throw new Error('[Pillar] helpCenter is required');
+    // Support both productKey (new) and helpCenter (deprecated)
+    if (!config.productKey && !config.helpCenter) {
+      throw new Error('[Pillar] productKey is required');
     }
 
     // Create singleton if doesn't exist
@@ -1181,7 +1182,7 @@ export class Pillar {
       this._planExecutor = new PlanExecutor(
         this._mcpClient,
         this._events,
-        this._config.helpCenter // Use helpCenter (Pillar slug) for plan persistence - unique across all sites
+        this._config.productKey // Use productKey for plan persistence - unique across all sites
       );
 
       // Create shared root container for all Pillar UI elements

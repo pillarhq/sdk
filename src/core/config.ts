@@ -191,7 +191,16 @@ export interface MobileTriggerConfig {
 }
 
 export interface PillarConfig {
-  helpCenter: string;
+  /**
+   * Your product key from the Pillar app.
+   * Get it at app.trypillar.com
+   */
+  productKey?: string;
+  
+  /**
+   * @deprecated Use `productKey` instead. Will be removed in v1.0.
+   */
+  helpCenter?: string;
   
   /**
    * Platform identifier for code-first actions.
@@ -284,7 +293,7 @@ export interface ResolvedThemeConfig {
 }
 
 export interface ResolvedConfig {
-  helpCenter: string;
+  productKey: string;
   apiBaseUrl: string;
   
   /** Platform for code-first actions (default: 'web') */
@@ -305,8 +314,8 @@ export interface ResolvedConfig {
   onError?: (error: Error) => void;
 }
 
-export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'helpCenter' | 'publicKey'> = {
-  apiBaseUrl: 'https://api.trypillar.com',
+export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = {
+  apiBaseUrl: 'https://help-api.trypillar.com',
   platform: 'web',
   
   panel: {
@@ -388,8 +397,23 @@ function mergeSidebarTabs(userTabs?: SidebarTabConfig[]): SidebarTabConfig[] {
 }
 
 export function resolveConfig(config: PillarConfig): ResolvedConfig {
+  // Support both productKey (new) and helpCenter (deprecated)
+  const productKey = config.productKey ?? config.helpCenter;
+  
+  if (!productKey) {
+    throw new Error('[Pillar] productKey is required');
+  }
+  
+  // Warn about deprecated helpCenter usage
+  if (config.helpCenter && !config.productKey) {
+    console.warn(
+      '[Pillar] "helpCenter" is deprecated and will be removed in v1.0. ' +
+      'Please use "productKey" instead.'
+    );
+  }
+  
   return {
-    helpCenter: config.helpCenter,
+    productKey,
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     platform: config.platform || 'web',
     version: config.version,

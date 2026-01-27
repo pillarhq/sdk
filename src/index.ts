@@ -1,12 +1,12 @@
 /**
- * Pillar SDK - Embedded Help for Your Application
+ * Pillar SDK - Cursor for your product
  *
  * @example
  * // Script tag usage
  * <script src="https://cdn.trypillar.com/sdk/pillar.min.js"></script>
  * <script>
  *   Pillar.init({
- *     helpCenter: 'your-help-center',
+ *     productKey: 'your-product-key',
  *   });
  * </script>
  *
@@ -15,7 +15,7 @@
  * import { Pillar } from '@pillar-ai/sdk';
  *
  * await Pillar.init({
- *   helpCenter: 'your-help-center',
+ *   productKey: 'your-product-key',
  * });
  */
 
@@ -124,13 +124,18 @@ if (typeof window !== 'undefined') {
   (window as unknown as { Pillar: typeof Pillar }).Pillar = Pillar;
 
   // Support auto-initialization via data attributes
+  // Supports both data-product-key (new) and data-help-center (deprecated)
   const autoInit = () => {
     const script = document.currentScript as HTMLScriptElement | null;
     if (script) {
-      const helpCenter = script.dataset.helpCenter;
+      const productKey = script.dataset.productKey ?? script.dataset.helpCenter;
 
-      if (helpCenter) {
-        Pillar.init({ helpCenter }).catch(console.error);
+      if (script.dataset.helpCenter && !script.dataset.productKey) {
+        console.warn('[Pillar] data-help-center is deprecated. Use data-product-key instead.');
+      }
+
+      if (productKey) {
+        Pillar.init({ productKey }).catch(console.error);
       }
     }
   };
@@ -141,13 +146,17 @@ if (typeof window !== 'undefined') {
   } else {
     // Script is being executed after DOM is ready (async/defer)
     // Try to find the script tag by searching for one with our data attributes
-    const scripts = document.querySelectorAll('script[data-help-center]');
+    const scripts = document.querySelectorAll('script[data-product-key], script[data-help-center]');
     if (scripts.length > 0) {
       const script = scripts[scripts.length - 1] as HTMLScriptElement;
-      const helpCenter = script.dataset.helpCenter;
+      const productKey = script.dataset.productKey ?? script.dataset.helpCenter;
 
-      if (helpCenter) {
-        Pillar.init({ helpCenter }).catch(console.error);
+      if (script.dataset.helpCenter && !script.dataset.productKey) {
+        console.warn('[Pillar] data-help-center is deprecated. Use data-product-key instead.');
+      }
+
+      if (productKey) {
+        Pillar.init({ productKey }).catch(console.error);
       }
     }
   }

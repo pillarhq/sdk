@@ -143,7 +143,7 @@ export class MCPClient {
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-customer-id': this.config.helpCenter,
+      'x-customer-id': this.config.productKey,
     };
 
     // Add browser language for multilingual AI responses
@@ -389,7 +389,7 @@ export class MCPClient {
     const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
-        'x-customer-id': this.config.helpCenter,
+        'x-customer-id': this.config.productKey,
       },
       body: formData,
     });
