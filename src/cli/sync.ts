@@ -31,6 +31,7 @@ type ActionType =
   | 'open_modal'
   | 'fill_form'
   | 'trigger_action'
+  | 'query'
   | 'copy_text'
   | 'external_link'
   | 'start_tutorial'
@@ -89,6 +90,12 @@ interface ActionManifest {
   gitSha?: string;
   generatedAt: string;
   actions: ActionManifestEntry[];
+  agentGuidance?: string;
+}
+
+interface LoadedModule {
+  actions: SyncActionDefinitions;
+  agentGuidance?: string;
 }
 
 interface SyncResponse {
@@ -176,7 +183,7 @@ Examples:
 `);
 }
 
-async function loadActions(actionsPath: string): Promise<SyncActionDefinitions> {
+async function loadActions(actionsPath: string): Promise<LoadedModule> {
   const absolutePath = path.resolve(process.cwd(), actionsPath);
 
   if (!fs.existsSync(absolutePath)) {
@@ -186,16 +193,18 @@ async function loadActions(actionsPath: string): Promise<SyncActionDefinitions> 
   const isTypeScript = absolutePath.endsWith('.ts') || absolutePath.endsWith('.tsx');
 
   if (isTypeScript) {
-    // For TypeScript files, use tsx to evaluate and extract the actions
+    // For TypeScript files, use tsx to evaluate and extract the actions and agentGuidance
     try {
-      // Create a temporary script file that imports and prints the actions as JSON
+      // Create a temporary script file that imports and prints the module as JSON
       const tempDir = path.dirname(absolutePath);
       const tempFile = path.join(tempDir, `.pillar-sync-temp-${Date.now()}.mjs`);
       const importPath = absolutePath.replace(/\\/g, '/');
       
-      const extractScript = `import actions from '${importPath}';
-const result = actions.default || actions;
-console.log(JSON.stringify(result));`;
+      // Extract both actions and agentGuidance
+      const extractScript = `import * as module from '${importPath}';
+const actions = module.default || module.actions;
+const agentGuidance = module.agentGuidance;
+console.log(JSON.stringify({ actions, agentGuidance }));`;
       
       fs.writeFileSync(tempFile, extractScript, 'utf-8');
       
@@ -206,7 +215,9 @@ console.log(JSON.stringify(result));`;
           stdio: ['pipe', 'pipe', 'pipe'],
         });
 
-        const actions = JSON.parse(result.trim());
+        const parsed = JSON.parse(result.trim());
+        const actions = parsed.actions;
+        const agentGuidance = parsed.agentGuidance;
 
         if (!actions || typeof actions !== 'object') {
           throw new Error(
@@ -214,7 +225,7 @@ console.log(JSON.stringify(result));`;
           );
         }
 
-        return actions;
+        return { actions, agentGuidance };
       } finally {
         // Clean up temp file
         if (fs.existsSync(tempFile)) {
@@ -239,6 +250,7 @@ console.log(JSON.stringify(result));`;
 
     // Support default export or named 'actions' export
     const actions = module.default || module.actions;
+    const agentGuidance = module.agentGuidance;
 
     if (!actions || typeof actions !== 'object') {
       throw new Error(
@@ -246,7 +258,7 @@ console.log(JSON.stringify(result));`;
       );
     }
 
-    return actions;
+    return { actions, agentGuidance };
   } catch (error) {
     throw error;
   }
@@ -256,7 +268,8 @@ function buildManifest(
   actions: SyncActionDefinitions,
   platform: Platform,
   version: string,
-  gitSha?: string
+  gitSha?: string,
+  agentGuidance?: string
 ): ActionManifest {
   const entries: ActionManifestEntry[] = [];
 
@@ -273,7 +286,12 @@ function buildManifest(
     if (definition.externalUrl) entry.external_url = definition.externalUrl;
     if (definition.autoRun) entry.auto_run = definition.autoRun;
     if (definition.autoComplete) entry.auto_complete = definition.autoComplete;
-    if (definition.returns) entry.returns_data = definition.returns;
+    // Query actions always return data (explicit returns takes precedence)
+    if (definition.returns !== undefined) {
+      entry.returns_data = definition.returns;
+    } else if (definition.type === 'query') {
+      entry.returns_data = true;
+    }
     if (definition.dataSchema) entry.data_schema = definition.dataSchema;
     if (definition.defaultData) entry.default_data = definition.defaultData;
     if (definition.requiredContext) entry.required_context = definition.requiredContext;
@@ -281,13 +299,19 @@ function buildManifest(
     entries.push(entry);
   }
 
-  return {
+  const manifest: ActionManifest = {
     platform,
     version,
     gitSha,
     generatedAt: new Date().toISOString(),
     actions: entries,
   };
+
+  if (agentGuidance) {
+    manifest.agentGuidance = agentGuidance;
+  }
+
+  return manifest;
 }
 
 async function pollStatus(
@@ -419,16 +443,21 @@ async function main(): Promise<void> {
 
   // Load actions from user's file
   console.log(`[pillar-sync] Loading actions from: ${actionsPath}`);
-  let actions: SyncActionDefinitions;
+  let loadedModule: LoadedModule;
   try {
-    actions = await loadActions(actionsPath);
+    loadedModule = await loadActions(actionsPath);
   } catch (error) {
     console.error(`[pillar-sync] Failed to load actions:`, error);
     process.exit(1);
   }
 
+  const { actions, agentGuidance } = loadedModule;
   const actionCount = Object.keys(actions).length;
   console.log(`[pillar-sync] Found ${actionCount} actions`);
+
+  if (agentGuidance) {
+    console.log(`[pillar-sync] Found agent guidance (${agentGuidance.length} chars)`);
+  }
 
   if (actionCount === 0) {
     console.warn('[pillar-sync] No actions found. Nothing to sync.');
@@ -445,7 +474,7 @@ async function main(): Promise<void> {
   console.log(`[pillar-sync] Git SHA: ${gitSha || 'not available'}`);
 
   // Generate manifest
-  const manifest = buildManifest(actions, platform, version, gitSha);
+  const manifest = buildManifest(actions, platform, version, gitSha, agentGuidance);
 
   // Optionally write manifest to disk for debugging
   if (process.env.PILLAR_DEBUG) {
@@ -457,12 +486,17 @@ async function main(): Promise<void> {
   // Sync to backend
   console.log(`[pillar-sync] Help Center: ${slug}`);
 
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     platform: manifest.platform,
     version: manifest.version,
     git_sha: gitSha,
     actions: manifest.actions,
   };
+
+  // Include agent_guidance if provided
+  if (agentGuidance) {
+    requestBody.agent_guidance = agentGuidance;
+  }
 
   const syncUrl = `${apiUrl}/api/admin/configs/${slug}/actions/sync/?async=true`;
   console.log(`[pillar-sync] POST ${syncUrl}`);

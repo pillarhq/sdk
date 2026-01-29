@@ -5,7 +5,6 @@
 
 import { getActionDefinition, hasAction, setClientInfo } from '../actions';
 import { APIClient } from '../api/client';
-import { MCPClient } from '../api/mcp-client';
 import { EdgeTrigger } from '../components/Button/EdgeTrigger';
 import { MobileTrigger } from '../components/Button/MobileTrigger';
 import { Panel } from '../components/Panel/Panel';
@@ -81,7 +80,6 @@ export class Pillar {
   private _config: ResolvedConfig | null = null;
   private _events: EventEmitter;
   private _api: APIClient | null = null;
-  private _mcpClient: MCPClient | null = null;
   private _planExecutor: PlanExecutor | null = null;
   private _textSelectionManager: TextSelectionManager | null = null;
   private _panel: Panel | null = null;
@@ -98,6 +96,10 @@ export class Pillar {
   // Task handlers
   private _taskHandlers: Map<string, (data: Record<string, unknown>) => void> = new Map();
   private _anyTaskHandler: ((name: string, data: Record<string, unknown>) => void) | null = null;
+
+  // Registered actions (for demos and runtime registration)
+  // Public property for demos to access (e.g., window.Pillar._registeredActions)
+  public _registeredActions: Map<string, Record<string, unknown>> = new Map();
 
   // Card renderers for inline_ui type actions
   private _cardRenderers: Map<string, CardRenderer> = new Map();
@@ -554,6 +556,57 @@ export class Pillar {
   }
 
   /**
+   * Register an action definition at runtime.
+   * 
+   * This is primarily for demos and development. In production, actions
+   * should be synced via the `pillar-sync` CLI during CI/CD.
+   * 
+   * The action definition is stored locally and can be used by `onTask`
+   * handlers. For actions with `returnsData: true`, the handler's return
+   * value is sent back to the agent.
+   * 
+   * @param action - Action definition with name and properties
+   * 
+   * @example
+   * pillar.registerAction({
+   *   name: 'list_datasets',
+   *   description: 'List available datasets',
+   *   type: 'query',
+   *   returnsData: true,
+   * });
+   */
+  registerAction(action: { name: string } & Record<string, unknown>): void {
+    const { name, ...definition } = action;
+    
+    if (!name) {
+      console.warn('[Pillar] registerAction called without a name');
+      return;
+    }
+    
+    // Store the action definition
+    this._registeredActions.set(name, {
+      name,
+      ...definition,
+      // Normalize property names for consistency
+      returns: definition.returnsData || definition.returns || false,
+      autoRun: definition.autoRun ?? definition.auto_run ?? false,
+      autoComplete: definition.autoComplete ?? definition.auto_complete ?? true,
+    });
+    
+    console.debug(`[Pillar] Registered action: ${name}`);
+  }
+
+  /**
+   * Get a registered action definition by name.
+   * 
+   * @param name - Action name
+   * @returns Action definition or undefined
+   */
+  getRegisteredAction(name: string): Record<string, unknown> | undefined {
+    return this._registeredActions.get(name);
+  }
+
+  /**
    * Register a catch-all handler for any task.
    * Useful for logging, analytics, or handling unknown tasks.
    * 
@@ -607,10 +660,14 @@ export class Pillar {
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
     const actionDefinition = hasAction(name) ? getActionDefinition(name) : undefined;
+    const runtimeAction = this._registeredActions.get(name);
     const registryHandler = actionDefinition?.handler;
     const specificHandler = this._taskHandlers.get(name);
     const typeHandler = taskType ? this._taskHandlers.get(taskType) : undefined;
     const handler = registryHandler || specificHandler || typeHandler;
+
+    // Check if action returns data (from code-first registry or runtime registration)
+    const actionReturnsData = actionDefinition?.returns || runtimeAction?.returns;
 
     if (handler) {
       try {
@@ -621,7 +678,7 @@ export class Pillar {
         const result = handler(handlerData);
         
         // If action returns data, send it back to the agent
-        if (actionDefinition?.returns && result !== undefined) {
+        if (actionReturnsData && result !== undefined) {
           // Handle both sync and async handlers
           Promise.resolve(result).then((resolvedResult) => {
             if (resolvedResult !== undefined) {
@@ -1105,13 +1162,78 @@ export class Pillar {
    * @internal
    */
   sendActionResult(actionName: string, result: unknown): void {
-    if (!this._mcpClient) {
+    if (!this._api) {
       console.warn('[Pillar] SDK not initialized, cannot send action result');
       return;
     }
 
-    this._mcpClient.sendActionResult(actionName, result);
+    console.log(`[Pillar] Sending action result for "${actionName}":`, result);
+    this._api.mcp.sendActionResult(actionName, result);
     this._events.emit('action:result', { actionName, result });
+  }
+
+  /**
+   * Execute a query action and send the result back to the agent.
+   * 
+   * This is called when the agent sends a `query_request` event.
+   * Query actions are expected to return data that the agent can use
+   * for further reasoning.
+   * 
+   * @param actionName - The name of the action to execute
+   * @param args - Arguments for the action
+   */
+  async executeQueryAction(actionName: string, args: Record<string, unknown> = {}): Promise<void> {
+    console.log(`[Pillar] Executing query action: ${actionName}`, args);
+
+    // Look for handlers
+    const actionDefinition = hasAction(actionName) ? getActionDefinition(actionName) : undefined;
+    const runtimeAction = this._registeredActions.get(actionName);
+    const registryHandler = actionDefinition?.handler;
+    const specificHandler = this._taskHandlers.get(actionName);
+    const queryTypeHandler = this._taskHandlers.get('query');
+    const handler = registryHandler || specificHandler || queryTypeHandler;
+
+    console.log(`[Pillar] Query action "${actionName}" handler lookup:`, {
+      hasActionDefinition: !!actionDefinition,
+      hasRuntimeAction: !!runtimeAction,
+      hasRegistryHandler: !!registryHandler,
+      hasSpecificHandler: !!specificHandler,
+      hasQueryTypeHandler: !!queryTypeHandler,
+      willUseHandler: handler ? 'yes' : 'NO HANDLER FOUND',
+    });
+
+    if (!handler) {
+      console.error(`[Pillar] No handler registered for query action "${actionName}". ` +
+        `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`);
+      // Send error result back to agent so it doesn't hang
+      this.sendActionResult(actionName, { 
+        error: `No handler registered for action "${actionName}"`,
+        success: false 
+      });
+      return;
+    }
+
+    try {
+      const result = await Promise.resolve(handler(args));
+      console.log(`[Pillar] Query action "${actionName}" completed with result:`, result);
+      
+      if (result !== undefined) {
+        this.sendActionResult(actionName, result);
+      } else {
+        console.warn(`[Pillar] Query action "${actionName}" returned undefined. ` +
+          `Make sure your handler returns data for the agent.`);
+        this.sendActionResult(actionName, { 
+          error: `Handler returned undefined`,
+          success: false 
+        });
+      }
+    } catch (error) {
+      console.error(`[Pillar] Error executing query action "${actionName}":`, error);
+      this.sendActionResult(actionName, { 
+        error: error instanceof Error ? error.message : String(error),
+        success: false 
+      });
+    }
   }
 
   // ============================================================================
@@ -1177,13 +1299,25 @@ export class Pillar {
       // Initialize API client with the final merged config
       this._api = new APIClient(this._config);
 
-      // Initialize MCP client and PlanExecutor for multi-step plans
-      this._mcpClient = new MCPClient(this._config);
+      // Initialize PlanExecutor for multi-step plans (uses APIClient's MCPClient)
       this._planExecutor = new PlanExecutor(
-        this._mcpClient,
+        this._api.mcp,
         this._events,
         this._config.productKey // Use productKey for plan persistence - unique across all sites
       );
+
+      // Connect action results to plan step completion
+      // When an action with returns=true completes, sendActionResult emits 'action:result'.
+      // If there's an active plan step awaiting this result, complete it with the data.
+      this._events.on('action:result', ({ actionName, result }) => {
+        if (this._planExecutor) {
+          this._planExecutor.completeStepByAction(
+            actionName,
+            true,
+            result as Record<string, unknown>
+          );
+        }
+      });
 
       // Create shared root container for all Pillar UI elements
       // Uses isolation: isolate to create a new stacking context
@@ -1306,7 +1440,6 @@ export class Pillar {
     this._edgeTrigger = null;
     this._mobileTrigger = null;
     this._api = null;
-    this._mcpClient = null;
     this._planExecutor = null;
     this._config = null;
     this._state = 'uninitialized';

@@ -12,3 +12,4 @@ export {
   INLINE_PLAN_MAX_STEPS,
   shouldDisplayInline,
 } from './InlinePlanView';
+export { PlanDocument, PLAN_DOCUMENT_STYLES } from './PlanDocument';

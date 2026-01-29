@@ -9,6 +9,7 @@
 import { h } from 'preact';
 import { activePlan, planProgress } from '../../store/plan';
 import type { ExecutionStep } from '../../core/plan';
+import { PlanDocument } from './PlanDocument';
 import { PlanStepItem } from './PlanStepItem';
 import Pillar from '../../core/Pillar';
 
@@ -72,6 +73,11 @@ export function PlanView() {
           {plan.completed_steps}/{plan.total_steps}
         </div>
       </div>
+
+      {/* Plan document section */}
+      {plan.document && (
+        <PlanDocument document={plan.document} />
+      )}
 
       {/* Progress bar */}
       {isExecuting && (

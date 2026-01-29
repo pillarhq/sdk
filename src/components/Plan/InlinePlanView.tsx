@@ -15,6 +15,7 @@ import type { ExecutionPlan, ExecutionStep, StepStatus } from '../../core/plan';
 import type { CardCallbacks } from '../../core/events';
 import Pillar from '../../core/Pillar';
 import { createDefaultConfirmCard } from '../Cards/ConfirmActionCard';
+import { PlanDocument } from './PlanDocument';
 import type { TaskButtonData } from '../Panel/TaskButton';
 
 // ============================================================================
@@ -261,6 +262,11 @@ export function InlinePlanView({ plan }: InlinePlanViewProps) {
 
   return (
     <div class={`pillar-inline-plan pillar-inline-plan--${plan.status}`}>
+      {/* Plan document section */}
+      {plan.document && (
+        <PlanDocument document={plan.document} />
+      )}
+
       {/* Steps */}
       <div class="pillar-inline-plan__steps">
         {plan.steps.map((step) => (

@@ -9,7 +9,7 @@ import type { Context, Suggestion, UserProfile } from '../core/context';
 import type { ExecutionPlan } from '../core/plan';
 import type { Workflow } from '../core/workflow';
 import type { UserContextItem } from '../types/user-context';
-import type { ActionData, ChatImage, ImageUploadResponse } from './mcp-client';
+import type { ActionData, ChatImage, ImageUploadResponse, QueryRequest } from './mcp-client';
 import { MCPClient, actionToTaskButton } from './mcp-client';
 
 // ============================================================================
@@ -91,6 +91,14 @@ export class APIClient {
   constructor(config: ResolvedConfig) {
     this.config = config;
     this.mcpClient = new MCPClient(config);
+  }
+
+  /**
+   * Get the underlying MCP client.
+   * Used by Pillar for direct MCP operations like sendActionResult.
+   */
+  get mcp(): MCPClient {
+    return this.mcpClient;
   }
 
   private get baseUrl(): string {
@@ -300,7 +308,8 @@ export class APIClient {
     userContext?: UserContextItem[],
     images?: ChatImage[],
     onProgress?: (progress: ProgressEvent) => void,
-    onConversationStarted?: (conversationId: string, messageId?: string) => void
+    onConversationStarted?: (conversationId: string, messageId?: string) => void,
+    onQueryRequest?: (request: QueryRequest) => Promise<void>
   ): Promise<ChatResponse> {
     // Use MCP client for chat via the 'ask' tool
     let fullMessage = '';
@@ -331,11 +340,16 @@ export class APIClient {
           onConversationStarted: (convId, msgId) => {
             onConversationStarted?.(convId, msgId);
           },
+          onQueryRequest: async (request) => {
+            if (onQueryRequest) {
+              await onQueryRequest(request);
+            }
+          },
           onError: (error) => {
             console.error('[Pillar API] MCP chat error:', error);
           },
         },
-        { articleSlug, userContext, images }
+        { articleSlug, userContext, images, history }
       );
 
       // If no streaming content was received, extract from result

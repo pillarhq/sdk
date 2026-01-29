@@ -9,6 +9,7 @@ import type { ChatImage } from '../api/mcp-client';
 import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { UserContextItem } from '../types/user-context';
 import { generateContextId } from '../types/user-context';
+import { clearPlan } from './plan';
 
 // Re-export ChatImage for convenience
 export type { ChatImage } from '../api/mcp-client';
@@ -398,5 +399,7 @@ export const resetChat = () => {
   userContext.value = [];
   pendingUserContext.value = [];
   clearPendingImages();
+  // Clear any active plan when starting a new chat
+  clearPlan(true);
 };
 

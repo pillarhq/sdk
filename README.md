@@ -61,62 +61,61 @@ First, register your product in the [Pillar app](https://app.trypillar.com):
 ```javascript
 import { Pillar } from "@pillar-ai/sdk";
 
-await Pillar.init({
+// Initialize and get the instance
+const pillar = await Pillar.init({
   productKey: "your-product-key", // From Pillar app
 });
+
+// Now you can use instance methods
+pillar.setContext({ currentPage: "/dashboard" });
+pillar.open();
+```
+
+You can also get the instance later using `Pillar.getInstance()`:
+
+```javascript
+// Anywhere in your app after init
+const pillar = Pillar.getInstance();
+pillar?.setContext({ currentPage: "/settings" });
 ```
 
 ## Defining Actions
 
-Define what your co-pilot can do. When users make requests, Pillar matches intent to actions and executes them:
+Define what your co-pilot can do. When users make requests, Pillar matches intent to actions and executes them.
+
+### Register Task Handlers
+
+Use `onTask` to handle actions when the AI executes them:
 
 ```javascript
-Pillar.init({
+const pillar = await Pillar.init({
   productKey: "your-product-key",
-  actions: {
-    // Navigation actions
-    go_to_settings: {
-      type: "navigate",
-      label: "Open Settings",
-      description: "Navigate to the settings page",
-      path: "/settings",
-    },
+});
 
-    // Trigger actions that execute code
-    export_to_csv: {
-      type: "trigger",
-      label: "Export to CSV",
-      description: "Export current data to a CSV file",
-    },
+// Handle navigation
+pillar.onTask("go_to_settings", (data) => {
+  router.push("/settings");
+});
 
-    // Actions with data schemas
-    update_preferences: {
-      type: "trigger",
-      label: "Update Preferences",
-      description: "Update notification preferences",
-      dataSchema: {
-        emailAlerts: { type: "boolean" },
-        frequency: { type: "string", enum: ["daily", "weekly", "monthly"] },
-      },
-    },
-  },
+// Handle triggers
+pillar.onTask("export_to_csv", async (data) => {
+  await downloadCSV();
+});
 
-  onTask: (actionName, data) => {
-    // Your code executes here
-    if (actionName === "export_to_csv") {
-      downloadCSV();
-    }
-    if (actionName === "update_preferences") {
-      updateUserPreferences(data.emailAlerts, data.frequency);
-    }
-  },
+// Handle actions with data
+pillar.onTask("update_preferences", (data) => {
+  updateUserPreferences(data.emailAlerts, data.frequency);
 });
 ```
+
+### Code-First Action Definitions
+
+For production, define actions in code and sync them via the `pillar-sync` CLI during CI/CD. See [Setting Up Actions](https://trypillar.com/docs/guides/actions) for details.
 
 ## Configuration
 
 ```javascript
-Pillar.init({
+const pillar = await Pillar.init({
   productKey: "your-product-key",
 
   panel: {
@@ -141,12 +140,15 @@ Pillar.init({
 
 | Method | Description |
 |--------|-------------|
-| `Pillar.init(config)` | Initialize the SDK with your configuration |
-| `Pillar.open()` | Open the co-pilot panel |
-| `Pillar.close()` | Close the co-pilot panel |
-| `Pillar.toggle()` | Toggle the co-pilot panel |
-| `Pillar.setContext(context)` | Update the user/product context |
-| `Pillar.on(event, callback)` | Subscribe to SDK events |
+| `Pillar.init(config)` | Initialize the SDK, returns the instance |
+| `Pillar.getInstance()` | Get the initialized SDK instance |
+| `pillar.open()` | Open the co-pilot panel |
+| `pillar.close()` | Close the co-pilot panel |
+| `pillar.toggle()` | Toggle the co-pilot panel |
+| `pillar.setContext(context)` | Update the user/product context |
+| `pillar.on(event, callback)` | Subscribe to SDK events |
+
+> **Note:** `Pillar.init()` and `Pillar.getInstance()` are static methods on the class. All other methods (lowercase `pillar`) are instance methods - call them on the instance returned from `init()` or `getInstance()`.
 
 For complete API documentation, see the [API Reference](https://trypillar.com/docs/reference/core).
 

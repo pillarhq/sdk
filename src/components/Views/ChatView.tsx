@@ -250,6 +250,16 @@ export function ChatView() {
         // Conversation started callback - store ID early for optimistic UI
         (convId) => {
           setConversationId(convId);
+        },
+        // Query request callback - execute query action and send result back
+        async (request) => {
+          console.log('[Pillar] Received query_request:', request.action_name, request.arguments);
+          const pillar = Pillar.getInstance();
+          if (pillar) {
+            await pillar.executeQueryAction(request.action_name, request.arguments);
+          } else {
+            console.error('[Pillar] SDK not initialized, cannot execute query action');
+          }
         }
       );
 

@@ -81,6 +81,31 @@ export interface ActionData {
   data: Record<string, unknown>;
 }
 
+/** Response from plans/step-complete endpoint */
+export interface StepCompleteResponse {
+  success: boolean;
+  /** Action to take: proceed, retry, modify_step, or end_plan */
+  action: 'proceed' | 'modify_step' | 'retry' | 'end_plan';
+  /** Updated plan with new step statuses */
+  plan: ExecutionPlan;
+  /** Step ID to retry (when action='retry') */
+  retry_step_id?: string;
+  /** Optional message from agent */
+  message?: string;
+  /** Error code if failed */
+  error?: string;
+}
+
+/** Query request from agent (for executing actions that return data) */
+export interface QueryRequest {
+  /** Unique request ID */
+  request_id: string;
+  /** Action name to execute */
+  action_name: string;
+  /** Arguments for the action */
+  arguments: Record<string, unknown>;
+}
+
 /** Streaming callbacks for tool calls */
 export interface StreamCallbacks {
   /** Called for each text token */
@@ -110,6 +135,8 @@ export interface StreamCallbacks {
       no_sources_used?: boolean;
     };
   }) => void;
+  /** Called when agent requests data from host app */
+  onQueryRequest?: (request: QueryRequest) => Promise<void>;
 }
 
 /** Image for chat requests (from upload-image endpoint) */
@@ -138,6 +165,27 @@ export class MCPClient {
     this.config = config;
   }
 
+  /**
+   * Get or create a session ID for MCP request correlation.
+   * Stored in sessionStorage to persist only for the current browser session.
+   */
+  private getSessionId(): string {
+    if (typeof window === 'undefined') return '';
+    
+    const KEY = 'pillar_mcp_session_id';
+    try {
+      let id = sessionStorage.getItem(KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        sessionStorage.setItem(KEY, id);
+      }
+      return id;
+    } catch {
+      // sessionStorage might be unavailable
+      return '';
+    }
+  }
+
   private get baseUrl(): string {
     return `${this.config.apiBaseUrl}/mcp/`;
   }
@@ -147,6 +195,12 @@ export class MCPClient {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey,
     };
+
+    // Add session ID for request correlation (critical for query actions)
+    const sessionId = this.getSessionId();
+    if (sessionId) {
+      headers['Mcp-Session-Id'] = sessionId;
+    }
 
     // Add browser language for multilingual AI responses
     if (typeof navigator !== 'undefined') {
@@ -291,6 +345,11 @@ export class MCPClient {
                 if (event.method === 'notifications/progress') {
                   const progress = event.params?.progress;
                   if (progress) {
+                    // Log all progress events for debugging (except tokens which are too verbose)
+                    if (progress.kind !== 'token') {
+                      console.log(`[MCPClient] Progress event: ${progress.kind}`, progress);
+                    }
+
                     if (progress.kind === 'token' && progress.token) {
                       collectedText.push(progress.token);
                       callbacks.onToken?.(progress.token);
@@ -306,6 +365,22 @@ export class MCPClient {
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
                       break;
+                    } else if (progress.kind === 'query_request') {
+                      // Query request - agent needs data from host app
+                      // Call the onQueryRequest callback to execute the query action
+                      if (callbacks.onQueryRequest) {
+                        const queryRequest: QueryRequest = {
+                          request_id: progress.request_id || crypto.randomUUID(),
+                          action_name: progress.action_name,
+                          arguments: progress.arguments || {},
+                        };
+                        // Execute async but don't await - let the stream continue
+                        callbacks.onQueryRequest(queryRequest).catch((error) => {
+                          console.error('[MCPClient] Query request handler failed:', error);
+                        });
+                      } else {
+                        console.warn('[MCPClient] Received query_request but no handler registered');
+                      }
                     } else {
                       // Other progress types (processing, search, search_complete, query, query_complete, query_failed, generating)
                       callbacks.onProgress?.({
@@ -428,6 +503,7 @@ export class MCPClient {
       articleSlug?: string;
       userContext?: UserContextItem[];
       images?: ChatImage[];
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
       signal?: AbortSignal;
     }
   ): Promise<ToolResult> {
@@ -445,6 +521,10 @@ export class MCPClient {
 
     if (options?.images && options.images.length > 0) {
       args.images = options.images;
+    }
+
+    if (options?.history && options.history.length > 0) {
+      args.history = options.history;
     }
 
     return this.callToolStream('ask', args, callbacks, options?.signal);
@@ -576,6 +656,37 @@ export class MCPClient {
       step_id: stepId,
     });
     return response as unknown as { plan: ExecutionPlan };
+  }
+
+  /**
+   * Report step completion and get server decision on next action.
+   * 
+   * This is the core of step-by-step verification:
+   * - Called after every step execution (success or failure)
+   * - Server decides what to do next: proceed, retry, modify, or end
+   * 
+   * @param planId - UUID of the plan
+   * @param stepId - UUID of the completed step
+   * @param success - Whether the step executed successfully
+   * @param result - Result data from the step execution
+   * @param errorMessage - Error message if step failed
+   * @returns Decision with updated plan
+   */
+  async stepComplete(
+    planId: string,
+    stepId: string,
+    success: boolean,
+    result: unknown,
+    errorMessage?: string
+  ): Promise<StepCompleteResponse> {
+    const response = await this.callTool('plans/step-complete', {
+      plan_id: planId,
+      step_id: stepId,
+      success,
+      result: result || {},
+      error_message: errorMessage || '',
+    });
+    return response as unknown as StepCompleteResponse;
   }
 
   // ============================================================================

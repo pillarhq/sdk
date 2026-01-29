@@ -34,6 +34,7 @@ import {
 } from '../../store/router';
 import { CONFIRM_CARD_STYLES } from '../Cards/ConfirmActionCard';
 import { PillarProvider } from '../context';
+import { PLAN_DOCUMENT_STYLES } from '../Plan/PlanDocument';
 import { INLINE_PLAN_STYLES } from '../Plan/InlinePlanView';
 import { PLAN_STEP_STYLES } from '../Plan/PlanStepItem';
 import { PLAN_STYLES } from '../Plan/PlanView';
@@ -385,7 +386,7 @@ export class Panel {
     const styleId = 'pillar-sdk-styles';
     if (document.getElementById(styleId)) return; // Prevent duplicates
 
-    const rawCSS = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + PLAN_STYLES + PLAN_STEP_STYLES + INLINE_PLAN_STYLES;
+    const rawCSS = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + PLAN_STYLES + PLAN_STEP_STYLES + INLINE_PLAN_STYLES + PLAN_DOCUMENT_STYLES;
     const transformedCSS = this.transformStylesForRegularDOM(rawCSS);
 
     const styles = document.createElement('style');
@@ -419,7 +420,7 @@ export class Panel {
 
     // Inject base styles
     const styles = document.createElement('style');
-    styles.textContent = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + PLAN_STYLES + PLAN_STEP_STYLES + INLINE_PLAN_STYLES;
+    styles.textContent = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + PLAN_STYLES + PLAN_STEP_STYLES + INLINE_PLAN_STYLES + PLAN_DOCUMENT_STYLES;
     this.shadow.appendChild(styles);
 
     // Inject theme customization CSS (color overrides from config)

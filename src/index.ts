@@ -109,10 +109,11 @@ export {
   type ProgressEvent,
 } from './api/client';
 
-// MCP Client types (for image upload)
+// MCP Client types (for image upload, query requests)
 export {
   type ChatImage,
   type ImageUploadResponse,
+  type QueryRequest,
 } from './api/mcp-client';
 
 // Auto-initialization for script tags

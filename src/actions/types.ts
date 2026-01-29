@@ -32,6 +32,7 @@
  * - open_modal: Open a modal or dialog
  * - fill_form: Fill form fields with data
  * - trigger_action: Trigger a custom action
+ * - query: Fetch data from the client and return to the agent (implies returns: true)
  * - copy_text: Copy text to clipboard
  * - external_link: Open an external URL
  * - start_tutorial: Start a tutorial/walkthrough
@@ -42,6 +43,7 @@ export type ActionType =
   | 'open_modal'
   | 'fill_form'
   | 'trigger_action'
+  | 'query'
   | 'copy_text'
   | 'external_link'
   | 'start_tutorial'
@@ -360,6 +362,11 @@ export interface CopyTextData {
   text?: string;
 }
 
+export interface QueryActionData {
+  /** Query parameters passed to the handler */
+  [key: string]: unknown;
+}
+
 /**
  * Maps action types to their default data shapes.
  * Used for automatic type inference in onTask handlers.
@@ -367,6 +374,7 @@ export interface CopyTextData {
 export interface ActionTypeDataMap {
   navigate: NavigateActionData;
   trigger_action: TriggerActionData;
+  query: QueryActionData;
   inline_ui: InlineUIData;
   external_link: ExternalLinkData;
   copy_text: CopyTextData;

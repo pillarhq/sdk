@@ -626,65 +626,22 @@ export class PlanExecutor {
         }
       }
 
-      // If requires_result_feedback, send to server for analysis
-      if (step.requires_result_feedback) {
-        console.log(
-          `[PlanExecutor] Sending step ${step.index} result to server`
-        );
-        const response = await this.mcpClient.continuePlan(
-          plan.id,
-          step.id,
-          result
-        );
-        updatePlan(response.plan);
-        this.events.emit('plan:updated', response.plan);
-      } else if (step.auto_complete) {
-        // Check if this is a navigation/modal action that used the fallback executeTask
-        // These actions open wizards/pages that require user interaction, so we should
-        // NOT auto-complete even if auto_complete is true from the backend
-        const usedFallback = !handler;
-        const isWizardAction = actionType === 'navigate' || actionType === 'open_modal';
-        
-        if (usedFallback && isWizardAction) {
-          console.log(`[PlanExecutor] Step ${step.index} is wizard action (${actionType}) - awaiting callback despite auto_complete=true`);
-          updatePlanStep(step.id, { status: 'awaiting_result', result });
-          this.events.emit('plan:step:active', { plan: activePlan.value!, step });
-          // Don't advance - wait for completePlanStep() or markStepDone() to be called
-        } else {
-          // Mark step complete locally and advance
-          updatePlanStep(step.id, { status: 'completed', result });
-          
-          // Get the updated step for the event
-          let updatedPlan = activePlan.value;
-          const updatedStep = updatedPlan?.steps.find((s) => s.id === step.id);
-
-          // Activate the next pending step so executeNextStep can find it
-          const nextStepIndex = step.index + 1;
-          if (updatedPlan && nextStepIndex < updatedPlan.steps.length) {
-            const nextStep = updatedPlan.steps[nextStepIndex];
-            if (nextStep.status === 'pending') {
-              updatePlanStep(nextStep.id, { status: 'ready' });
-              updatedPlan = activePlan.value; // Refresh after update
-            }
-          }
-
-          this.events.emit('plan:step:complete', {
-            plan: updatedPlan!,
-            step: updatedStep || step,
-            success: true,
-          });
-
-          // Continue to next step
-          await this.executeNextStep();
-        }
-      } else {
-        // Step has auto_complete=false - wait for host app to call completePlanStep()
-        // This is used for wizard actions that require user to complete a flow
-        console.log(`[PlanExecutor] Step ${step.index} awaiting callback (auto_complete=false)`);
+      // Check if this is a wizard action that needs to wait for user completion
+      const usedFallback = !handler;
+      const isWizardAction = actionType === 'navigate' || actionType === 'open_modal';
+      
+      if (usedFallback && isWizardAction && !step.auto_complete) {
+        // Wizard actions wait for user to complete the flow
+        console.log(`[PlanExecutor] Step ${step.index} is wizard action - awaiting user completion`);
         updatePlanStep(step.id, { status: 'awaiting_result', result });
         this.events.emit('plan:step:active', { plan: activePlan.value!, step });
-        // Don't advance - wait for completePlanStep() or confirmPlanStep() to be called
+        // Don't advance - wait for completePlanStep() or markStepDone() to be called
+        return;
       }
+      
+      // STEP-BY-STEP VERIFICATION: Report success to server
+      await this.reportStepComplete(step, true, result, undefined);
+      
     } catch (error) {
       console.error(
         `[PlanExecutor] Step ${step.index} failed:`,
@@ -693,46 +650,164 @@ export class PlanExecutor {
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-      // Notify server about failure
-      try {
-        const response = await this.mcpClient.failStep(plan.id, step.id, errorMessage);
-        updatePlan(response.plan);
-      } catch (serverError) {
-        console.error('[PlanExecutor] Failed to notify server of step failure:', serverError);
-        // Update locally even if server call fails
+      // STEP-BY-STEP VERIFICATION: Report failure to server
+      await this.reportStepComplete(step, false, undefined, errorMessage);
+    }
+  }
+
+  /**
+   * Report step completion to server and handle the decision.
+   * 
+   * This is the core of step-by-step verification:
+   * - Every step reports its result (success or failure)
+   * - Server decides what to do next
+   * - SDK executes the decision
+   */
+  private async reportStepComplete(
+    step: ExecutionStep,
+    success: boolean,
+    result: unknown,
+    errorMessage?: string
+  ): Promise<void> {
+    const plan = activePlan.value;
+    if (!plan) {
+      console.warn('[PlanExecutor] No active plan for step completion');
+      return;
+    }
+
+    console.log(
+      `[PlanExecutor] Reporting step ${step.index} completion: success=${success}`
+    );
+
+    try {
+      const response = await this.mcpClient.stepComplete(
+        plan.id,
+        step.id,
+        success,
+        result,
+        errorMessage
+      );
+
+      // Handle the server's decision
+      await this.handleServerDecision(step, response, success, errorMessage);
+    } catch (serverError) {
+      console.error('[PlanExecutor] Failed to report step completion:', serverError);
+      
+      // Fallback: handle locally
+      if (success) {
+        // Mark complete and try to advance
+        updatePlanStep(step.id, { status: 'completed', result });
+        this.events.emit('plan:step:complete', {
+          plan: activePlan.value!,
+          step,
+          success: true,
+        });
+        await this.executeNextStep();
+      } else {
+        // Mark failed
         updatePlanStep(step.id, {
           status: 'failed',
-          error_message: errorMessage,
+          error_message: errorMessage || 'Unknown error',
         });
-      }
-
-      const updatedPlan = activePlan.value;
-      const updatedStep = updatedPlan?.steps.find((s) => s.id === step.id);
-      const canRetry = updatedStep
-        ? updatedStep.is_retriable && updatedStep.retry_count < updatedStep.max_retries
-        : step.is_retriable && step.retry_count < step.max_retries;
-
-      // Emit failed event with retry info
-      this.events.emit('plan:step:failed', {
-        plan: updatedPlan!,
-        step: updatedStep || step,
-        error: error instanceof Error ? error : new Error(String(error)),
-        canRetry,
-      });
-
-      this.events.emit('plan:step:complete', {
-        plan: updatedPlan!,
-        step: updatedStep || step,
-        success: false,
-      });
-
-      // Only emit plan error if we can't retry
-      if (!canRetry) {
+        this.events.emit('plan:step:failed', {
+          plan: activePlan.value!,
+          step,
+          error: new Error(errorMessage || 'Unknown error'),
+          canRetry: false,
+        });
         this.events.emit('plan:error', {
-          plan: updatedPlan!,
-          error: error instanceof Error ? error : new Error(String(error)),
+          plan: activePlan.value!,
+          error: new Error(errorMessage || 'Unknown error'),
         });
       }
+    }
+  }
+
+  /**
+   * Handle the server's decision after step completion.
+   */
+  private async handleServerDecision(
+    step: ExecutionStep,
+    response: import('../api/mcp-client').StepCompleteResponse,
+    success: boolean,
+    errorMessage?: string
+  ): Promise<void> {
+    const { action, plan: updatedPlan, retry_step_id, message } = response;
+
+    console.log(`[PlanExecutor] Server decision: ${action}${message ? ` - ${message}` : ''}`);
+
+    // Update local plan state
+    updatePlan(updatedPlan);
+    this.events.emit('plan:updated', updatedPlan);
+
+    switch (action) {
+      case 'proceed':
+        // Step succeeded, move to next step
+        this.events.emit('plan:step:complete', {
+          plan: updatedPlan,
+          step: updatedPlan.steps.find(s => s.id === step.id) || step,
+          success: true,
+        });
+        await this.executeNextStep();
+        break;
+
+      case 'modify_step':
+        // Server modified the next step, proceed
+        this.events.emit('plan:step:complete', {
+          plan: updatedPlan,
+          step: updatedPlan.steps.find(s => s.id === step.id) || step,
+          success: true,
+        });
+        await this.executeNextStep();
+        break;
+
+      case 'retry':
+        // Server wants us to retry the step with modified params
+        const retryStep = updatedPlan.steps.find(s => s.id === (retry_step_id || step.id));
+        if (retryStep) {
+          console.log(`[PlanExecutor] Retrying step ${retryStep.index} with modified params`);
+          this.events.emit('plan:step:retry', {
+            plan: updatedPlan,
+            step: retryStep,
+            retryCount: retryStep.retry_count || 1,
+          });
+          await this.executeStep(retryStep);
+        } else {
+          console.error('[PlanExecutor] Retry step not found');
+          await this.executeNextStep();
+        }
+        break;
+
+      case 'end_plan':
+        // Plan is complete (success or failure)
+        if (updatedPlan.status === 'completed') {
+          console.log('[PlanExecutor] Plan completed successfully');
+          this.events.emit('plan:step:complete', {
+            plan: updatedPlan,
+            step: updatedPlan.steps.find(s => s.id === step.id) || step,
+            success: true,
+          });
+          this.events.emit('plan:complete', updatedPlan);
+          clearSavedPlan(this.siteId);
+        } else {
+          // Plan failed
+          console.log('[PlanExecutor] Plan failed');
+          this.events.emit('plan:step:failed', {
+            plan: updatedPlan,
+            step: updatedPlan.steps.find(s => s.id === step.id) || step,
+            error: new Error(message || errorMessage || 'Plan failed'),
+            canRetry: false,
+          });
+          this.events.emit('plan:error', {
+            plan: updatedPlan,
+            error: new Error(message || errorMessage || 'Plan failed'),
+          });
+        }
+        break;
+
+      default:
+        console.warn(`[PlanExecutor] Unknown server action: ${action}`);
+        await this.executeNextStep();
     }
   }
 
