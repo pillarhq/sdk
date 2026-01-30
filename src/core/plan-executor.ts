@@ -576,9 +576,20 @@ export class PlanExecutor {
     this.events.emit('plan:step:active', { plan: activePlan.value!, step });
 
     try {
-      // Get handler and definition from action registry
+      // Get Pillar instance for handler lookup
+      const { default: Pillar } = await import('./Pillar');
+      const pillar = Pillar.getInstance();
+      
+      // Get action definition for metadata (returns data flag, etc.)
       const actionDefinition = actionName && hasAction(actionName) ? getActionDefinition(actionName) : undefined;
-      const handler = actionDefinition?.handler;
+      
+      // Get handler using unified lookup (checks code-first registry + onTask handlers)
+      // This is the key fix: handlers registered via onTask() are now found
+      const handler = pillar?.getHandler(actionName);
+      
+      // Also check runtime-registered actions for metadata
+      const runtimeAction = pillar?.getRegisteredAction(actionName);
+      const actionReturnsData = actionDefinition?.returns || runtimeAction?.returns;
       
       // Extract action type for wizard detection (needed for auto_complete logic below)
       const actionType = (step as unknown as { action_type?: string }).action_type as 
@@ -587,30 +598,26 @@ export class PlanExecutor {
       let result: unknown = undefined;
       
       if (handler) {
-        // Use registered handler from action definition
-        result = await handler(step.action_data);
+        // Execute handler (await to handle async handlers properly)
+        console.log(`[PlanExecutor] Executing handler for: ${actionName}`);
+        result = await Promise.resolve(handler(step.action_data || {}));
         
         // If action returns data, send it back to the agent
-        if (actionDefinition?.returns && result !== undefined) {
-          const { default: Pillar } = await import('./Pillar');
-          const pillar = Pillar.getInstance();
+        if (actionReturnsData && result !== undefined) {
           if (pillar) {
             pillar.sendActionResult(actionName, result);
           }
         }
       } else {
-        // Use Pillar's executeTask which routes through registered onTask handlers
-        // and has proper fallback handling (using host app's router instead of hard reload)
-        const { default: Pillar } = await import('./Pillar');
-        const pillar = Pillar.getInstance();
-        
+        // No handler found - use Pillar's executeTask for built-in fallbacks
+        // (navigate, external_link, copy_text, etc.)
         if (pillar) {
           const path = step.action_data?.path as string | undefined;
           const externalUrl = step.action_data?.url as string | undefined;
           
-          console.log(`[PlanExecutor] Executing via Pillar.executeTask: ${actionName}`);
+          console.log(`[PlanExecutor] No handler found, using executeTask fallback: ${actionName}`);
           
-          // executeTask will look for registered handlers (onTask) and use built-in fallbacks
+          // executeTask has built-in handlers for navigate, external_link, etc.
           pillar.executeTask({
             id: step.id,
             name: actionName,

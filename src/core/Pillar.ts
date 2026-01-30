@@ -607,6 +607,42 @@ export class Pillar {
   }
 
   /**
+   * Get handler for an action, checking all registration systems.
+   * 
+   * Lookup order:
+   * 1. Code-first action registry (synced via pillar-sync CLI) - handler in definition
+   * 2. Task handlers (registered via onTask at runtime)
+   * 
+   * This is the recommended pattern:
+   * - Action definitions synced to server via CLI (so AI knows what's possible)
+   * - Handlers registered at runtime via onTask (client-side execution)
+   * 
+   * @param actionName - Action name to look up
+   * @returns Handler function or undefined if not found
+   * 
+   * @example
+   * const handler = pillar.getHandler('list_datasources');
+   * if (handler) {
+   *   const result = await handler({ limit: 10 });
+   * }
+   */
+  getHandler(actionName: string): ((data: Record<string, unknown>) => unknown) | undefined {
+    // 1. Check code-first action registry (synced via CLI)
+    const actionDefinition = hasAction(actionName) ? getActionDefinition(actionName) : undefined;
+    if (actionDefinition?.handler) {
+      return actionDefinition.handler;
+    }
+    
+    // 2. Check task handlers (registered via onTask)
+    const taskHandler = this._taskHandlers.get(actionName);
+    if (taskHandler) {
+      return taskHandler;
+    }
+    
+    return undefined;
+  }
+
+  /**
    * Register a catch-all handler for any task.
    * Useful for logging, analytics, or handling unknown tasks.
    * 
