@@ -43,14 +43,17 @@ export class PlanExecutor {
    * Called when the ReAct agent creates a plan via the create_plan tool.
    */
   async handlePlanReceived(plan: ExecutionPlan): Promise<void> {
-    console.log(
-      `[PlanExecutor] Received plan: ${plan.id}, auto_execute=${plan.auto_execute}, status=${plan.status}`
-    );
+    console.log(`[PlanExecutor] Received plan ${plan.id} (auto_execute=${plan.auto_execute}, status=${plan.status})`);
 
     setPlan(plan);
     this.persistPlan(plan);
 
-    if (plan.auto_execute && plan.status === 'executing') {
+    // Auto-execute if plan is configured for it AND status indicates ready to run
+    // Accept both 'executing' and 'ready' status for robustness
+    const shouldAutoExecute = plan.auto_execute && 
+      ['executing', 'ready'].includes(plan.status);
+
+    if (shouldAutoExecute) {
       this.events.emit('plan:start', plan);
       await this.executeNextStep();
     }
@@ -148,6 +151,26 @@ export class PlanExecutor {
   }
 
   /**
+   * Resume execution of a stuck plan.
+   * 
+   * This is a fallback method for when auto-execution fails or
+   * the plan gets into an inconsistent state. It manually triggers
+   * execution of the next ready step without requiring server confirmation.
+   */
+  async resumeExecution(): Promise<void> {
+    const plan = activePlan.value;
+    if (!plan) return;
+
+    // Emit start event if not already started
+    if (plan.status !== 'executing') {
+      updatePlan({ ...plan, status: 'executing' });
+      this.events.emit('plan:start', activePlan.value!);
+    }
+
+    await this.executeNextStep();
+  }
+
+  /**
    * Execute the next ready step.
    */
   private async executeNextStep(): Promise<void> {
@@ -175,13 +198,9 @@ export class PlanExecutor {
 
       if (allDone) {
         console.log(`[PlanExecutor] Plan ${plan.id} complete`);
-        // Update plan status to 'completed' so UI shows done state
-        // Don't clear immediately - let UI show the completed state
         updatePlan({ ...plan, status: 'completed' });
         this.events.emit('plan:complete', activePlan.value!);
-        // Clear from localStorage so it won't be recovered on refresh
         clearSavedPlan(this.siteId);
-        // Note: UI can call dismissPlan() when user wants to dismiss the completed plan
       }
       return;
     }
@@ -199,10 +218,8 @@ export class PlanExecutor {
     }
 
     // For inline_ui actions, stay in 'ready' and let the UI render the card
-    // User will interact with the card and confirm via confirmInlineStep()
     const actionType = (step as unknown as { action_type?: string }).action_type;
     if (actionType === 'inline_ui' && step.status === 'ready') {
-      console.log(`[PlanExecutor] Step ${step.index} is inline_ui - waiting for user card interaction`);
       this.events.emit('plan:step:active', { plan: activePlan.value!, step });
       return;
     }
@@ -271,11 +288,10 @@ export class PlanExecutor {
       return;
     }
 
-    console.log(`[PlanExecutor] Inline step ${step.index} completed with data:`, data);
-
-    // The inline card has already done the work (made API calls, etc.)
-    // Just mark the step as complete and advance to the next step
-    await this.markStepComplete(stepId, data);
+    // Report completion to server with the confirmation data
+    // This allows the server to analyze the result (e.g., selected datasource)
+    // and update subsequent steps with the data (requires_result_feedback)
+    await this.reportStepComplete(step, true, data, undefined);
   }
 
   /**
@@ -414,7 +430,6 @@ export class PlanExecutor {
       return;
     }
 
-    console.log(`[PlanExecutor] Dismissing completed plan ${plan.id}`);
     // Use plan:complete event (plan:dismissed isn't in PillarEvents)
     this.events.emit('plan:complete', plan);
     clearPlan(true);
@@ -450,10 +465,6 @@ export class PlanExecutor {
       // No active plan step waiting for this action - that's fine, it was standalone
       return;
     }
-
-    console.log(
-      `[PlanExecutor] Completing step ${step.index} (${actionName}) via callback`
-    );
 
     if (success) {
       await this.markStepComplete(step.id, data);
@@ -496,7 +507,6 @@ export class PlanExecutor {
       return;
     }
 
-    console.log(`[PlanExecutor] Marking step ${step.index} as done via UI button`);
     await this.markStepComplete(stepId);
   }
 
@@ -536,10 +546,6 @@ export class PlanExecutor {
 
     // Handle guidance steps - they don't execute, just get acknowledged
     if (step.step_type === 'guidance') {
-      console.log(
-        `[PlanExecutor] Guidance step ${step.index}: ${step.description}`
-      );
-      
       // Mark as completed immediately (user acknowledges by viewing)
       updatePlanStep(step.id, { status: 'completed' });
       
@@ -567,10 +573,6 @@ export class PlanExecutor {
     }
 
     const actionName = step.action_name || 'unknown';
-    
-    console.log(
-      `[PlanExecutor] Executing step ${step.index}: ${actionName}`
-    );
 
     updatePlanStep(step.id, { status: 'executing' });
     this.events.emit('plan:step:active', { plan: activePlan.value!, step });
@@ -598,8 +600,6 @@ export class PlanExecutor {
       let result: unknown = undefined;
       
       if (handler) {
-        // Execute handler (await to handle async handlers properly)
-        console.log(`[PlanExecutor] Executing handler for: ${actionName}`);
         result = await Promise.resolve(handler(step.action_data || {}));
         
         // If action returns data, send it back to the agent
@@ -614,8 +614,6 @@ export class PlanExecutor {
         if (pillar) {
           const path = step.action_data?.path as string | undefined;
           const externalUrl = step.action_data?.url as string | undefined;
-          
-          console.log(`[PlanExecutor] No handler found, using executeTask fallback: ${actionName}`);
           
           // executeTask has built-in handlers for navigate, external_link, etc.
           pillar.executeTask({
@@ -639,7 +637,6 @@ export class PlanExecutor {
       
       if (usedFallback && isWizardAction && !step.auto_complete) {
         // Wizard actions wait for user to complete the flow
-        console.log(`[PlanExecutor] Step ${step.index} is wizard action - awaiting user completion`);
         updatePlanStep(step.id, { status: 'awaiting_result', result });
         this.events.emit('plan:step:active', { plan: activePlan.value!, step });
         // Don't advance - wait for completePlanStep() or markStepDone() to be called
@@ -681,10 +678,6 @@ export class PlanExecutor {
       console.warn('[PlanExecutor] No active plan for step completion');
       return;
     }
-
-    console.log(
-      `[PlanExecutor] Reporting step ${step.index} completion: success=${success}`
-    );
 
     try {
       const response = await this.mcpClient.stepComplete(
@@ -741,8 +734,6 @@ export class PlanExecutor {
   ): Promise<void> {
     const { action, plan: updatedPlan, retry_step_id, message } = response;
 
-    console.log(`[PlanExecutor] Server decision: ${action}${message ? ` - ${message}` : ''}`);
-
     // Update local plan state
     updatePlan(updatedPlan);
     this.events.emit('plan:updated', updatedPlan);
@@ -772,7 +763,6 @@ export class PlanExecutor {
         // Server wants us to retry the step with modified params
         const retryStep = updatedPlan.steps.find(s => s.id === (retry_step_id || step.id));
         if (retryStep) {
-          console.log(`[PlanExecutor] Retrying step ${retryStep.index} with modified params`);
           this.events.emit('plan:step:retry', {
             plan: updatedPlan,
             step: retryStep,
@@ -788,7 +778,6 @@ export class PlanExecutor {
       case 'end_plan':
         // Plan is complete (success or failure)
         if (updatedPlan.status === 'completed') {
-          console.log('[PlanExecutor] Plan completed successfully');
           this.events.emit('plan:step:complete', {
             plan: updatedPlan,
             step: updatedPlan.steps.find(s => s.id === step.id) || step,
@@ -797,8 +786,6 @@ export class PlanExecutor {
           this.events.emit('plan:complete', updatedPlan);
           clearSavedPlan(this.siteId);
         } else {
-          // Plan failed
-          console.log('[PlanExecutor] Plan failed');
           this.events.emit('plan:step:failed', {
             plan: updatedPlan,
             step: updatedPlan.steps.find(s => s.id === step.id) || step,

@@ -31,11 +31,26 @@ export function PlanView() {
 
   const isAwaitingStart = plan.status === 'awaiting_start';
   const isExecuting = plan.status === 'executing';
+  const isReady = plan.status === 'ready';
   const progress = planProgress.value;
   const pillar = Pillar.getInstance();
 
+  // Check if plan appears stuck - has auto_execute but no step is actively executing
+  const hasActiveStep = plan.steps.some(s => s.status === 'executing');
+  const hasReadyStep = plan.steps.some(s => s.status === 'ready');
+  const isStuck = plan.auto_execute && 
+    (isExecuting || isReady) && 
+    !hasActiveStep && 
+    hasReadyStep;
+
   const handleStart = () => {
     pillar?.startPlan();
+  };
+
+  const handleResume = async () => {
+    // Manually trigger execution of next step
+    console.log('[PlanView] Manual resume triggered');
+    await pillar?.resumePlan();
   };
 
   const handleCancel = () => {
@@ -80,12 +95,19 @@ export function PlanView() {
       )}
 
       {/* Progress bar */}
-      {isExecuting && (
+      {(isExecuting || isReady) && (
         <div class="pillar-plan__progress-bar">
           <div
             class="pillar-plan__progress-fill"
             style={{ width: `${progress * 100}%` }}
           />
+        </div>
+      )}
+
+      {/* Stuck warning */}
+      {isStuck && (
+        <div class="pillar-plan__warning">
+          Plan execution may be stuck. Click Resume to continue.
         </div>
       )}
 
@@ -111,6 +133,15 @@ export function PlanView() {
             onClick={handleStart}
           >
             Start Plan
+          </button>
+        )}
+        {isStuck && (
+          <button
+            type="button"
+            class="pillar-plan__start-btn"
+            onClick={handleResume}
+          >
+            Resume
           </button>
         )}
         <button
@@ -244,5 +275,15 @@ export const PLAN_STYLES = `
   background: var(--pillar-bg-tertiary, #f3f4f6);
   color: var(--pillar-danger, #dc2626);
   border-color: var(--pillar-danger, #dc2626);
+}
+
+/* Warning Message */
+.pillar-plan__warning {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--pillar-warning-text, #92400e);
+  background: var(--pillar-warning-bg, #fef3c7);
+  border: 1px solid var(--pillar-warning-border, #fcd34d);
+  border-radius: 6px;
 }
 `;

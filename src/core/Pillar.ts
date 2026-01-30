@@ -1124,6 +1124,18 @@ export class Pillar {
   }
 
   /**
+   * Resume plan execution if it appears stuck.
+   * 
+   * This is a fallback for cases where auto-execute failed or
+   * the plan got into an inconsistent state. It manually triggers
+   * execution of the next ready step.
+   */
+  async resumePlan(): Promise<void> {
+    console.log('[Pillar] Manual plan resume triggered');
+    await this._planExecutor?.resumeExecution();
+  }
+
+  /**
    * Confirm a plan step requiring confirmation.
    *
    * @param stepId - UUID of the step to confirm
@@ -1219,8 +1231,6 @@ export class Pillar {
    * @param args - Arguments for the action
    */
   async executeQueryAction(actionName: string, args: Record<string, unknown> = {}): Promise<void> {
-    console.log(`[Pillar] Executing query action: ${actionName}`, args);
-
     // Look for handlers
     const actionDefinition = hasAction(actionName) ? getActionDefinition(actionName) : undefined;
     const runtimeAction = this._registeredActions.get(actionName);
@@ -1228,15 +1238,6 @@ export class Pillar {
     const specificHandler = this._taskHandlers.get(actionName);
     const queryTypeHandler = this._taskHandlers.get('query');
     const handler = registryHandler || specificHandler || queryTypeHandler;
-
-    console.log(`[Pillar] Query action "${actionName}" handler lookup:`, {
-      hasActionDefinition: !!actionDefinition,
-      hasRuntimeAction: !!runtimeAction,
-      hasRegistryHandler: !!registryHandler,
-      hasSpecificHandler: !!specificHandler,
-      hasQueryTypeHandler: !!queryTypeHandler,
-      willUseHandler: handler ? 'yes' : 'NO HANDLER FOUND',
-    });
 
     if (!handler) {
       console.error(`[Pillar] No handler registered for query action "${actionName}". ` +
