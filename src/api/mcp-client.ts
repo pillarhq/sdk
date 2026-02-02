@@ -122,18 +122,14 @@ export interface StreamCallbacks {
   onConversationStarted?: (conversationId: string, messageId?: string) => void;
   /** Called when stream is complete */
   onComplete?: (conversationId?: string, queryLogId?: string) => void;
-  /** Called for progress updates (search, query, generating, etc.) */
+  /** Called for progress updates - now markdown-based */
   onProgress?: (progress: {
-    kind: string;
-    message?: string;
-    progress_id?: string;
-    metadata?: {
-      sources?: Array<{title: string; url: string; score?: number}>;
-      result_count?: number;
-      query?: string;
-      action_name?: string;
-      no_sources_used?: boolean;
-    };
+    progress_id?: string;     // Unique ID for updating/replacing events
+    markdown: string;         // Markdown content to render
+    is_streaming?: boolean;   // True if this is a streaming chunk
+    is_step_start?: boolean;  // True if this starts a new reasoning step
+    is_step_complete?: boolean; // True if this completes a reasoning step
+    iteration?: number;       // Iteration number for multi-step reasoning
   }) => void;
   /** Called when agent requests data from host app */
   onQueryRequest?: (request: QueryRequest) => Promise<void>;
@@ -341,20 +337,17 @@ export class MCPClient {
                   throw new Error(event.error.message);
                 }
 
-                // Handle streaming token events (notifications/progress)
+                // Handle streaming notifications (notifications/progress)
                 if (event.method === 'notifications/progress') {
                   const progress = event.params?.progress;
                   if (progress) {
-                    // Log all progress events for debugging (except tokens which are too verbose)
-                    if (progress.kind !== 'token') {
-                      console.log(`[MCPClient] Progress event: ${progress.kind}`, progress);
-                    }
-
+                    // Handle special control events (not markdown-based)
                     if (progress.kind === 'token' && progress.token) {
+                      // Token streaming for response text
                       collectedText.push(progress.token);
                       callbacks.onToken?.(progress.token);
                     } else if (progress.kind === 'conversation_started') {
-                      // Conversation started - early conversation_id from pre-generated UUID
+                      // Conversation started - early conversation_id
                       callbacks.onConversationStarted?.(
                         progress.conversation_id,
                         progress.message_id
@@ -367,33 +360,28 @@ export class MCPClient {
                       break;
                     } else if (progress.kind === 'query_request') {
                       // Query request - agent needs data from host app
-                      // Call the onQueryRequest callback to execute the query action
                       if (callbacks.onQueryRequest) {
                         const queryRequest: QueryRequest = {
                           request_id: progress.request_id || crypto.randomUUID(),
                           action_name: progress.action_name,
                           arguments: progress.arguments || {},
                         };
-                        // Execute async but don't await - let the stream continue
                         callbacks.onQueryRequest(queryRequest).catch((error) => {
                           console.error('[MCPClient] Query request handler failed:', error);
                         });
                       } else {
                         console.warn('[MCPClient] Received query_request but no handler registered');
                       }
-                    } else {
-                      // Other progress types (processing, search, search_complete, query, query_complete, query_failed, generating)
+                    } else if (progress.markdown || progress.is_step_start || progress.is_step_complete) {
+                      // Markdown-based progress events (thinking, search results, step markers, etc.)
+                      // Note: step_start may have empty markdown, so also check for step flags
                       callbacks.onProgress?.({
-                        kind: progress.kind,
-                        message: progress.message,
                         progress_id: progress.progress_id,
-                        metadata: {
-                          sources: progress.sources || progress.metadata?.sources,
-                          result_count: progress.result_count ?? progress.metadata?.result_count,
-                          query: progress.query || progress.metadata?.query,
-                          action_name: progress.action_name || progress.metadata?.action_name,
-                          no_sources_used: progress.no_sources_used ?? progress.metadata?.no_sources_used,
-                        },
+                        markdown: progress.markdown || '',
+                        is_streaming: progress.is_streaming,
+                        is_step_start: progress.is_step_start,
+                        is_step_complete: progress.is_step_complete,
+                        iteration: progress.iteration,
                       });
                     }
                   }
@@ -701,13 +689,13 @@ export class MCPClient {
    * 
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
+   * @returns Promise that resolves when the request completes
    */
-  sendActionResult(actionName: string, result: unknown): void {
-    // Send via fire-and-forget POST request
-    // The server will inject this into the ongoing conversation
+  async sendActionResult(actionName: string, result: unknown): Promise<void> {
+    const requestId = this.nextId();
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
-      id: this.nextId(),
+      id: requestId,
       method: 'action/result',
       params: {
         action_name: actionName,
@@ -715,14 +703,43 @@ export class MCPClient {
       },
     };
 
-    // Fire-and-forget - don't wait for response
-    fetch(this.baseUrl, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify(request),
-    }).catch((error) => {
-      console.error('[MCPClient] Failed to send action result:', error);
-    });
+    const body = JSON.stringify(request);
+    const sessionId = this.getSessionId();
+    
+    console.log(
+      `[MCPClient] Sending action result: action=${actionName}, ` +
+      `request_id=${requestId}, session=${sessionId?.slice(0, 8) || 'none'}..., ` +
+      `size=${body.length} bytes`
+    );
+
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error(
+          `[MCPClient] Action result delivery failed: action=${actionName}, ` +
+          `status=${response.status}, error=${errorText}`
+        );
+        return;
+      }
+
+      const responseData = await response.json().catch(() => null);
+      
+      console.log(
+        `[MCPClient] Action result delivered: action=${actionName}, ` +
+        `signaled=${responseData?.result?.signaled ?? 'unknown'}`
+      );
+    } catch (error) {
+      console.error(
+        `[MCPClient] Action result fetch failed: action=${actionName}, ` +
+        `error=${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }
 

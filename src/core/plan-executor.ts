@@ -466,18 +466,17 @@ export class PlanExecutor {
       return;
     }
 
+    console.log(
+      `[PlanExecutor] Completing step ${step.index} (${actionName}) via callback: success=${success}`
+    );
+
     if (success) {
       await this.markStepComplete(step.id, data);
     } else {
-      // Mark step failed
-      updatePlanStep(step.id, { status: 'failed', result: { error: 'Action failed by host app' } });
-
-      this.events.emit('plan:step:failed', {
-        plan: activePlan.value!,
-        step: activePlan.value!.steps.find((s) => s.id === step.id)!,
-        error: new Error('Action failed by host app'),
-        canRetry: step.is_retriable,
-      });
+      // STEP-BY-STEP VERIFICATION: Report failure to server
+      // Extract error message from data if available
+      const errorMessage = data?.error as string || 'Action failed by host app';
+      await this.reportStepComplete(step, false, data, errorMessage);
     }
   }
 
@@ -512,29 +511,25 @@ export class PlanExecutor {
 
   /**
    * Internal helper to mark a step complete and advance to next.
+   * 
+   * This is called when:
+   * - An inline step completes (via completeInlineStep)
+   * - A task:complete event fires for a step awaiting result (via completeStepByAction)
+   * - User clicks "Done" on a wizard step (via markStepDone)
+   * 
+   * It reports the result to the server for step-by-step verification,
+   * then advances to the next step based on the server's decision.
    */
   private async markStepComplete(stepId: string, data?: Record<string, unknown>): Promise<void> {
-    updatePlanStep(stepId, { status: 'completed', result: data });
+    const plan = activePlan.value;
+    if (!plan) return;
 
-    const updatedPlan = activePlan.value!;
-    const updatedStep = updatedPlan.steps.find((s) => s.id === stepId)!;
+    const step = plan.steps.find((s) => s.id === stepId);
+    if (!step) return;
 
-    // Activate the next pending step so executeNextStep can find it
-    const nextStepIndex = updatedStep.index + 1;
-    if (nextStepIndex < updatedPlan.steps.length) {
-      const nextStep = updatedPlan.steps[nextStepIndex];
-      if (nextStep.status === 'pending') {
-        updatePlanStep(nextStep.id, { status: 'ready' });
-      }
-    }
-
-    this.events.emit('plan:step:complete', {
-      plan: activePlan.value!,
-      step: updatedStep,
-      success: true,
-    });
-
-    await this.executeNextStep();
+    // STEP-BY-STEP VERIFICATION: Report success to server with the actual result data
+    // The server will decide what to do next (proceed, retry, modify, or end)
+    await this.reportStepComplete(step, true, data, undefined);
   }
 
   /**
@@ -605,7 +600,7 @@ export class PlanExecutor {
         // If action returns data, send it back to the agent
         if (actionReturnsData && result !== undefined) {
           if (pillar) {
-            pillar.sendActionResult(actionName, result);
+            await pillar.sendActionResult(actionName, result);
           }
         }
       } else {
@@ -625,26 +620,62 @@ export class PlanExecutor {
             data: step.action_data || {},
           });
           
-          result = { executed: true, action: actionName };
+          // Check if this step should auto-complete after execution
+          // Steps with auto_complete=true that don't require result feedback can complete immediately
+          // Steps with requires_result_feedback=true must wait for data to send back to agent
+          const shouldAutoComplete = step.auto_complete && !step.requires_result_feedback;
+          
+          if (shouldAutoComplete) {
+            // Auto-complete: report success to server immediately
+            console.log(`[PlanExecutor] Step ${step.index} auto-completing (auto_complete=true, requires_result_feedback=false)`);
+            await this.reportStepComplete(step, true, undefined, undefined);
+          } else {
+            // Manual completion: wait for host app to signal completion via task:complete event
+            // or for user to click "Done" button (which calls markStepDone)
+            console.log(`[PlanExecutor] Step ${step.index} executed via fallback - awaiting result (auto_complete=${step.auto_complete}, requires_result_feedback=${step.requires_result_feedback})`);
+            updatePlanStep(step.id, { status: 'awaiting_result' });
+            this.events.emit('plan:step:active', { plan: activePlan.value!, step });
+          }
+          return;
         } else {
           throw new Error(`No handler for action: ${actionName} (Pillar not initialized)`);
         }
       }
 
-      // Check if this is a wizard action that needs to wait for user completion
-      const usedFallback = !handler;
-      const isWizardAction = actionType === 'navigate' || actionType === 'open_modal';
-      
-      if (usedFallback && isWizardAction && !step.auto_complete) {
-        // Wizard actions wait for user to complete the flow
+      // Decide whether this step should auto-complete.
+      // Steps with requires_result_feedback=true must wait for data to send back to agent.
+      const shouldAutoComplete = step.auto_complete && !step.requires_result_feedback;
+
+      if (!shouldAutoComplete) {
+        // Manual completion: wait for host app to signal completion via task:complete event
+        // or for user to click "Done" button (which calls markStepDone).
         updatePlanStep(step.id, { status: 'awaiting_result', result });
         this.events.emit('plan:step:active', { plan: activePlan.value!, step });
-        // Don't advance - wait for completePlanStep() or markStepDone() to be called
         return;
       }
-      
-      // STEP-BY-STEP VERIFICATION: Report success to server
-      await this.reportStepComplete(step, true, result, undefined);
+
+      // Handler returned directly - check if result indicates success/failure.
+      // STEP-BY-STEP VERIFICATION: Report to server with correct success status.
+      let stepSuccess = true;
+      let stepError: string | undefined;
+
+      // Check if the result itself indicates failure (e.g., { success: false, message: "..." })
+      if (result && typeof result === 'object' && !Array.isArray(result)) {
+        const resultObj = result as Record<string, unknown>;
+        if (resultObj.success === false) {
+          stepSuccess = false;
+          stepError =
+            (resultObj.message as string) ||
+            (resultObj.error as string) ||
+            'Action returned failure';
+        } else if ('error' in resultObj && !('success' in resultObj)) {
+          // Has error field without success field - treat as failure
+          stepSuccess = false;
+          stepError = (resultObj.error as string) || 'Action returned error';
+        }
+      }
+
+      await this.reportStepComplete(step, stepSuccess, result, stepError);
       
     } catch (error) {
       console.error(

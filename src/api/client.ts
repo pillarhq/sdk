@@ -11,6 +11,7 @@ import type { Workflow } from '../core/workflow';
 import type { UserContextItem } from '../types/user-context';
 import type { ActionData, ChatImage, ImageUploadResponse, QueryRequest } from './mcp-client';
 import { MCPClient, actionToTaskButton } from './mcp-client';
+import { AGUIClientAdapter } from './ag-ui-adapter';
 
 // ============================================================================
 // Types
@@ -45,16 +46,12 @@ export interface ChatResponse {
 }
 
 export interface ProgressEvent {
-  kind: 'processing' | 'search' | 'search_complete' | 'query' | 'query_complete' | 'query_failed' | 'generating';
-  message?: string;
-  progress_id?: string;
-  metadata?: {
-    sources?: Array<{title: string; url: string; score?: number}>;
-    result_count?: number;
-    query?: string;
-    action_name?: string;
-    no_sources_used?: boolean;
-  };
+  progress_id?: string;      // Unique ID for updating/replacing events (enables streaming)
+  markdown: string;          // Markdown content to render
+  is_streaming?: boolean;    // True if this is a streaming chunk
+  is_step_start?: boolean;   // True if this starts a new reasoning step
+  is_step_complete?: boolean; // True if this completes a reasoning step
+  iteration?: number;        // Iteration number for multi-step reasoning
 }
 
 /**
@@ -87,18 +84,29 @@ export class APIClient {
   private config: ResolvedConfig;
   private abortControllers: Map<string, AbortController> = new Map();
   private mcpClient: MCPClient;
+  private aguiClient: AGUIClientAdapter;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+    // MCPClient is still used for plan management and other non-streaming operations
     this.mcpClient = new MCPClient(config);
+    // AG-UI client is used for all chat streaming
+    this.aguiClient = new AGUIClientAdapter(config);
   }
 
   /**
    * Get the underlying MCP client.
-   * Used by Pillar for direct MCP operations like sendActionResult.
+   * Used by Pillar for plan management operations.
    */
   get mcp(): MCPClient {
     return this.mcpClient;
+  }
+
+  /**
+   * Get the AG-UI client adapter for chat operations.
+   */
+  get agui(): AGUIClientAdapter {
+    return this.aguiClient;
   }
 
   private get baseUrl(): string {
@@ -311,62 +319,25 @@ export class APIClient {
     onConversationStarted?: (conversationId: string, messageId?: string) => void,
     onQueryRequest?: (request: QueryRequest) => Promise<void>
   ): Promise<ChatResponse> {
-    // Use MCP client for chat via the 'ask' tool
-    let fullMessage = '';
-    let sources: ArticleSummary[] = [];
-    let actions: TaskButtonData[] = [];
-
+    // Use AG-UI client for chat streaming
     try {
-      const result = await this.mcpClient.ask(
-        message,
-        {
-          onToken: (token) => {
-            fullMessage += token;
-            onChunk?.(token);
-          },
-          onSources: (s) => {
-            sources = s;
-          },
-          onActions: (a: ActionData[]) => {
-            actions = a.map(actionToTaskButton);
-            onActions?.(actions);
-          },
-          onPlan: (plan) => {
-            onPlan?.(plan);
-          },
-          onProgress: (p) => {
-            onProgress?.(p as ProgressEvent);
-          },
-          onConversationStarted: (convId, msgId) => {
-            onConversationStarted?.(convId, msgId);
-          },
-          onQueryRequest: async (request) => {
-            if (onQueryRequest) {
-              await onQueryRequest(request);
-            }
-          },
-          onError: (error) => {
-            console.error('[Pillar API] MCP chat error:', error);
-          },
+      const result = await this.aguiClient.chat(message, {
+        onToken: onChunk,
+        onSources: () => {}, // Sources come via onStateDelta in adapter
+        onActions: onActions,
+        onPlan: onPlan,
+        onProgress: onProgress,
+        onConversationStarted: onConversationStarted,
+        onError: (error) => {
+          console.error('[Pillar API] AG-UI chat error:', error);
         },
-        { articleSlug, userContext, images, history }
-      );
-
-      // If no streaming content was received, extract from result
-      if (!fullMessage && result.content[0]?.type === 'text') {
-        fullMessage = result.content[0].text || '';
-      }
-
-      // Extract conversation/message IDs from result _meta if available
-      const meta = result._meta || {};
-
-      return {
-        message: fullMessage,
-        sources,
-        actions,
-        conversationId: meta.conversation_id,
-        messageId: meta.query_log_id,
-      };
+        onComplete: () => {},
+      }, {
+        history,
+        userContext,
+      });
+      
+      return result;
     } catch (error) {
       console.error('[Pillar API] Chat error:', error);
       throw error;

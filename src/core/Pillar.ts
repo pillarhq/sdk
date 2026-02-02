@@ -716,16 +716,31 @@ export class Pillar {
         // If action returns data, send it back to the agent
         if (actionReturnsData && result !== undefined) {
           // Handle both sync and async handlers
-          Promise.resolve(result).then((resolvedResult) => {
+          Promise.resolve(result).then(async (resolvedResult) => {
             if (resolvedResult !== undefined) {
-              this.sendActionResult(name, resolvedResult);
+              await this.sendActionResult(name, resolvedResult);
+              
+              // Check if result indicates failure (e.g., {success: false, message: "..."})
+              // and emit task:complete with correct success status
+              let taskSuccess = true;
+              if (resolvedResult && typeof resolvedResult === 'object' && !Array.isArray(resolvedResult)) {
+                const resultObj = resolvedResult as Record<string, unknown>;
+                if (resultObj.success === false) {
+                  taskSuccess = false;
+                }
+              }
+              this._events.emit('task:complete', { name, success: taskSuccess, data: resolvedResult as Record<string, unknown> | undefined });
+            } else {
+              this._events.emit('task:complete', { name, success: true, data });
             }
           }).catch((error) => {
             console.error(`[Pillar] Error in query action "${name}":`, error);
+            this._events.emit('task:complete', { name, success: false, data });
           });
+        } else {
+          // No data returned - assume success
+          this._events.emit('task:complete', { name, success: true, data });
         }
-        
-        this._events.emit('task:complete', { name, success: true, data });
       } catch (error) {
         console.error(`[Pillar] Error executing task "${name}":`, error);
         this._events.emit('task:complete', { name, success: false, data });
@@ -1207,16 +1222,17 @@ export class Pillar {
    * 
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
+   * @returns Promise that resolves when the result is delivered
    * @internal
    */
-  sendActionResult(actionName: string, result: unknown): void {
+  async sendActionResult(actionName: string, result: unknown): Promise<void> {
     if (!this._api) {
       console.warn('[Pillar] SDK not initialized, cannot send action result');
       return;
     }
 
     console.log(`[Pillar] Sending action result for "${actionName}":`, result);
-    this._api.mcp.sendActionResult(actionName, result);
+    await this._api.mcp.sendActionResult(actionName, result);
     this._events.emit('action:result', { actionName, result });
   }
 
@@ -1243,7 +1259,7 @@ export class Pillar {
       console.error(`[Pillar] No handler registered for query action "${actionName}". ` +
         `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`);
       // Send error result back to agent so it doesn't hang
-      this.sendActionResult(actionName, { 
+      await this.sendActionResult(actionName, { 
         error: `No handler registered for action "${actionName}"`,
         success: false 
       });
@@ -1255,18 +1271,18 @@ export class Pillar {
       console.log(`[Pillar] Query action "${actionName}" completed with result:`, result);
       
       if (result !== undefined) {
-        this.sendActionResult(actionName, result);
+        await this.sendActionResult(actionName, result);
       } else {
         console.warn(`[Pillar] Query action "${actionName}" returned undefined. ` +
           `Make sure your handler returns data for the agent.`);
-        this.sendActionResult(actionName, { 
+        await this.sendActionResult(actionName, { 
           error: `Handler returned undefined`,
           success: false 
         });
       }
     } catch (error) {
       console.error(`[Pillar] Error executing query action "${actionName}":`, error);
-      this.sendActionResult(actionName, { 
+      await this.sendActionResult(actionName, { 
         error: error instanceof Error ? error.message : String(error),
         success: false 
       });
@@ -1352,6 +1368,19 @@ export class Pillar {
             actionName,
             true,
             result as Record<string, unknown>
+          );
+        }
+      });
+
+      // Connect task:complete to plan step completion
+      // When executeTask runs a handler (via onTask), it emits task:complete.
+      // If there's an active plan step awaiting this task, complete it with the data.
+      this._events.on('task:complete', ({ name, success, data }) => {
+        if (this._planExecutor) {
+          this._planExecutor.completeStepByAction(
+            name,
+            success,
+            data
           );
         }
       });

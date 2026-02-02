@@ -1804,6 +1804,7 @@ export const PANEL_STYLES = `
 
 ._pillar-message-assistant-content {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 8px;
 }
@@ -2146,6 +2147,33 @@ export const PANEL_STYLES = `
   font-size: 11px;
 }
 
+._pillar-progress-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+._pillar-progress-detail-item {
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  padding: 1px 0;
+}
+
+._pillar-progress-detail-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+._pillar-progress-detail-name {
+  font-weight: 500;
+}
+
+._pillar-progress-detail-desc {
+  color: var(--pillar-text-muted);
+  opacity: 0.8;
+}
+
 ._pillar-progress-content-wrapper {
   position: relative;
   padding-left: 16px;
@@ -2194,6 +2222,37 @@ export const PANEL_STYLES = `
   pointer-events: none;
 }
 
+._pillar-progress-text {
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+._pillar-progress-text p {
+  margin: 0 0 4px 0;
+}
+
+._pillar-progress-text p:last-child {
+  margin-bottom: 0;
+}
+
+._pillar-progress-text ol,
+._pillar-progress-text ul {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+._pillar-progress-text li {
+  margin-bottom: 1px;
+}
+
+._pillar-progress-text br {
+  display: block;
+  content: "";
+  margin-top: 2px;
+}
+
 .pillar-progress-events {}
 .pillar-progress-row {}
 .pillar-progress-row-header {}
@@ -2207,4 +2266,67 @@ export const PANEL_STYLES = `
 .pillar-progress-content-wrapper {}
 .pillar-progress-content-container {}
 .pillar-progress-content-gradient {}
+.pillar-progress-text {}
+
+/* ============================================================================
+   Reasoning Disclosure (collapsible thinking steps)
+   Internal: _pillar-reasoning-disclosure | Public: pillar-reasoning-disclosure
+   ============================================================================ */
+
+._pillar-reasoning-disclosure {
+  border-radius: var(--pillar-radius-md);
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  overflow: hidden;
+}
+
+._pillar-reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: var(--pillar-font-size-sm);
+  font-weight: 500;
+  font-family: var(--pillar-font-family);
+  color: var(--pillar-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--pillar-transition-fast);
+}
+
+._pillar-reasoning-header:hover {
+  background: var(--pillar-bg-tertiary);
+}
+
+._pillar-reasoning-icon {
+  font-size: 8px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+._pillar-reasoning-label {
+  flex: 1;
+}
+
+._pillar-reasoning-content {
+  padding: 0 10px 10px 10px;
+  border-top: 1px solid var(--pillar-border);
+}
+
+._pillar-reasoning-content ._pillar-progress-row {
+  margin-top: 6px;
+}
+
+._pillar-reasoning-content ._pillar-progress-row:first-child {
+  margin-top: 10px;
+}
+
+.pillar-reasoning-disclosure {}
+.pillar-reasoning-header {}
+.pillar-reasoning-icon {}
+.pillar-reasoning-label {}
+.pillar-reasoning-content {}
 `;

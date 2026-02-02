@@ -20,24 +20,21 @@ import {
   messages,
   pendingMessage,
   pendingUserContext,
-  progressEvents,
-  progressStatus,
   setActionComplete,
   setActionPending,
   setConversationId,
   setLoading,
   setMessageFeedback,
-  setProgressStatus,
   submitPendingTrigger,
   updateActionMessageContent,
   updateLastAssistantMessage,
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
 } from '../../store/chat';
-import { ProgressRow } from '../Progress';
+import { ProgressRow, AGUIProgress } from '../Progress';
 import { hasActivePlan } from '../../store/plan';
 import type { UserContextItem } from '../../types/user-context';
-import { renderMarkdown } from '../../utils/markdown';
+import { PreactMarkdown } from '../../utils/preact-markdown';
 import type { ProgressEvent } from '../../api/client';
 import { createConfirmActionCard } from '../Cards/ConfirmActionCard';
 import { useAPI } from '../context';
@@ -239,13 +236,8 @@ export function ChatView() {
         images,
         // Progress callback - show what AI is doing
         (progress: ProgressEvent) => {
-          // Add to progress events array for display
+          // Add to progress events array for display (now markdown-based)
           addProgressEvent(progress as StoreProgressEvent);
-          // Also update the single progress status (for backwards compatibility)
-          setProgressStatus({
-            kind: progress.kind as StoreProgressEvent['kind'],
-            message: progress.message,
-          });
         },
         // Conversation started callback - store ID early for optimistic UI
         (convId) => {
@@ -418,37 +410,46 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Progress events (search, query, generating, etc.) */}
-                  {!msg.content && progressEvents.value.length > 0 && (
+                  {/* Live streaming progress - use AG-UI state-based component */}
+                  {!msg.content && isLoading.value && index === messages.value.length - 1 && (
+                    <AGUIProgress />
+                  )}
+                  {/* Legacy progress events during loading (fallback) */}
+                  {!msg.content && !isLoading.value && msg.progressEvents && msg.progressEvents.length > 0 && (
                     <div class="_pillar-progress-events pillar-progress-events">
-                      {progressEvents.value.map((event, idx) => {
-                        const isLast = idx === progressEvents.value.length - 1;
-                        const isActive = isLast && !msg.content;
-                        
-                        return (
-                          <ProgressRow
-                            key={event.progress_id || idx}
-                            progress={event}
-                            isActive={isActive}
-                          />
-                        );
-                      })}
+                      {msg.progressEvents.map((event, idx) => (
+                        <ProgressRow
+                          key={event.progress_id || idx}
+                          progress={event}
+                        />
+                      ))}
                     </div>
                   )}
                   {msg.content ? (
-                    <div
-                      class="_pillar-message-assistant pillar-message-assistant"
-                      dangerouslySetInnerHTML={{
-                        __html: renderMarkdown(msg.content),
-                      }}
-                    />
+                    <>
+                      {/* Progress events rendered as markdown (collapsible reasoning) */}
+                      {msg.progressEvents && msg.progressEvents.length > 0 && (
+                        <div class="_pillar-reasoning-events pillar-reasoning-events">
+                          {msg.progressEvents.map((event, idx) => (
+                            <ProgressRow
+                              key={event.progress_id || idx}
+                              progress={event}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Main message content rendered as markdown */}
+                      <div class="_pillar-message-assistant pillar-message-assistant">
+                        <PreactMarkdown content={msg.content} />
+                      </div>
+                    </>
                   ) : (
                     /* Only show simple loading if no progress events yet */
-                    progressEvents.value.length === 0 && (
+                    (!msg.progressEvents || msg.progressEvents.length === 0) && (
                       <div class="_pillar-progress-indicator pillar-progress-indicator">
                         <div class="_pillar-loading-spinner pillar-loading-spinner" />
                         <span class="_pillar-progress-message pillar-progress-message">
-                          {progressStatus.value.message || 'Processing...'}
+                          Processing...
                         </span>
                       </div>
                     )

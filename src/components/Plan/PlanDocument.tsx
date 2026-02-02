@@ -10,7 +10,7 @@
 
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
-import { renderMarkdown } from '../../utils/markdown';
+import { PreactMarkdown } from '../../utils/preact-markdown';
 
 // ============================================================================
 // Types
@@ -37,9 +37,6 @@ export function PlanDocument({
     setIsExpanded(!isExpanded);
   };
 
-  // Render markdown content
-  const htmlContent = renderMarkdown(document);
-
   return (
     <div class="pillar-plan-document">
       <div
@@ -61,10 +58,9 @@ export function PlanDocument({
       <div
         class={`pillar-plan-document__content ${isExpanded ? 'pillar-plan-document__content--expanded' : ''}`}
       >
-        <div
-          class="pillar-plan-document__body"
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+        <div class="pillar-plan-document__body">
+          <PreactMarkdown content={document} />
+        </div>
       </div>
     </div>
   );
