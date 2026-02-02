@@ -367,6 +367,118 @@ export const PANEL_STYLES = `
 .pillar-icon-btn {}
 .pillar-back-btn {}
 .pillar-home-btn {}
+.pillar-history-btn {}
+
+/* ============================================================================
+   History Dropdown
+   Internal: _pillar-history-* | Public: pillar-history-*
+   ============================================================================ */
+
+._pillar-history-dropdown {
+  position: relative;
+}
+
+._pillar-history-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--pillar-spacing-xs);
+  width: 280px;
+  max-height: 400px;
+  background: var(--pillar-bg);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-lg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  z-index: 100;
+}
+
+._pillar-history-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pillar-spacing-sm);
+  padding: var(--pillar-spacing-xl);
+  color: var(--pillar-text-muted);
+  font-size: 13px;
+}
+
+._pillar-history-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--pillar-border);
+  border-top-color: var(--pillar-primary);
+  border-radius: 50%;
+  animation: pillar-spin 0.8s linear infinite;
+}
+
+@keyframes pillar-spin {
+  to { transform: rotate(360deg); }
+}
+
+._pillar-history-empty {
+  padding: var(--pillar-spacing-xl);
+  text-align: center;
+  color: var(--pillar-text-muted);
+  font-size: 13px;
+}
+
+._pillar-history-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: var(--pillar-spacing-xs) 0;
+}
+
+._pillar-history-group-header {
+  padding: var(--pillar-spacing-xs) var(--pillar-spacing-md);
+  padding-top: var(--pillar-spacing-sm);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--pillar-text-muted);
+  letter-spacing: 0.02em;
+}
+
+._pillar-history-group-header:first-child {
+  padding-top: var(--pillar-spacing-xs);
+}
+
+._pillar-history-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--pillar-spacing-xs) var(--pillar-spacing-md);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--pillar-transition-fast);
+  border-radius: var(--pillar-radius-sm);
+  margin: 0 var(--pillar-spacing-xs);
+  width: calc(100% - var(--pillar-spacing-sm));
+}
+
+._pillar-history-item:hover {
+  background: var(--pillar-bg-secondary);
+}
+
+._pillar-history-item-title {
+  font-size: 13px;
+  color: var(--pillar-text);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Public override classes */
+.pillar-history-dropdown {}
+.pillar-history-menu {}
+.pillar-history-group-header {}
+.pillar-history-list {}
+.pillar-history-item {}
+.pillar-history-item-title {}
 .pillar-close-btn {}
 
 /* ============================================================================

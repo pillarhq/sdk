@@ -1,12 +1,14 @@
 /**
  * Panel Header Component
- * Navigation header with back, home, and close buttons
+ * Navigation header with back, home, history, and close buttons
  */
 
 import { h } from 'preact';
-import { canGoBack, isAtHome, goBack, goHome, type ViewType } from '../../store/router';
+import { canGoBack, isAtHome, goBack, goHome, navigate, type ViewType } from '../../store/router';
 import { closePanel } from '../../store/panel';
-import { hasMessages } from '../../store/chat';
+import { hasMessages, loadConversation } from '../../store/chat';
+import { getApiClient } from '../../core/Pillar';
+import { HistoryDropdown } from './HistoryDropdown';
 
 const BACK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>`;
 const HOME_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>`;
@@ -48,6 +50,23 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
     closePanel();
   };
 
+  const handleSelectConversation = async (conversationId: string) => {
+    const apiClient = getApiClient();
+    if (!apiClient) return;
+
+    try {
+      const conversation = await apiClient.getConversation(conversationId);
+      if (conversation && conversation.messages.length > 0) {
+        // Load the conversation into chat store
+        loadConversation(conversation.id, conversation.messages);
+        // Navigate to chat view
+        navigate('chat');
+      }
+    } catch (error) {
+      console.error('[Pillar] Failed to load conversation:', error);
+    }
+  };
+
   return (
     <header class="_pillar-header pillar-header">
       <div class="_pillar-header-left pillar-header-left">
@@ -82,6 +101,7 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
             dangerouslySetInnerHTML={{ __html: NEW_CHAT_ICON }}
           />
         )}
+        <HistoryDropdown onSelectConversation={handleSelectConversation} />
         <button
           class="_pillar-icon-btn pillar-icon-btn pillar-close-btn"
           onClick={handleClose}

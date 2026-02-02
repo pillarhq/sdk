@@ -76,6 +76,29 @@ export interface ServerEmbedConfig {
   };
 }
 
+/**
+ * Conversation summary in history list.
+ */
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  startedAt: string | null;
+  lastMessageAt: string | null;
+  messageCount: number;
+}
+
+/**
+ * Full conversation with messages.
+ */
+export interface ConversationDetail extends ConversationSummary {
+  messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string | null;
+  }>;
+}
+
 // ============================================================================
 // API Client
 // ============================================================================
@@ -86,12 +109,25 @@ export class APIClient {
   private mcpClient: MCPClient;
   private aguiClient: AGUIClientAdapter;
 
+  // External user ID for cross-device conversation history
+  private _externalUserId: string | null = null;
+
+  // Visitor and session IDs (initialized eagerly on construction)
+  private _visitorId: string = '';
+  private _sessionId: string = '';
+
   constructor(config: ResolvedConfig) {
     this.config = config;
     // MCPClient is still used for plan management and other non-streaming operations
     this.mcpClient = new MCPClient(config);
     // AG-UI client is used for all chat streaming
     this.aguiClient = new AGUIClientAdapter(config);
+    
+    // Initialize visitor and session IDs immediately
+    this._visitorId = this.initVisitorId();
+    this._sessionId = this.initSessionId();
+    // External user ID is set via identify() - no localStorage persistence
+    this._externalUserId = null;
   }
 
   /**
@@ -113,15 +149,34 @@ export class APIClient {
     return `${this.config.apiBaseUrl}/api/v1/help-center`;
   }
 
+  /**
+   * Set the external user ID for authenticated users.
+   * This ID will be included in all subsequent requests.
+   */
+  setExternalUserId(userId: string): void {
+    this._externalUserId = userId;
+    // Also update the MCP client
+    this.mcpClient.setExternalUserId(userId);
+  }
+
+  /**
+   * Clear the external user ID (for logout).
+   */
+  clearExternalUserId(): void {
+    this._externalUserId = null;
+    // Also clear from the MCP client
+    this.mcpClient.clearExternalUserId();
+  }
+
   // ============================================================================
   // Analytics Helpers
   // ============================================================================
 
   /**
-   * Get or create a persistent visitor ID.
+   * Initialize the persistent visitor ID on SDK init.
    * Stored in localStorage to persist across sessions.
    */
-  private getVisitorId(): string {
+  private initVisitorId(): string {
     if (typeof window === 'undefined') return '';
     
     const KEY = 'pillar_visitor_id';
@@ -139,10 +194,10 @@ export class APIClient {
   }
 
   /**
-   * Get or create a session ID.
+   * Initialize the session ID on SDK init.
    * Stored in sessionStorage to persist only for the current browser session.
    */
-  private getSessionId(): string {
+  private initSessionId(): string {
     if (typeof window === 'undefined') return '';
     
     const KEY = 'pillar_session_id';
@@ -171,10 +226,15 @@ export class APIClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey, // Product key for middleware resolution
-      'x-visitor-id': this.getVisitorId(),
-      'x-session-id': this.getSessionId(),
+      'x-visitor-id': this._visitorId,
+      'x-session-id': this._sessionId,
       'x-page-url': this.getPageUrl(),
     };
+
+    // Add external user ID header for authenticated users (enables cross-device history)
+    if (this._externalUserId) {
+      headers['x-external-user-id'] = this._externalUserId;
+    }
 
     // Add platform/version headers for code-first action filtering
     if (this.config.platform) {
@@ -260,6 +320,103 @@ export class APIClient {
       return await response.json();
     } catch (error) {
       console.warn('[Pillar] Failed to fetch embed config:', error);
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // User Identification
+  // ============================================================================
+
+  /**
+   * Identify the current user after login.
+   * Links the anonymous visitor to the authenticated user ID, enabling
+   * cross-device conversation history.
+   * 
+   * @param userId - Client's authenticated user ID
+   * @param profile - Optional user profile data
+   */
+  async identify(
+    userId: string,
+    profile?: { name?: string; email?: string; metadata?: Record<string, unknown> }
+  ): Promise<void> {
+    const url = `${this.config.apiBaseUrl}/mcp/identify/`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        userId,
+        name: profile?.name,
+        email: profile?.email,
+        metadata: profile?.metadata,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Identify failed: ${response.status}`);
+    }
+  }
+
+  // ============================================================================
+  // Conversation History
+  // ============================================================================
+
+  /**
+   * List past conversations for the current visitor.
+   * 
+   * @param limit - Max number of conversations to return (default: 20, max: 50)
+   * @returns List of conversation summaries
+   */
+  async listConversations(limit: number = 20): Promise<ConversationSummary[]> {
+    const url = `${this.config.apiBaseUrl}/mcp/conversations/?limit=${Math.min(limit, 50)}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to list conversations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.conversations || [];
+    } catch (error) {
+      console.warn('[Pillar] Failed to list conversations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single conversation with all messages.
+   * 
+   * @param conversationId - The conversation ID to fetch
+   * @returns Full conversation with messages
+   */
+  async getConversation(conversationId: string): Promise<ConversationDetail | null> {
+    const url = `${this.config.apiBaseUrl}/mcp/conversations/${conversationId}/`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.headers,
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to get conversation: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.warn('[Pillar] Failed to get conversation:', error);
       return null;
     }
   }

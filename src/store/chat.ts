@@ -39,6 +39,9 @@ export const messages = signal<StoredChatMessage[]>([]);
 // Current conversation ID (server-assigned, persists across messages in a conversation)
 export const conversationId = signal<string | null>(null);
 
+// Incremented when conversation history should be invalidated (e.g., new conversation created)
+export const historyInvalidationCounter = signal<number>(0);
+
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
 
@@ -515,7 +518,13 @@ export const updateActionMessageContent = (actionName: string, content: string) 
 };
 
 export const setConversationId = (id: string) => {
+  const isNewConversation = conversationId.value === null;
   conversationId.value = id;
+  
+  // Invalidate history cache when a new conversation is created
+  if (isNewConversation) {
+    historyInvalidationCounter.value += 1;
+  }
 };
 
 export const clearConversationId = () => {
@@ -638,5 +647,30 @@ export const resetChat = () => {
   clearAGUIState();
   // Clear any active plan when starting a new chat
   clearPlan(true);
+};
+
+/**
+ * Load a conversation from history.
+ * Populates the chat with messages from a previous conversation.
+ */
+export const loadConversation = (
+  id: string,
+  historyMessages: Array<{ role: 'user' | 'assistant'; content: string; id?: string }>
+) => {
+  // Reset to a clean state first
+  resetChat();
+  
+  // Set the conversation ID
+  conversationId.value = id;
+  
+  // Load messages (map to StoredChatMessage format)
+  messages.value = historyMessages.map((msg) => ({
+    role: msg.role,
+    content: msg.content,
+    id: msg.id,
+  }));
+  
+  // Expand chat to show messages
+  isExpanded.value = true;
 };
 

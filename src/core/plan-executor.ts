@@ -644,9 +644,9 @@ export class PlanExecutor {
 
       // Decide whether this step should auto-complete.
       // Steps with requires_result_feedback=true must wait for data to send back to agent.
-      const shouldAutoComplete = step.auto_complete && !step.requires_result_feedback;
+      const shouldAutoCompleteAfterHandler = step.auto_complete && !step.requires_result_feedback;
 
-      if (!shouldAutoComplete) {
+      if (!shouldAutoCompleteAfterHandler) {
         // Manual completion: wait for host app to signal completion via task:complete event
         // or for user to click "Done" button (which calls markStepDone).
         updatePlanStep(step.id, { status: 'awaiting_result', result });

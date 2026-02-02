@@ -131,6 +131,10 @@ export interface PillarEvents {
   'context:change': { context: Context };
   'profile:change': { profile: UserProfile };
   'action:report': { action: string; metadata?: Record<string, unknown> };
+
+  // User identity events
+  'user:identified': { userId: string; profile?: { name?: string; email?: string; metadata?: Record<string, unknown> } };
+  'user:logout': Record<string, never>;
   // Query action events - for actions that return data to the agent
   'action:result': { actionName: string; result: unknown };
   // Task events - for AI-suggested actions

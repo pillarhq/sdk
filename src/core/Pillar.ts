@@ -3,62 +3,73 @@
  * Entry point for all SDK functionality
  */
 
-import { getActionDefinition, hasAction, setClientInfo } from '../actions';
-import { APIClient } from '../api/client';
-import { EdgeTrigger } from '../components/Button/EdgeTrigger';
-import { MobileTrigger } from '../components/Button/MobileTrigger';
-import { Panel } from '../components/Panel/Panel';
-import { TextSelectionManager } from '../components/TextSelection/TextSelectionManager';
-import { conversationId as chatConversationId, messages as chatMessages, resetChat } from '../store/chat';
+import { getActionDefinition, hasAction, setClientInfo } from "../actions";
+import { APIClient } from "../api/client";
+import { EdgeTrigger } from "../components/Button/EdgeTrigger";
+import { MobileTrigger } from "../components/Button/MobileTrigger";
+import { Panel } from "../components/Panel/Panel";
+import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
 import {
-    resetContext,
-    clearErrorState as storeClearErrorState,
-    reportAction as storeReportAction,
-    setErrorState as storeSetErrorState,
-    setContext as storeSetContext,
-    setUserProfile as storeSetUserProfile,
-} from '../store/context';
+  conversationId as chatConversationId,
+  messages as chatMessages,
+  historyInvalidationCounter,
+  resetChat,
+} from "../store/chat";
 import {
-    isHoverMode,
-    isOpen as panelIsOpen,
-    resetPanel,
-    setFullWidthBreakpoint,
-    setMobileBreakpoint,
-} from '../store/panel';
+  resetContext,
+  clearErrorState as storeClearErrorState,
+  reportAction as storeReportAction,
+  setContext as storeSetContext,
+  setErrorState as storeSetErrorState,
+  setUserProfile as storeSetUserProfile,
+} from "../store/context";
 import {
-    activePlan,
-    resetPlanStore,
-} from '../store/plan';
+  isHoverMode,
+  isOpen as panelIsOpen,
+  resetPanel,
+  setFullWidthBreakpoint,
+  setMobileBreakpoint,
+} from "../store/panel";
+import { activePlan, resetPlanStore } from "../store/plan";
+import { resetRouter } from "../store/router";
 import {
-    resetRouter
-} from '../store/router';
+  activeWorkflow,
+  advanceToNextStep,
+  resetWorkflow,
+  cancelWorkflow as storeCancelWorkflow,
+  completeWorkflow as storeCompleteWorkflow,
+  startWorkflow as storeStartWorkflow,
+  updateStepStatus,
+} from "../store/workflow";
+import { domReady } from "../utils/dom";
+import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
-    activeWorkflow,
-    advanceToNextStep,
-    resetWorkflow,
-    cancelWorkflow as storeCancelWorkflow,
-    completeWorkflow as storeCompleteWorkflow,
-    startWorkflow as storeStartWorkflow,
-    updateStepStatus
-} from '../store/workflow';
-import { domReady } from '../utils/dom';
-import { clearPillarUrlParams, parsePillarUrlParams } from '../utils/urlParams';
-import { mergeServerConfig, resolveConfig, type PillarConfig, type ResolvedConfig, type ThemeConfig } from './config';
+  mergeServerConfig,
+  resolveConfig,
+  type PillarConfig,
+  type ResolvedConfig,
+  type ThemeConfig,
+} from "./config";
 import {
-    DEFAULT_CONTEXT,
-    DEFAULT_USER_PROFILE,
-    MAX_RECENT_ACTIONS,
-    type Context,
-    type InternalContext,
-    type Suggestion,
-    type UserProfile,
-} from './context';
-import { EventEmitter, type CardRenderer, type PillarEvents, type TaskExecutePayload } from './events';
-import type { ExecutionPlan } from './plan';
-import { PlanExecutor } from './plan-executor';
-import type { Workflow, WorkflowStep } from './workflow';
+  DEFAULT_CONTEXT,
+  DEFAULT_USER_PROFILE,
+  MAX_RECENT_ACTIONS,
+  type Context,
+  type InternalContext,
+  type Suggestion,
+  type UserProfile,
+} from "./context";
+import {
+  EventEmitter,
+  type CardRenderer,
+  type PillarEvents,
+  type TaskExecutePayload,
+} from "./events";
+import type { ExecutionPlan } from "./plan";
+import { PlanExecutor } from "./plan-executor";
+import type { Workflow, WorkflowStep } from "./workflow";
 
-export type PillarState = 'uninitialized' | 'initializing' | 'ready' | 'error';
+export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
 
 /**
  * Chat context for escalation to human support.
@@ -68,7 +79,7 @@ export interface ChatContext {
   conversationId: string | null;
   /** Messages in the conversation */
   messages: Array<{
-    role: 'user' | 'assistant';
+    role: "user" | "assistant";
     content: string;
   }>;
 }
@@ -76,7 +87,7 @@ export interface ChatContext {
 export class Pillar {
   private static instance: Pillar | null = null;
 
-  private _state: PillarState = 'uninitialized';
+  private _state: PillarState = "uninitialized";
   private _config: ResolvedConfig | null = null;
   private _events: EventEmitter;
   private _api: APIClient | null = null;
@@ -93,9 +104,15 @@ export class Pillar {
   private _context: InternalContext = { ...DEFAULT_CONTEXT };
   private _userProfile: UserProfile = { ...DEFAULT_USER_PROFILE };
 
+  // User identity (for cross-device conversation history)
+  private _externalUserId: string | null = null;
+
   // Task handlers
-  private _taskHandlers: Map<string, (data: Record<string, unknown>) => void> = new Map();
-  private _anyTaskHandler: ((name: string, data: Record<string, unknown>) => void) | null = null;
+  private _taskHandlers: Map<string, (data: Record<string, unknown>) => void> =
+    new Map();
+  private _anyTaskHandler:
+    | ((name: string, data: Record<string, unknown>) => void)
+    | null = null;
 
   // Registered actions (for demos and runtime registration)
   // Public property for demos to access (e.g., window.Pillar._registeredActions)
@@ -115,7 +132,7 @@ export class Pillar {
    */
   private _createRootContainer(): HTMLElement {
     // Check if container already exists
-    let container = document.getElementById('pillar-root');
+    let container = document.getElementById("pillar-root");
     if (container) {
       // Subscribe to hover mode changes to update z-index
       this._subscribeToHoverModeForRoot(container);
@@ -123,16 +140,16 @@ export class Pillar {
     }
 
     // Create new container
-    container = document.createElement('div');
-    container.id = 'pillar-root';
+    container = document.createElement("div");
+    container.id = "pillar-root";
     // Initial z-index based on current hover mode
-    const initialZIndex = isHoverMode.value ? '20' : '-1';
+    const initialZIndex = isHoverMode.value ? "20" : "-1";
     container.style.cssText = `isolation: isolate; z-index: ${initialZIndex}; position: relative;`;
     document.body.appendChild(container);
-    
+
     // Subscribe to hover mode changes to update z-index
     this._subscribeToHoverModeForRoot(container);
-    
+
     return container;
   }
 
@@ -146,7 +163,7 @@ export class Pillar {
     this._unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
       // Use z-index 999 in hover mode to integrate with page,
       // -1 in push mode since panel handles its own stacking
-      container.style.zIndex = inHoverMode ? '20' : '-1';
+      container.style.zIndex = inHoverMode ? "20" : "-1";
     });
   }
 
@@ -160,7 +177,7 @@ export class Pillar {
   static async init(config: PillarConfig): Promise<Pillar> {
     // Support both productKey (new) and helpCenter (deprecated)
     if (!config.productKey && !config.helpCenter) {
-      throw new Error('[Pillar] productKey is required');
+      throw new Error("[Pillar] productKey is required");
     }
 
     // Create singleton if doesn't exist
@@ -204,7 +221,7 @@ export class Pillar {
    * Whether SDK is ready
    */
   get isReady(): boolean {
-    return this._state === 'ready';
+    return this._state === "ready";
   }
 
   /**
@@ -234,11 +251,16 @@ export class Pillar {
   /**
    * Open the help panel
    */
-  open(options?: { view?: string; article?: string; search?: string; focusInput?: boolean }): void {
+  open(options?: {
+    view?: string;
+    article?: string;
+    search?: string;
+    focusInput?: boolean;
+  }): void {
     if (!this._panel) return;
 
     this._panel.open(options);
-    this._events.emit('panel:open');
+    this._events.emit("panel:open");
   }
 
   /**
@@ -248,7 +270,7 @@ export class Pillar {
     if (!this._panel) return;
 
     this._panel.close();
-    this._events.emit('panel:close');
+    this._events.emit("panel:close");
   }
 
   /**
@@ -267,15 +289,15 @@ export class Pillar {
    */
   navigate(view: string, params?: Record<string, string>): void {
     this._panel?.navigate(view, params);
-    this._events.emit('panel:navigate', { view, params });
+    this._events.emit("panel:navigate", { view, params });
   }
 
   /**
    * Set context for the assistant.
    * Use this to tell Pillar what the user is doing for smarter, more relevant assistance.
-   * 
+   *
    * @param ctx - Context fields to set (merges with existing context)
-   * 
+   *
    * @example
    * ```typescript
    * pillar.setContext({
@@ -292,15 +314,15 @@ export class Pillar {
     };
     // Sync to store for components
     storeSetContext(ctx);
-    this._events.emit('context:change', { context: this._context });
+    this._events.emit("context:change", { context: this._context });
   }
 
   /**
    * Get the current chat context (conversation ID and messages).
    * Useful for escalation to human support with conversation history.
-   * 
+   *
    * @returns Chat context with conversation ID and messages, or null if no conversation
-   * 
+   *
    * @example
    * // Get chat context for escalation
    * const context = pillar.getChatContext();
@@ -314,14 +336,14 @@ export class Pillar {
   getChatContext(): ChatContext | null {
     const messages = chatMessages.value;
     const conversationId = chatConversationId.value;
-    
+
     if (messages.length === 0) {
       return null;
     }
-    
+
     return {
       conversationId,
-      messages: messages.map(m => ({
+      messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
       })),
@@ -331,16 +353,16 @@ export class Pillar {
   /**
    * Update the theme at runtime.
    * Use this to sync with your app's theme (e.g., dark mode toggle).
-   * 
+   *
    * @param theme - Partial theme config to merge with current theme
-   * 
+   *
    * @example
    * // Switch to dark mode
    * pillar.setTheme({ mode: 'dark' });
-   * 
+   *
    * // Switch to light mode with custom primary color
    * pillar.setTheme({ mode: 'light', colors: { primary: '#ff0000' } });
-   * 
+   *
    * // Let system preference decide
    * pillar.setTheme({ mode: 'auto' });
    */
@@ -360,18 +382,18 @@ export class Pillar {
     this._panel?.setTheme(this._config.theme);
 
     // Emit event
-    this._events.emit('theme:change', { theme: this._config.theme });
+    this._events.emit("theme:change", { theme: this._config.theme });
   }
 
   /**
    * Enable or disable the text selection "Ask AI" popover at runtime.
-   * 
+   *
    * @param enabled - Whether to show the popover when text is selected
-   * 
+   *
    * @example
    * // Disable text selection popover
    * pillar.setTextSelectionEnabled(false);
-   * 
+   *
    * // Re-enable it
    * pillar.setTextSelectionEnabled(true);
    */
@@ -405,7 +427,7 @@ export class Pillar {
     }
 
     // Emit event
-    this._events.emit('textSelection:change', { enabled });
+    this._events.emit("textSelection:change", { enabled });
   }
 
   /**
@@ -448,19 +470,153 @@ export class Pillar {
     this._userProfile = { ...profile };
     // Sync to store for components
     storeSetUserProfile(this._userProfile);
-    this._events.emit('profile:change', { profile: this._userProfile });
+    this._events.emit("profile:change", { profile: this._userProfile });
+  }
+
+  /**
+   * Identify the current user after login.
+   *
+   * Call this when a user logs into your application to:
+   * - Link their anonymous conversation history to their account
+   * - Enable cross-device conversation history retrieval
+   * - Associate future conversations with their user ID
+   *
+   * @param userId - Your application's user ID for this user
+   * @param profile - Optional user profile data (name, email, metadata)
+   * @param options - Optional settings for the identify call
+   * @param options.preserveConversation - If true, keeps the current conversation (default: false)
+   *
+   * @example
+   * ```typescript
+   * // When user logs in
+   * await pillar.identify('user-123', {
+   *   name: 'John Doe',
+   *   email: 'john@example.com',
+   * });
+   *
+   * // Keep current conversation when identifying
+   * await pillar.identify('user-123', undefined, { preserveConversation: true });
+   * ```
+   */
+  async identify(
+    userId: string,
+    profile?: {
+      name?: string;
+      email?: string;
+      metadata?: Record<string, unknown>;
+    },
+    options?: { preserveConversation?: boolean }
+  ): Promise<void> {
+    if (!this._api) {
+      console.warn("[Pillar] SDK not initialized, cannot identify user");
+      return;
+    }
+
+    if (!userId) {
+      console.warn("[Pillar] userId is required for identify()");
+      return;
+    }
+
+    try {
+      // Call backend to merge anonymous visitor with authenticated user
+      await this._api.identify(userId, profile);
+
+      // Store the external user ID for future requests
+      this._externalUserId = userId;
+
+      // Update user profile with the user ID
+      this._userProfile = {
+        ...this._userProfile,
+        userId,
+        ...(profile?.name && { name: profile.name }),
+      };
+      storeSetUserProfile(this._userProfile);
+
+      // Notify the API client and MCP client of the identity change
+      this._api.setExternalUserId(userId);
+
+      // Reset current conversation unless preserveConversation is true
+      if (!options?.preserveConversation) {
+        resetChat();
+      }
+
+      // Invalidate conversation history cache - will refetch with authenticated user's history
+      historyInvalidationCounter.value += 1;
+
+      this._events.emit("user:identified", { userId, profile });
+    } catch (error) {
+      console.error("[Pillar] Failed to identify user:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the user's identity (logout).
+   *
+   * Call this when a user logs out of your application.
+   * Future conversations will be tracked anonymously until identify() is called again.
+   *
+   * Note: This does not delete existing conversations - they remain associated
+   * with the user's account for future retrieval.
+   *
+   * @param options - Optional settings for the logout call
+   * @param options.preserveConversation - If true, keeps the current conversation (default: false)
+   *
+   * @example
+   * ```typescript
+   * // When user logs out
+   * pillar.logout();
+   *
+   * // Keep current conversation when logging out
+   * pillar.logout({ preserveConversation: true });
+   * ```
+   */
+  logout(options?: { preserveConversation?: boolean }): void {
+    // Clear the external user ID
+    this._externalUserId = null;
+
+    // Reset user profile
+    this._userProfile = { ...DEFAULT_USER_PROFILE };
+    storeSetUserProfile(this._userProfile);
+
+    // Notify the API client and MCP client to stop sending the external user ID
+    this._api?.clearExternalUserId();
+
+    // Reset current conversation unless preserveConversation is true
+    if (!options?.preserveConversation) {
+      resetChat();
+    }
+
+    // Invalidate conversation history cache - will refetch with visitor ID only
+    historyInvalidationCounter.value += 1;
+
+    this._events.emit("user:logout", {});
+  }
+
+  /**
+   * Get the current external user ID (if identified).
+   */
+  get externalUserId(): string | null {
+    return this._externalUserId;
+  }
+
+  /**
+   * Whether the current user is identified (logged in).
+   */
+  get isIdentified(): boolean {
+    return this._externalUserId !== null;
   }
 
   /**
    * Report a user action for context building.
    * Recent actions are tracked and sent with chat requests for better context.
-   * 
+   *
    * @param action - Description of the action (e.g., "clicked_upgrade", "viewed_invoice")
    * @param metadata - Optional metadata about the action
    */
   reportAction(action: string, metadata?: Record<string, unknown>): void {
     const recentActions = this._context.recentActions || [];
-    
+
     // Keep only the most recent actions
     const updatedActions = [
       ...recentActions.slice(-(MAX_RECENT_ACTIONS - 1)),
@@ -474,7 +630,7 @@ export class Pillar {
 
     // Sync to store for components
     storeReportAction(action);
-    this._events.emit('action:report', { action, metadata });
+    this._events.emit("action:report", { action, metadata });
   }
 
   /**
@@ -486,7 +642,7 @@ export class Pillar {
       this._context = rest as InternalContext;
       // Sync to store for components
       storeClearErrorState();
-      this._events.emit('context:change', { context: this._context });
+      this._events.emit("context:change", { context: this._context });
     }
   }
 
@@ -501,7 +657,7 @@ export class Pillar {
     };
     // Sync to store for components
     storeSetErrorState(code, message);
-    this._events.emit('context:change', { context: this._context });
+    this._events.emit("context:change", { context: this._context });
   }
 
   /**
@@ -510,14 +666,14 @@ export class Pillar {
    */
   async getSuggestions(): Promise<Suggestion[]> {
     if (!this._api) {
-      console.warn('[Pillar] SDK not initialized, cannot get suggestions');
+      console.warn("[Pillar] SDK not initialized, cannot get suggestions");
       return [];
     }
 
     try {
       return await this._api.getSuggestions(this._context, this._userProfile);
     } catch (error) {
-      console.error('[Pillar] Failed to get suggestions:', error);
+      console.error("[Pillar] Failed to get suggestions:", error);
       return [];
     }
   }
@@ -540,33 +696,36 @@ export class Pillar {
   /**
    * Register a handler for a specific task.
    * Called when the AI suggests a task and the user clicks it.
-   * 
+   *
    * @param taskName - The task identifier (e.g., 'invite_team_member')
    * @param handler - Function to handle the task execution
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * pillar.onTask('invite_team_member', (data) => {
    *   openInviteModal(data);
    * });
    */
-  onTask(taskName: string, handler: (data: Record<string, unknown>) => void): () => void {
+  onTask(
+    taskName: string,
+    handler: (data: Record<string, unknown>) => void
+  ): () => void {
     this._taskHandlers.set(taskName, handler);
     return () => this._taskHandlers.delete(taskName);
   }
 
   /**
    * Register an action definition at runtime.
-   * 
+   *
    * This is primarily for demos and development. In production, actions
    * should be synced via the `pillar-sync` CLI during CI/CD.
-   * 
+   *
    * The action definition is stored locally and can be used by `onTask`
    * handlers. For actions with `returnsData: true`, the handler's return
    * value is sent back to the agent.
-   * 
+   *
    * @param action - Action definition with name and properties
-   * 
+   *
    * @example
    * pillar.registerAction({
    *   name: 'list_datasets',
@@ -577,12 +736,12 @@ export class Pillar {
    */
   registerAction(action: { name: string } & Record<string, unknown>): void {
     const { name, ...definition } = action;
-    
+
     if (!name) {
-      console.warn('[Pillar] registerAction called without a name');
+      console.warn("[Pillar] registerAction called without a name");
       return;
     }
-    
+
     // Store the action definition
     this._registeredActions.set(name, {
       name,
@@ -592,13 +751,13 @@ export class Pillar {
       autoRun: definition.autoRun ?? definition.auto_run ?? false,
       autoComplete: definition.autoComplete ?? definition.auto_complete ?? true,
     });
-    
+
     console.debug(`[Pillar] Registered action: ${name}`);
   }
 
   /**
    * Get a registered action definition by name.
-   * 
+   *
    * @param name - Action name
    * @returns Action definition or undefined
    */
@@ -608,60 +767,68 @@ export class Pillar {
 
   /**
    * Get handler for an action, checking all registration systems.
-   * 
+   *
    * Lookup order:
    * 1. Code-first action registry (synced via pillar-sync CLI) - handler in definition
    * 2. Task handlers (registered via onTask at runtime)
-   * 
+   *
    * This is the recommended pattern:
    * - Action definitions synced to server via CLI (so AI knows what's possible)
    * - Handlers registered at runtime via onTask (client-side execution)
-   * 
+   *
    * @param actionName - Action name to look up
    * @returns Handler function or undefined if not found
-   * 
+   *
    * @example
    * const handler = pillar.getHandler('list_datasources');
    * if (handler) {
    *   const result = await handler({ limit: 10 });
    * }
    */
-  getHandler(actionName: string): ((data: Record<string, unknown>) => unknown) | undefined {
+  getHandler(
+    actionName: string
+  ): ((data: Record<string, unknown>) => unknown) | undefined {
     // 1. Check code-first action registry (synced via CLI)
-    const actionDefinition = hasAction(actionName) ? getActionDefinition(actionName) : undefined;
+    const actionDefinition = hasAction(actionName)
+      ? getActionDefinition(actionName)
+      : undefined;
     if (actionDefinition?.handler) {
       return actionDefinition.handler;
     }
-    
+
     // 2. Check task handlers (registered via onTask)
     const taskHandler = this._taskHandlers.get(actionName);
     if (taskHandler) {
       return taskHandler;
     }
-    
+
     return undefined;
   }
 
   /**
    * Register a catch-all handler for any task.
    * Useful for logging, analytics, or handling unknown tasks.
-   * 
+   *
    * @param handler - Function called with task name and data
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * pillar.onAnyTask((name, data) => {
    *   analytics.track('task_executed', { name, data });
    * });
    */
-  onAnyTask(handler: (name: string, data: Record<string, unknown>) => void): () => void {
+  onAnyTask(
+    handler: (name: string, data: Record<string, unknown>) => void
+  ): () => void {
     this._anyTaskHandler = handler;
-    return () => { this._anyTaskHandler = null; };
+    return () => {
+      this._anyTaskHandler = null;
+    };
   }
 
   /**
    * Remove a task handler.
-   * 
+   *
    * @param taskName - The task identifier to stop handling
    */
   offTask(taskName: string): void {
@@ -672,14 +839,14 @@ export class Pillar {
    * Execute a task programmatically.
    * This is called internally by the widget when a user clicks a task button.
    * Can also be called directly if you want to trigger a task.
-   * 
+   *
    * @param payload - Task execution payload
    */
   executeTask(payload: TaskExecutePayload): void {
     const { name, data, taskType, path, externalUrl } = payload;
 
     // Emit the event for external listeners
-    this._events.emit('task:execute', payload);
+    this._events.emit("task:execute", payload);
 
     // Call the any-task handler if registered
     if (this._anyTaskHandler) {
@@ -695,7 +862,9 @@ export class Pillar {
     // 2. Specific handler by action name (via onTask)
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
-    const actionDefinition = hasAction(name) ? getActionDefinition(name) : undefined;
+    const actionDefinition = hasAction(name)
+      ? getActionDefinition(name)
+      : undefined;
     const runtimeAction = this._registeredActions.get(name);
     const registryHandler = actionDefinition?.handler;
     const specificHandler = this._taskHandlers.get(name);
@@ -703,78 +872,119 @@ export class Pillar {
     const handler = registryHandler || specificHandler || typeHandler;
 
     // Check if action returns data (from code-first registry or runtime registration)
-    const actionReturnsData = actionDefinition?.returns || runtimeAction?.returns;
+    const actionReturnsData =
+      actionDefinition?.returns || runtimeAction?.returns;
 
     if (handler) {
       try {
         // Merge path into data for navigate handlers
-        const handlerData = taskType === 'navigate' && path 
-          ? { ...data, path } 
-          : data;
+        const handlerData =
+          taskType === "navigate" && path ? { ...data, path } : data;
         const result = handler(handlerData);
-        
+
         // If action returns data, send it back to the agent
         if (actionReturnsData && result !== undefined) {
           // Handle both sync and async handlers
-          Promise.resolve(result).then(async (resolvedResult) => {
-            if (resolvedResult !== undefined) {
-              await this.sendActionResult(name, resolvedResult);
-              
-              // Check if result indicates failure (e.g., {success: false, message: "..."})
-              // and emit task:complete with correct success status
-              let taskSuccess = true;
-              if (resolvedResult && typeof resolvedResult === 'object' && !Array.isArray(resolvedResult)) {
-                const resultObj = resolvedResult as Record<string, unknown>;
-                if (resultObj.success === false) {
-                  taskSuccess = false;
+          Promise.resolve(result)
+            .then(async (resolvedResult) => {
+              if (resolvedResult !== undefined) {
+                await this.sendActionResult(name, resolvedResult);
+
+                // Check if result indicates failure (e.g., {success: false, message: "..."})
+                // and emit task:complete with correct success status
+                let taskSuccess = true;
+                if (
+                  resolvedResult &&
+                  typeof resolvedResult === "object" &&
+                  !Array.isArray(resolvedResult)
+                ) {
+                  const resultObj = resolvedResult as Record<string, unknown>;
+                  if (resultObj.success === false) {
+                    taskSuccess = false;
+                  }
                 }
+                this._events.emit("task:complete", {
+                  name,
+                  success: taskSuccess,
+                  data: resolvedResult as Record<string, unknown> | undefined,
+                });
+              } else {
+                this._events.emit("task:complete", {
+                  name,
+                  success: true,
+                  data,
+                });
               }
-              this._events.emit('task:complete', { name, success: taskSuccess, data: resolvedResult as Record<string, unknown> | undefined });
-            } else {
-              this._events.emit('task:complete', { name, success: true, data });
-            }
-          }).catch((error) => {
-            console.error(`[Pillar] Error in query action "${name}":`, error);
-            this._events.emit('task:complete', { name, success: false, data });
-          });
+            })
+            .catch((error) => {
+              console.error(`[Pillar] Error in query action "${name}":`, error);
+              this._events.emit("task:complete", {
+                name,
+                success: false,
+                data,
+              });
+            });
         } else {
           // No data returned - assume success
-          this._events.emit('task:complete', { name, success: true, data });
+          this._events.emit("task:complete", { name, success: true, data });
         }
       } catch (error) {
         console.error(`[Pillar] Error executing task "${name}":`, error);
-        this._events.emit('task:complete', { name, success: false, data });
+        this._events.emit("task:complete", { name, success: false, data });
       }
     } else {
       // Handle built-in task types if no custom handler
       switch (taskType) {
-        case 'navigate':
-          if (path && typeof window !== 'undefined') {
+        case "navigate":
+          if (path && typeof window !== "undefined") {
             // Fallback to hard redirect only if no handler was registered
-            console.warn(`[Pillar] No 'navigate' handler registered. Using window.location.href as fallback.`);
+            console.warn(
+              `[Pillar] No 'navigate' handler registered. Using window.location.href as fallback.`
+            );
             window.location.href = path;
-            this._events.emit('task:complete', { name, success: true, data });
+            this._events.emit("task:complete", { name, success: true, data });
           }
           break;
-        case 'external_link':
-          if (externalUrl && typeof window !== 'undefined') {
-            window.open(externalUrl, '_blank', 'noopener,noreferrer');
-            this._events.emit('task:complete', { name, success: true, data });
+        case "external_link":
+          if (externalUrl && typeof window !== "undefined") {
+            window.open(externalUrl, "_blank", "noopener,noreferrer");
+            this._events.emit("task:complete", { name, success: true, data });
           }
           break;
-        case 'copy_text':
-          if (data.text && typeof navigator !== 'undefined' && navigator.clipboard) {
-            navigator.clipboard.writeText(String(data.text)).then(() => {
-              this._events.emit('task:complete', { name, success: true, data });
-            }).catch(() => {
-              this._events.emit('task:complete', { name, success: false, data });
-            });
+        case "copy_text":
+          if (
+            data.text &&
+            typeof navigator !== "undefined" &&
+            navigator.clipboard
+          ) {
+            navigator.clipboard
+              .writeText(String(data.text))
+              .then(() => {
+                this._events.emit("task:complete", {
+                  name,
+                  success: true,
+                  data,
+                });
+              })
+              .catch(() => {
+                this._events.emit("task:complete", {
+                  name,
+                  success: false,
+                  data,
+                });
+              });
           }
           break;
         default:
-          console.warn(`[Pillar] No handler registered for task "${name}". Register one with pillar.onTask('${name}', handler)`);
+          console.warn(
+            `[Pillar] No handler registered for task "${name}". Register one with pillar.onTask('${name}', handler)`
+          );
           // Emit failure for unhandled tasks
-          this._events.emit('task:complete', { name, success: false, data: { error: 'No handler registered' } });
+          this._events.emit("task:complete", {
+            name,
+            success: false,
+            data: { error: "No handler registered" },
+          });
       }
     }
   }
@@ -782,29 +992,33 @@ export class Pillar {
   /**
    * Mark a task as complete.
    * Call this after your task handler finishes successfully.
-   * 
+   *
    * @param taskName - The task identifier
    * @param success - Whether the task completed successfully
    * @param data - Optional result data
    */
-  completeTask(taskName: string, success: boolean = true, data?: Record<string, unknown>): void {
-    this._events.emit('task:complete', { name: taskName, success, data });
+  completeTask(
+    taskName: string,
+    success: boolean = true,
+    data?: Record<string, unknown>
+  ): void {
+    this._events.emit("task:complete", { name: taskName, success, data });
   }
 
   /**
    * Signal that an action has completed.
-   * 
+   *
    * For simple actions, this emits the completion event.
    * For wizard actions (modals, multi-step flows), call this when the user
    * finishes the flow.
-   * 
+   *
    * If there's an active plan waiting on this action, the plan automatically
    * advances to the next step.
-   * 
+   *
    * @param actionName - The action identifier
    * @param success - Whether the action completed successfully (default: true)
    * @param data - Optional result data
-   * 
+   *
    * @example
    * // In your wizard completion handler:
    * pillar.completeAction('add_source', true, { sourceId: source.id });
@@ -815,8 +1029,8 @@ export class Pillar {
     data?: Record<string, unknown>
   ): Promise<void> {
     // Emit the task:complete event for standalone action tracking
-    this._events.emit('task:complete', { name: actionName, success, data });
-    
+    this._events.emit("task:complete", { name: actionName, success, data });
+
     // If there's an active plan with this action awaiting, advance it
     if (this._planExecutor) {
       await this._planExecutor.completeStepByAction(actionName, success, data);
@@ -827,11 +1041,11 @@ export class Pillar {
    * Confirm task execution result.
    * Call this after your task handler completes to report success/failure
    * back to Pillar for implementation status tracking.
-   * 
+   *
    * @param taskId - The database UUID of the task (from task:execute event)
    * @param status - 'success' or 'failure'
    * @param details - Optional execution details
-   * 
+   *
    * @example
    * pillar.on('task:execute', async (task) => {
    *   const startTime = Date.now();
@@ -850,7 +1064,7 @@ export class Pillar {
    */
   confirmTaskExecution(
     taskId: string,
-    status: 'success' | 'failure',
+    status: "success" | "failure",
     details?: {
       error?: string;
       duration_ms?: number;
@@ -858,12 +1072,14 @@ export class Pillar {
     }
   ): void {
     if (!taskId) {
-      console.warn('[Pillar] confirmTaskExecution called without taskId');
+      console.warn("[Pillar] confirmTaskExecution called without taskId");
       return;
     }
 
     if (!this._api) {
-      console.warn('[Pillar] SDK not initialized, cannot confirm task execution');
+      console.warn(
+        "[Pillar] SDK not initialized, cannot confirm task execution"
+      );
       return;
     }
 
@@ -877,15 +1093,15 @@ export class Pillar {
 
   /**
    * Register a custom card renderer for inline_ui type actions.
-   * 
+   *
    * When the AI returns an action with action_type: 'inline_ui' and
    * a card_type in its data, the SDK will look for a registered renderer
    * and call it to render the inline UI card.
-   * 
+   *
    * @param cardType - The card type identifier (e.g., 'invite_members')
    * @param renderer - Function that renders the card into a container
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * // Vanilla JS
    * pillar.registerCard('invite_members', (container, data, callbacks) => {
@@ -908,7 +1124,7 @@ export class Pillar {
   /**
    * Get a registered card renderer by type.
    * Returns undefined if no renderer is registered for the given type.
-   * 
+   *
    * @param cardType - The card type identifier
    */
   getCardRenderer(cardType: string): CardRenderer | undefined {
@@ -917,7 +1133,7 @@ export class Pillar {
 
   /**
    * Check if a card renderer is registered for a given type.
-   * 
+   *
    * @param cardType - The card type identifier
    */
   hasCardRenderer(cardType: string): boolean {
@@ -938,12 +1154,12 @@ export class Pillar {
   /**
    * Start a workflow.
    * Called when the AI returns a workflow in its response.
-   * 
+   *
    * @param workflow - The workflow to start
    */
   startWorkflow(workflow: Workflow): void {
     storeStartWorkflow(workflow);
-    this._events.emit('workflow:start', activeWorkflow.value!);
+    this._events.emit("workflow:start", activeWorkflow.value!);
 
     // Auto-execute first step if it has auto_run enabled
     const firstStep = activeWorkflow.value!.steps[0];
@@ -956,13 +1172,13 @@ export class Pillar {
   /**
    * Initiate a workflow step that requires user confirmation.
    * Called when user clicks "Start" on a step with auto_run=false.
-   * 
+   *
    * @param stepIndex - Optional step index (defaults to current)
    */
   initiateWorkflowStep(stepIndex?: number): void {
     const workflow = activeWorkflow.value;
     if (!workflow) {
-      console.warn('[Pillar] No active workflow');
+      console.warn("[Pillar] No active workflow");
       return;
     }
 
@@ -974,7 +1190,7 @@ export class Pillar {
       return;
     }
 
-    if (step.status !== 'awaiting_initiation') {
+    if (step.status !== "awaiting_initiation") {
       console.warn(`[Pillar] Step ${idx} is not awaiting initiation`);
       return;
     }
@@ -986,7 +1202,7 @@ export class Pillar {
    * Confirm a workflow step as complete.
    * Called by the host app after the action is done.
    * Automatically advances to the next step.
-   * 
+   *
    * @param success - Whether the step completed successfully
    * @param stepIndex - Optional step index (defaults to current)
    */
@@ -998,8 +1214,8 @@ export class Pillar {
     const step = workflow.steps[idx];
 
     // Update step status
-    updateStepStatus(idx, success ? 'completed' : 'failed');
-    this._events.emit('workflow:step:complete', {
+    updateStepStatus(idx, success ? "completed" : "failed");
+    this._events.emit("workflow:step:complete", {
       workflow: activeWorkflow.value!,
       step: activeWorkflow.value!.steps[idx],
       success,
@@ -1015,12 +1231,12 @@ export class Pillar {
 
     if (!nextStep) {
       // Workflow complete
-      this._events.emit('workflow:complete', activeWorkflow.value!);
+      this._events.emit("workflow:complete", activeWorkflow.value!);
       storeCompleteWorkflow();
       return;
     }
 
-    this._events.emit('workflow:step:active', {
+    this._events.emit("workflow:step:active", {
       workflow: activeWorkflow.value!,
       step: nextStep,
     });
@@ -1034,7 +1250,7 @@ export class Pillar {
 
   /**
    * Skip a workflow step.
-   * 
+   *
    * @param stepIndex - Optional step index (defaults to current)
    */
   skipWorkflowStep(stepIndex?: number): void {
@@ -1044,8 +1260,8 @@ export class Pillar {
     const idx = stepIndex ?? workflow.current_step;
     const step = workflow.steps[idx];
 
-    updateStepStatus(idx, 'skipped');
-    this._events.emit('workflow:step:skip', {
+    updateStepStatus(idx, "skipped");
+    this._events.emit("workflow:step:skip", {
       workflow: activeWorkflow.value!,
       step: activeWorkflow.value!.steps[idx],
     });
@@ -1055,12 +1271,12 @@ export class Pillar {
 
     if (!nextStep) {
       // Workflow complete
-      this._events.emit('workflow:complete', activeWorkflow.value!);
+      this._events.emit("workflow:complete", activeWorkflow.value!);
       storeCompleteWorkflow();
       return;
     }
 
-    this._events.emit('workflow:step:active', {
+    this._events.emit("workflow:step:active", {
       workflow: activeWorkflow.value!,
       step: nextStep,
     });
@@ -1078,7 +1294,7 @@ export class Pillar {
     const workflow = activeWorkflow.value;
     if (!workflow) return;
 
-    this._events.emit('workflow:cancel', workflow);
+    this._events.emit("workflow:cancel", workflow);
     storeCancelWorkflow();
   }
 
@@ -1087,7 +1303,7 @@ export class Pillar {
    * Internal method that runs the task and handles auto_complete.
    */
   private _executeWorkflowStep(step: WorkflowStep): void {
-    updateStepStatus(step.index, 'active');
+    updateStepStatus(step.index, "active");
 
     // Execute the task
     this.executeTask({
@@ -1140,13 +1356,13 @@ export class Pillar {
 
   /**
    * Resume plan execution if it appears stuck.
-   * 
+   *
    * This is a fallback for cases where auto-execute failed or
    * the plan got into an inconsistent state. It manually triggers
    * execution of the next ready step.
    */
   async resumePlan(): Promise<void> {
-    console.log('[Pillar] Manual plan resume triggered');
+    console.log("[Pillar] Manual plan resume triggered");
     await this._planExecutor?.resumeExecution();
   }
 
@@ -1156,20 +1372,26 @@ export class Pillar {
    * @param stepId - UUID of the step to confirm
    * @param data - Optional modified data from user input
    */
-  async confirmPlanStep(stepId: string, data?: Record<string, unknown>): Promise<void> {
+  async confirmPlanStep(
+    stepId: string,
+    data?: Record<string, unknown>
+  ): Promise<void> {
     await this._planExecutor?.confirmStep(stepId, data);
   }
 
   /**
    * Confirm an inline_ui step with data from the inline card.
-   * 
+   *
    * This is called when the user interacts with an inline card (e.g., invite form)
    * within a plan step and clicks confirm.
    *
    * @param stepId - UUID of the step to confirm
    * @param data - Data from the inline card (e.g., email, form fields)
    */
-  async confirmInlinePlanStep(stepId: string, data?: Record<string, unknown>): Promise<void> {
+  async confirmInlinePlanStep(
+    stepId: string,
+    data?: Record<string, unknown>
+  ): Promise<void> {
     await this._planExecutor?.confirmInlineStep(stepId, data);
   }
 
@@ -1200,10 +1422,10 @@ export class Pillar {
 
   /**
    * Mark a plan step as done by step ID.
-   * 
+   *
    * Use this when the UI "Done" button is clicked for a wizard step.
    * The step must be in 'awaiting_result' status.
-   * 
+   *
    * @param stepId - UUID of the step to mark as done
    */
   async markPlanStepDone(stepId: string): Promise<void> {
@@ -1216,10 +1438,10 @@ export class Pillar {
 
   /**
    * Send action result back to the agent.
-   * 
+   *
    * Called automatically for actions with `returns: true` after their
    * handler completes. The result is sent to the agent for further reasoning.
-   * 
+   *
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
    * @returns Promise that resolves when the result is delivered
@@ -1227,64 +1449,79 @@ export class Pillar {
    */
   async sendActionResult(actionName: string, result: unknown): Promise<void> {
     if (!this._api) {
-      console.warn('[Pillar] SDK not initialized, cannot send action result');
+      console.warn("[Pillar] SDK not initialized, cannot send action result");
       return;
     }
 
     console.log(`[Pillar] Sending action result for "${actionName}":`, result);
     await this._api.mcp.sendActionResult(actionName, result);
-    this._events.emit('action:result', { actionName, result });
+    this._events.emit("action:result", { actionName, result });
   }
 
   /**
    * Execute a query action and send the result back to the agent.
-   * 
+   *
    * This is called when the agent sends a `query_request` event.
    * Query actions are expected to return data that the agent can use
    * for further reasoning.
-   * 
+   *
    * @param actionName - The name of the action to execute
    * @param args - Arguments for the action
    */
-  async executeQueryAction(actionName: string, args: Record<string, unknown> = {}): Promise<void> {
+  async executeQueryAction(
+    actionName: string,
+    args: Record<string, unknown> = {}
+  ): Promise<void> {
     // Look for handlers
-    const actionDefinition = hasAction(actionName) ? getActionDefinition(actionName) : undefined;
+    const actionDefinition = hasAction(actionName)
+      ? getActionDefinition(actionName)
+      : undefined;
     const runtimeAction = this._registeredActions.get(actionName);
     const registryHandler = actionDefinition?.handler;
     const specificHandler = this._taskHandlers.get(actionName);
-    const queryTypeHandler = this._taskHandlers.get('query');
+    const queryTypeHandler = this._taskHandlers.get("query");
     const handler = registryHandler || specificHandler || queryTypeHandler;
 
     if (!handler) {
-      console.error(`[Pillar] No handler registered for query action "${actionName}". ` +
-        `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`);
+      console.error(
+        `[Pillar] No handler registered for query action "${actionName}". ` +
+          `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`
+      );
       // Send error result back to agent so it doesn't hang
-      await this.sendActionResult(actionName, { 
+      await this.sendActionResult(actionName, {
         error: `No handler registered for action "${actionName}"`,
-        success: false 
+        success: false,
       });
       return;
     }
 
     try {
       const result = await Promise.resolve(handler(args));
-      console.log(`[Pillar] Query action "${actionName}" completed with result:`, result);
-      
+      console.log(
+        `[Pillar] Query action "${actionName}" completed with result:`,
+        result
+      );
+
       if (result !== undefined) {
         await this.sendActionResult(actionName, result);
       } else {
-        console.warn(`[Pillar] Query action "${actionName}" returned undefined. ` +
-          `Make sure your handler returns data for the agent.`);
-        await this.sendActionResult(actionName, { 
+        console.warn(
+          `[Pillar] Query action "${actionName}" returned undefined. ` +
+            `Make sure your handler returns data for the agent.`
+        );
+        await this.sendActionResult(actionName, {
           error: `Handler returned undefined`,
-          success: false 
+          success: false,
         });
       }
     } catch (error) {
-      console.error(`[Pillar] Error executing query action "${actionName}":`, error);
-      await this.sendActionResult(actionName, { 
+      console.error(
+        `[Pillar] Error executing query action "${actionName}":`,
+        error
+      );
+      await this.sendActionResult(actionName, {
         error: error instanceof Error ? error.message : String(error),
-        success: false 
+        success: false,
       });
     }
   }
@@ -1298,18 +1535,18 @@ export class Pillar {
    */
   private async _init(config: PillarConfig): Promise<void> {
     // If already initializing, wait for it to complete
-    if (this._state === 'initializing' && this._initPromise) {
-      console.log('[Pillar] Already initializing, waiting for completion');
+    if (this._state === "initializing" && this._initPromise) {
+      console.log("[Pillar] Already initializing, waiting for completion");
       await this._initPromise;
       return;
     }
 
-    if (this._state === 'ready') {
-      console.log('[Pillar] Already initialized');
+    if (this._state === "ready") {
+      console.log("[Pillar] Already initialized");
       return;
     }
 
-    this._state = 'initializing';
+    this._state = "initializing";
 
     // Create and store the init promise so other callers can wait
     this._initPromise = this._doInit(config);
@@ -1328,19 +1565,22 @@ export class Pillar {
       // We need a minimal resolved config for the API client
       const tempConfig = resolveConfig(config);
       const tempApi = new APIClient(tempConfig);
-      
+
       // Fetch server-side embed config (admin-configured settings)
       // This allows admins to change SDK behavior without requiring
       // customers to update their integration code
       const serverConfig = await tempApi.fetchEmbedConfig().catch((error) => {
-        console.warn('[Pillar] Failed to fetch server config, using local config only:', error);
+        console.warn(
+          "[Pillar] Failed to fetch server config, using local config only:",
+          error
+        );
         return null;
       });
-      
+
       // Merge configs with priority: DEFAULT_CONFIG < serverConfig < localConfig
       // Local config (passed to Pillar.init) always wins
       const mergedConfig = mergeServerConfig(config, serverConfig);
-      
+
       // Resolve the merged configuration
       this._config = resolveConfig(mergedConfig);
 
@@ -1362,7 +1602,7 @@ export class Pillar {
       // Connect action results to plan step completion
       // When an action with returns=true completes, sendActionResult emits 'action:result'.
       // If there's an active plan step awaiting this result, complete it with the data.
-      this._events.on('action:result', ({ actionName, result }) => {
+      this._events.on("action:result", ({ actionName, result }) => {
         if (this._planExecutor) {
           this._planExecutor.completeStepByAction(
             actionName,
@@ -1375,13 +1615,9 @@ export class Pillar {
       // Connect task:complete to plan step completion
       // When executeTask runs a handler (via onTask), it emits task:complete.
       // If there's an active plan step awaiting this task, complete it with the data.
-      this._events.on('task:complete', ({ name, success, data }) => {
+      this._events.on("task:complete", ({ name, success, data }) => {
         if (this._planExecutor) {
-          this._planExecutor.completeStepByAction(
-            name,
-            success,
-            data
-          );
+          this._planExecutor.completeStepByAction(name, success, data);
         }
       });
 
@@ -1395,19 +1631,34 @@ export class Pillar {
 
       // Initialize panel if enabled
       if (this._config.panel.enabled) {
-        this._panel = new Panel(this._config, this._api, this._events, this._rootContainer);
+        this._panel = new Panel(
+          this._config,
+          this._api,
+          this._events,
+          this._rootContainer
+        );
         await this._panel.init();
       }
 
       // Initialize edge trigger if enabled
       if (this._config.edgeTrigger.enabled) {
-        this._edgeTrigger = new EdgeTrigger(this._config, this._events, () => this.toggle(), this._rootContainer);
+        this._edgeTrigger = new EdgeTrigger(
+          this._config,
+          this._events,
+          () => this.toggle(),
+          this._rootContainer
+        );
         this._edgeTrigger.init();
       }
 
       // Initialize mobile trigger if enabled (shows on small screens when edge trigger is hidden)
       if (this._config.mobileTrigger.enabled) {
-        this._mobileTrigger = new MobileTrigger(this._config, this._events, () => this.toggle(), this._rootContainer);
+        this._mobileTrigger = new MobileTrigger(
+          this._config,
+          this._events,
+          () => this.toggle(),
+          this._rootContainer
+        );
         this._mobileTrigger.init();
       }
 
@@ -1421,11 +1672,11 @@ export class Pillar {
         this._textSelectionManager.init();
       }
 
-      this._state = 'ready';
-      this._events.emit('ready');
+      this._state = "ready";
+      this._events.emit("ready");
       this._config.onReady?.();
 
-      console.log('[Pillar] SDK initialized successfully');
+      console.log("[Pillar] SDK initialized successfully");
 
       // Attempt to recover any active plan from localStorage
       await this._planExecutor?.recoverPlan();
@@ -1435,11 +1686,11 @@ export class Pillar {
         await this._handleUrlParams();
       }
     } catch (error) {
-      this._state = 'error';
+      this._state = "error";
       const err = error instanceof Error ? error : new Error(String(error));
-      this._events.emit('error', err);
+      this._events.emit("error", err);
       this._config?.onError?.(err);
-      console.error('[Pillar] Failed to initialize:', error);
+      console.error("[Pillar] Failed to initialize:", error);
       throw error;
     }
   }
@@ -1508,10 +1759,18 @@ export class Pillar {
     this._api = null;
     this._planExecutor = null;
     this._config = null;
-    this._state = 'uninitialized';
+    this._state = "uninitialized";
 
-    console.log('[Pillar] SDK destroyed');
+    console.log("[Pillar] SDK destroyed");
   }
+}
+
+/**
+ * Get the API client from the current Pillar instance.
+ * Returns null if SDK is not initialized.
+ */
+export function getApiClient(): APIClient | null {
+  return Pillar.getInstance()?.["_api"] ?? null;
 }
 
 // Export for script tag usage

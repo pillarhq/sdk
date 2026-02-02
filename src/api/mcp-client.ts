@@ -157,8 +157,21 @@ export class MCPClient {
   private config: ResolvedConfig;
   private requestId = 0;
 
+  // External user ID for cross-device conversation history
+  private _externalUserId: string | null = null;
+
+  // Visitor and session IDs (initialized eagerly on construction)
+  private _visitorId: string = '';
+  private _sessionId: string = '';
+
   constructor(config: ResolvedConfig) {
     this.config = config;
+    
+    // Initialize visitor and session IDs immediately
+    this._visitorId = this.initVisitorId();
+    this._sessionId = this.initSessionId();
+    // External user ID is set via identify() - no localStorage persistence
+    this._externalUserId = null;
   }
 
   /**
@@ -186,11 +199,84 @@ export class MCPClient {
     return `${this.config.apiBaseUrl}/mcp/`;
   }
 
+  /**
+   * Initialize the persistent visitor ID on SDK init.
+   * Stored in localStorage to persist across sessions.
+   */
+  private initVisitorId(): string {
+    if (typeof window === 'undefined') return '';
+    
+    const KEY = 'pillar_visitor_id';
+    try {
+      let id = localStorage.getItem(KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem(KEY, id);
+      }
+      return id;
+    } catch {
+      // localStorage might be unavailable (e.g., private browsing)
+      return '';
+    }
+  }
+
+  /**
+   * Initialize the session ID on SDK init.
+   * Stored in sessionStorage to persist only for the current browser session.
+   */
+  private initSessionId(): string {
+    if (typeof window === 'undefined') return '';
+    
+    const KEY = 'pillar_session_id';
+    try {
+      let id = sessionStorage.getItem(KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        sessionStorage.setItem(KEY, id);
+      }
+      return id;
+    } catch {
+      // sessionStorage might be unavailable
+      return '';
+    }
+  }
+
+  /**
+   * Get the current page URL for analytics tracking.
+   */
+  private getPageUrl(): string {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }
+
+  /**
+   * Set the external user ID for authenticated users.
+   * This ID will be included in all subsequent requests.
+   */
+  setExternalUserId(userId: string): void {
+    this._externalUserId = userId;
+  }
+
+  /**
+   * Clear the external user ID (for logout).
+   */
+  clearExternalUserId(): void {
+    this._externalUserId = null;
+  }
+
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey,
+      'x-visitor-id': this._visitorId,
+      'x-session-id': this._sessionId,
+      'x-page-url': this.getPageUrl(),
     };
+
+    // Add external user ID header for authenticated users (enables cross-device history)
+    if (this._externalUserId) {
+      headers['x-external-user-id'] = this._externalUserId;
+    }
 
     // Add session ID for request correlation (critical for query actions)
     const sessionId = this.getSessionId();
