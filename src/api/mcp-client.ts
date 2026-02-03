@@ -3,6 +3,12 @@
  * 
  * Implements JSON-RPC 2.0 over HTTP with SSE streaming support
  * for communication with the MCP server.
+ * 
+ * @deprecated MCPClient is deprecated for chat operations.
+ * Use AGUIClient for all chat streaming.
+ * MCPClient is retained only for plan management operations.
+ * 
+ * TODO: Move plan management to AG-UI protocol and remove this client.
  */
 
 import type { TaskButtonData } from '../components/Panel/TaskButton';
