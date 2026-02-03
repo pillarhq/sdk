@@ -65,6 +65,8 @@ export interface ToolResult {
     sources?: ArticleSummary[];
     actions?: ActionData[];
     plan?: ExecutionPlan;
+    /** Registered actions for dynamic action tools (persisted across turns) */
+    registered_actions?: Record<string, unknown>[];
   };
   _meta?: {
     conversation_id?: string;
@@ -123,6 +125,8 @@ export interface StreamCallbacks {
   onActions?: (actions: ActionData[]) => void;
   /** Called when a plan is created (from plan.created event) */
   onPlan?: (plan: ExecutionPlan) => void;
+  /** Called when registered actions are received (for dynamic action tools) */
+  onRegisteredActions?: (actions: Record<string, unknown>[]) => void;
   /** Called on error */
   onError?: (error: string) => void;
   /** Called when conversation_started event is received (early conversation_id) */
@@ -516,6 +520,11 @@ export class MCPClient {
                     callbacks.onPlan?.(finalResult.structuredContent.plan);
                   }
 
+                  // Extract registered actions (for dynamic action tools)
+                  if (finalResult.structuredContent?.registered_actions) {
+                    callbacks.onRegisteredActions?.(finalResult.structuredContent.registered_actions);
+                  }
+
                   // Extract metadata
                   const conversationId = finalResult._meta?.conversation_id;
                   const queryLogId = finalResult._meta?.query_log_id;
@@ -621,6 +630,8 @@ export class MCPClient {
       userContext?: UserContextItem[];
       images?: ChatImage[];
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      /** Registered actions from previous turns (for dynamic action tools) */
+      registeredActions?: Record<string, unknown>[];
       signal?: AbortSignal;
     }
   ): Promise<ToolResult> {
@@ -642,6 +653,11 @@ export class MCPClient {
 
     if (options?.history && options.history.length > 0) {
       args.history = options.history;
+    }
+
+    // Pass registered actions for dynamic action tools (multi-turn persistence)
+    if (options?.registeredActions && options.registeredActions.length > 0) {
+      args.registered_actions = options.registeredActions;
     }
 
     return this.callToolStream('ask', args, callbacks, options?.signal);

@@ -39,6 +39,10 @@ export const messages = signal<StoredChatMessage[]>([]);
 // Current conversation ID (server-assigned, persists across messages in a conversation)
 export const conversationId = signal<string | null>(null);
 
+// Registered actions for dynamic action tools (persisted across conversation turns)
+// These are actions discovered via search that can be called directly by the LLM
+export const registeredActions = signal<Record<string, unknown>[]>([]);
+
 /**
  * @deprecated Use `conversationId` instead. Will be removed in v2.0.
  */
@@ -410,6 +414,28 @@ export const clearConversationId = () => {
   conversationId.value = null;
 };
 
+/**
+ * Set registered actions from backend response.
+ * These are actions discovered via search that can be called directly by the LLM.
+ */
+export const setRegisteredActions = (actions: Record<string, unknown>[]) => {
+  registeredActions.value = actions;
+};
+
+/**
+ * Get registered actions for sending with the next message.
+ */
+export const getRegisteredActions = (): Record<string, unknown>[] => {
+  return registeredActions.value;
+};
+
+/**
+ * Clear registered actions (e.g., when starting a new conversation).
+ */
+export const clearRegisteredActions = () => {
+  registeredActions.value = [];
+};
+
 export const setMessageFeedback = (messageId: string, feedback: 'up' | 'down') => {
   messages.value = messages.value.map((msg) =>
     msg.id === messageId ? { ...msg, feedback } : msg
@@ -443,15 +469,20 @@ export const clearProgressStatus = () => {
 export const addProgressEvent = (event: ProgressEvent) => {
   // Update global (deprecated, for progressStatus backwards compat)
   // Use same deduplication logic as per-message storage
-  if (event.progress_id) {
+  // Use id field with fallback to legacy progress_id (matching addProgressEventToLastMessage)
+  const eventId = event.id || event.progress_id;
+  if (eventId) {
     const existingIndex = progressEvents.value.findIndex(
-      (e) => e.progress_id === event.progress_id
+      (e) => (e.id || e.progress_id) === eventId
     );
     if (existingIndex >= 0) {
       const existing = progressEvents.value[existingIndex];
       const updatedEvent: ProgressEvent = {
         ...existing,
         ...event,
+        // Preserve the id (use new if provided, otherwise keep existing)
+        id: event.id || existing.id,
+        progress_id: event.progress_id || existing.progress_id,
         text: event.kind === 'thinking' && existing.text && event.text
           ? existing.text + event.text
           : event.text ?? existing.text,
@@ -534,6 +565,7 @@ export const clearPendingUserContext = () => {
 export const resetChat = () => {
   messages.value = [];
   conversationId.value = null;
+  registeredActions.value = [];  // Clear registered actions for new conversation
   isLoading.value = false;
   progressStatus.value = { kind: null };
   progressEvents.value = [];

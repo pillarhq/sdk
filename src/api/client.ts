@@ -378,6 +378,9 @@ export class APIClient {
     let fullMessage = '';
     let sources: ArticleSummary[] = [];
     let actions: TaskButtonData[] = [];
+    
+    // Import store functions for registered actions (dynamic action tools)
+    const { getRegisteredActions, setRegisteredActions } = await import('../store/chat');
 
     try {
       const result = await this.mcpClient.ask(
@@ -408,11 +411,23 @@ export class APIClient {
               await onActionRequest(request);
             }
           },
+          onRegisteredActions: (registeredActions) => {
+            // Store registered actions for next message (dynamic action tools)
+            setRegisteredActions(registeredActions);
+            debug.log('[Pillar API] Stored', registeredActions.length, 'registered actions for dynamic tool calling');
+          },
           onError: (error) => {
             debug.error('[Pillar API] MCP chat error:', error);
           },
         },
-        { articleSlug, userContext, images, history }
+        { 
+          articleSlug, 
+          userContext, 
+          images, 
+          history,
+          // Pass registered actions from previous turns for dynamic action tools
+          registeredActions: getRegisteredActions(),
+        }
       );
 
       // If no streaming content was received, extract from result
