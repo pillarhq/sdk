@@ -148,8 +148,8 @@ export class Pillar {
     // Create new container
     container = document.createElement("div");
     container.id = "pillar-root";
-    // Initial z-index based on current hover mode
-    const initialZIndex = isHoverMode.value ? "20" : "-1";
+    // Use z-index higher than typical app navbars (Grafana uses 1000-1060)
+    const initialZIndex = "100001";
     container.style.cssText = `isolation: isolate; z-index: ${initialZIndex}; position: relative;`;
     document.body.appendChild(container);
 
@@ -167,9 +167,9 @@ export class Pillar {
     this._unsubscribeHoverMode?.();
 
     this._unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
-      // Use z-index 999 in hover mode to integrate with page,
-      // -1 in push mode since panel handles its own stacking
-      container.style.zIndex = inHoverMode ? "20" : "-1";
+      // Both modes need high z-index so edge trigger is visible above app navbars
+      // (Grafana uses z-index 1000-1060 for navbar/modals)
+      container.style.zIndex = "100001";
     });
   }
 
