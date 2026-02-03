@@ -211,6 +211,16 @@ export interface PillarConfig {
    */
   version?: string;
   
+  /**
+   * Enable debug mode for verbose logging and debug panel.
+   * When enabled:
+   * - All SDK events are logged to console
+   * - A debug panel shows real-time execution flow
+   * - Network requests/responses are captured
+   * @default false
+   */
+  debug?: boolean;
+  
   // Panel settings
   panel?: PanelConfig;
   
@@ -295,6 +305,8 @@ export interface ResolvedConfig {
   platform: Platform;
   /** App version for code-first actions (optional) */
   version?: string;
+  /** Debug mode enabled */
+  debug: boolean;
   
   panel: ResolvedPanelConfig;
   edgeTrigger: Required<EdgeTriggerConfig>;
@@ -312,6 +324,7 @@ export interface ResolvedConfig {
 export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
   platform: 'web',
+  debug: false,
   
   panel: {
     enabled: true,
@@ -401,6 +414,7 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     platform: config.platform || 'web',
     version: config.version,
+    debug: config.debug ?? false,
     
     panel: {
       ...DEFAULT_CONFIG.panel,

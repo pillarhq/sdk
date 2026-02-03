@@ -41,7 +41,9 @@ import {
   startWorkflow as storeStartWorkflow,
   updateStepStatus,
 } from "../store/workflow";
-import { debug } from "../utils/debug";
+import { h, render } from "preact";
+import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
+import { DebugPanel } from "../components/DebugPanel";
 import { domReady } from "../utils/dom";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
@@ -121,6 +123,9 @@ export class Pillar {
 
   // Card renderers for inline_ui type actions
   private _cardRenderers: Map<string, CardRenderer> = new Map();
+
+  // Debug panel container
+  private _debugPanelContainer: HTMLElement | null = null;
 
   constructor() {
     this._events = new EventEmitter();
@@ -236,6 +241,37 @@ export class Pillar {
    */
   get config(): ResolvedConfig | null {
     return this._config;
+  }
+
+  /**
+   * Whether debug mode is enabled
+   */
+  get isDebugEnabled(): boolean {
+    return this._config?.debug ?? false;
+  }
+
+  /**
+   * Get debug log entries (for debug panel).
+   * Returns empty array if debug mode is not enabled.
+   */
+  getDebugLog(): import('../utils/debug').DebugEntry[] {
+    if (!this._config?.debug) return [];
+    return debugLog.getEntries();
+  }
+
+  /**
+   * Subscribe to debug log updates (for debug panel).
+   * Returns unsubscribe function.
+   */
+  onDebugLog(callback: (entries: import('../utils/debug').DebugEntry[]) => void): () => void {
+    return debugLog.subscribe(callback);
+  }
+
+  /**
+   * Clear debug log entries.
+   */
+  clearDebugLog(): void {
+    debugLog.clear();
   }
 
   /**
@@ -876,6 +912,14 @@ export class Pillar {
       actionDefinition?.returns || runtimeAction?.returns;
 
     if (handler) {
+      const handlerStartTime = performance.now();
+      debugLog.add({
+        event: 'handler:execute',
+        data: { action: name, taskType, params: data },
+        source: 'handler',
+        level: 'info',
+      });
+
       try {
         // Merge path into data for navigate handlers
         const handlerData =
@@ -887,6 +931,7 @@ export class Pillar {
           // Handle both sync and async handlers
           Promise.resolve(result)
             .then(async (resolvedResult) => {
+              const duration = Math.round(performance.now() - handlerStartTime);
               if (resolvedResult !== undefined) {
                 await this.sendActionResult(name, resolvedResult);
 
@@ -903,12 +948,24 @@ export class Pillar {
                     taskSuccess = false;
                   }
                 }
+                debugLog.add({
+                  event: 'handler:complete',
+                  data: { action: name, duration, success: taskSuccess, returnsData: true },
+                  source: 'handler',
+                  level: taskSuccess ? 'info' : 'warn',
+                });
                 this._events.emit("task:complete", {
                   name,
                   success: taskSuccess,
                   data: resolvedResult as Record<string, unknown> | undefined,
                 });
               } else {
+                debugLog.add({
+                  event: 'handler:complete',
+                  data: { action: name, duration, success: true },
+                  source: 'handler',
+                  level: 'info',
+                });
                 this._events.emit("task:complete", {
                   name,
                   success: true,
@@ -917,6 +974,13 @@ export class Pillar {
               }
             })
             .catch((error) => {
+              const duration = Math.round(performance.now() - handlerStartTime);
+              debugLog.add({
+                event: 'handler:error',
+                data: { action: name, duration, error: error instanceof Error ? error.message : String(error) },
+                source: 'handler',
+                level: 'error',
+              });
               debug.error(`[Pillar] Error in query action "${name}":`, error);
               this._events.emit("task:complete", {
                 name,
@@ -926,9 +990,23 @@ export class Pillar {
             });
         } else {
           // No data returned - assume success
+          const duration = Math.round(performance.now() - handlerStartTime);
+          debugLog.add({
+            event: 'handler:complete',
+            data: { action: name, duration, success: true },
+            source: 'handler',
+            level: 'info',
+          });
           this._events.emit("task:complete", { name, success: true, data });
         }
       } catch (error) {
+        const duration = Math.round(performance.now() - handlerStartTime);
+        debugLog.add({
+          event: 'handler:error',
+          data: { action: name, duration, error: error instanceof Error ? error.message : String(error) },
+          source: 'handler',
+          level: 'error',
+        });
         debug.error(`[Pillar] Error executing task "${name}":`, error);
         this._events.emit("task:complete", { name, success: false, data });
       }
@@ -1521,6 +1599,13 @@ export class Pillar {
       return;
     }
 
+    debugLog.add({
+      event: 'handler:execute',
+      data: { action: actionName, type: 'query', params: args },
+      source: 'handler',
+      level: 'info',
+    });
+
     try {
       const handlerStart = performance.now();
       const result = await Promise.resolve(handler(args));
@@ -1532,10 +1617,22 @@ export class Pillar {
       );
 
       if (result !== undefined) {
+        debugLog.add({
+          event: 'handler:complete',
+          data: { action: actionName, duration: handlerElapsed, success: true, returnsData: true },
+          source: 'handler',
+          level: 'info',
+        });
         await this.sendActionResult(actionName, result);
         const totalElapsed = Math.round(performance.now() - startTime);
         debug.log(`[Pillar] Query action "${actionName}" total time: ${totalElapsed}ms`);
       } else {
+        debugLog.add({
+          event: 'handler:complete',
+          data: { action: actionName, duration: handlerElapsed, success: false, error: 'returned undefined' },
+          source: 'handler',
+          level: 'warn',
+        });
         debug.warn(
           `[Pillar] Query action "${actionName}" returned undefined. ` +
             `Make sure your handler returns data for the agent.`
@@ -1547,6 +1644,12 @@ export class Pillar {
       }
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
+      debugLog.add({
+        event: 'handler:error',
+        data: { action: actionName, duration: elapsed, error: error instanceof Error ? error.message : String(error) },
+        source: 'handler',
+        level: 'error',
+      });
       debug.error(
         `[Pillar] Error executing query action "${actionName}" after ${elapsed}ms:`,
         error
@@ -1617,6 +1720,17 @@ export class Pillar {
    */
   private async _doInit(config: PillarConfig): Promise<void> {
     try {
+      // Enable debug mode if requested
+      if (config.debug) {
+        setDebugMode(true);
+        debugLog.add({
+          event: 'sdk:init:start',
+          data: { productKey: config.productKey, debug: true },
+          source: 'sdk',
+          level: 'info',
+        });
+      }
+
       // Wait for DOM to be ready
       await domReady();
 
@@ -1683,6 +1797,11 @@ export class Pillar {
         }
       });
 
+      // Set up debug event capturing when debug mode is enabled
+      if (this._config.debug) {
+        this._setupDebugEventCapture();
+      }
+
       // Create shared root container for all Pillar UI elements
       // Uses isolation: isolate to create a new stacking context
       this._rootContainer = this._createRootContainer();
@@ -1740,6 +1859,11 @@ export class Pillar {
 
       debug.log("[Pillar] SDK initialized successfully");
 
+      // Mount debug panel if debug mode is enabled
+      if (this._config.debug) {
+        this._mountDebugPanel();
+      }
+
       // Attempt to recover any active plan from localStorage
       await this._planExecutor?.recoverPlan();
 
@@ -1780,6 +1904,77 @@ export class Pillar {
   }
 
   /**
+   * Mount the debug panel to the document body.
+   */
+  private _mountDebugPanel(): void {
+    // Create container for debug panel
+    this._debugPanelContainer = document.createElement('div');
+    this._debugPanelContainer.id = 'pillar-debug-panel-root';
+    document.body.appendChild(this._debugPanelContainer);
+
+    // Render debug panel
+    render(h(DebugPanel, null), this._debugPanelContainer);
+    
+    debugLog.add({
+      event: 'debug:panel:mounted',
+      source: 'sdk',
+      level: 'info',
+    });
+  }
+
+  /**
+   * Set up debug event capturing for all SDK events.
+   * Logs all events to the debug log store for display in the debug panel.
+   */
+  private _setupDebugEventCapture(): void {
+    // Plan events
+    this._events.on('plan:start', (data) => {
+      debugLog.add({ event: 'plan:start', data, source: 'sdk', level: 'info' });
+    });
+    this._events.on('plan:step:active', (data) => {
+      debugLog.add({ event: 'plan:step:active', data: { stepIndex: data.step?.index, action: data.step?.action_name }, source: 'sdk', level: 'info' });
+    });
+    this._events.on('plan:step:complete', (data) => {
+      debugLog.add({ event: 'plan:step:complete', data: { stepIndex: data.step?.index, action: data.step?.action_name, success: data.success }, source: 'sdk', level: 'info' });
+    });
+    this._events.on('plan:step:failed', (data) => {
+      debugLog.add({ event: 'plan:step:failed', data: { stepIndex: data.step?.index, action: data.step?.action_name, error: data.error?.message }, source: 'sdk', level: 'error' });
+    });
+    this._events.on('plan:complete', (data) => {
+      debugLog.add({ event: 'plan:complete', data: { planId: data.id, goal: data.goal }, source: 'sdk', level: 'info' });
+    });
+    this._events.on('plan:error', (data) => {
+      debugLog.add({ event: 'plan:error', data: { planId: data.plan?.id, error: data.error?.message }, source: 'sdk', level: 'error' });
+    });
+    this._events.on('plan:cancel', (data) => {
+      debugLog.add({ event: 'plan:cancel', data: { planId: data.id }, source: 'sdk', level: 'warn' });
+    });
+
+    // Task events
+    this._events.on('task:execute', (data) => {
+      debugLog.add({ event: 'task:execute', data: { name: data.name, taskType: data.taskType }, source: 'sdk', level: 'info' });
+    });
+    this._events.on('task:complete', (data) => {
+      debugLog.add({ event: 'task:complete', data: { name: data.name, success: data.success }, source: 'sdk', level: data.success ? 'info' : 'error' });
+    });
+
+    // Action events
+    this._events.on('action:result', (data) => {
+      debugLog.add({ event: 'action:result', data: { actionName: data.actionName, hasResult: !!data.result }, source: 'sdk', level: 'info' });
+    });
+
+    // General events
+    this._events.on('ready', () => {
+      debugLog.add({ event: 'sdk:ready', source: 'sdk', level: 'info' });
+    });
+    this._events.on('error', (data) => {
+      debugLog.add({ event: 'sdk:error', data: { message: data.message }, source: 'sdk', level: 'error' });
+    });
+
+    debug.log('[Pillar] Debug event capture enabled');
+  }
+
+  /**
    * Internal cleanup
    */
   private _destroy(): void {
@@ -1797,6 +1992,13 @@ export class Pillar {
     // Remove root container
     this._rootContainer?.remove();
     this._rootContainer = null;
+
+    // Remove debug panel
+    if (this._debugPanelContainer) {
+      render(null, this._debugPanelContainer);
+      this._debugPanelContainer.remove();
+      this._debugPanelContainer = null;
+    }
 
     // Reset all stores
     resetPanel();

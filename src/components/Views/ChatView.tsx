@@ -36,7 +36,6 @@ import { hasActivePlan } from '../../store/plan';
 import type { UserContextItem } from '../../types/user-context';
 import { PreactMarkdown } from '../../utils/preact-markdown';
 import type { ProgressEvent } from '../../api/client';
-import { createConfirmActionCard } from '../Cards/ConfirmActionCard';
 import { useAPI } from '../context';
 import { ContextTagList } from '../Panel/ContextTag';
 import { createTaskButtonGroup, type TaskButtonData } from '../Panel/TaskButton';
@@ -354,47 +353,16 @@ export function ChatView() {
   // Create refs map for action containers per message
   const actionContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  // Effect to render action buttons and confirm cards when messages change
+  // Effect to render action buttons when messages change
+  // All actions render as buttons initially; inline_ui buttons toggle their card on click
   useEffect(() => {
-    const pillar = Pillar.getInstance();
-    
     messages.value.forEach((msg, index) => {
       if (msg.role === 'assistant' && msg.actions && msg.actions.length > 0) {
         const container = actionContainerRefs.current.get(index);
         if (container && container.children.length === 0) {
-          // Separate inline_ui cards from regular buttons
-          const confirmActions = msg.actions.filter(a => a.taskType === 'inline_ui');
-          const buttonActions = msg.actions.filter(a => a.taskType !== 'inline_ui');
-          
-          // Render confirm action cards first
-          confirmActions.forEach((action) => {
-            const card = createConfirmActionCard(
-              action,
-              // onConfirm callback
-              (data) => {
-                if (pillar) {
-                  // Emit task execution event
-                  pillar.executeTask({
-                    id: action.id,
-                    name: action.name,
-                    taskType: action.taskType,
-                    data: data || action.data || {},
-                  });
-                }
-              },
-              // onCancel callback
-              () => {
-                debug.log('[Pillar] Confirm action cancelled:', action.name);
-              }
-            );
-            container.appendChild(card);
-          });
-          
-          // Then render regular buttons
-          if (buttonActions.length > 0) {
-            const buttonGroup = createTaskButtonGroup(buttonActions);
-            container.appendChild(buttonGroup);
-          }
+          // Render all actions as buttons (inline_ui handling is in TaskButton)
+          const buttonGroup = createTaskButtonGroup(msg.actions);
+          container.appendChild(buttonGroup);
         }
       }
     });

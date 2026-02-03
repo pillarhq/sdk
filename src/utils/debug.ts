@@ -1,22 +1,86 @@
 /**
- * Debug Logger Utility
+ * Unified Debug Logger Utility
  *
- * Development-only logging utility for the Pillar SDK.
- * In production builds, log and warn calls are no-ops.
- * Errors are always logged.
- * 
- * When configured with an MCP client, logs are buffered and forwarded
- * to the server every 5 seconds for debugging client-server communication.
+ * Single source of truth for all SDK debugging:
+ * - debugLog.add() is the primary API for structured logging
+ * - debug.log/warn/error are convenience wrappers that route through debugLog
+ * - Server forwarding is handled via subscription pattern
+ * - DebugPanel subscribes for UI display
+ *
+ * Sources:
+ * - 'sdk': Core SDK events (init, ready, errors)
+ * - 'handler': Action handler execution
+ * - 'network': API requests/responses
+ * - 'server': Server-side events (via SSE)
  */
 
 import type { MCPClient } from '../api/mcp-client';
 
-/** Log entry structure for buffered logs */
+// ============================================================================
+// Types
+// ============================================================================
+
+/** Debug entry sources */
+export type DebugSource = 'sdk' | 'handler' | 'network' | 'server';
+
+/** Debug entry severity levels */
+export type DebugLevel = 'info' | 'warn' | 'error';
+
+/**
+ * Unified debug entry for all logging.
+ * Used by DebugPanel, server forwarding, and console output.
+ */
+export interface DebugEntry {
+  /** Unix timestamp in milliseconds */
+  timestamp: number;
+  /** Event name or message (e.g., 'sdk:init:start', 'network:request') */
+  event: string;
+  /** Structured data associated with the event */
+  data?: unknown;
+  /** Source of the log entry */
+  source: DebugSource;
+  /** Severity level */
+  level: DebugLevel;
+  /** Optional prefix for backward compatibility (e.g., '[Pillar]', '[PlanExecutor]') */
+  prefix?: string;
+}
+
+/**
+ * Log entry structure for server forwarding (backward compatible).
+ */
 export interface LogEntry {
   level: 'log' | 'warn' | 'error';
   message: string;
   data?: unknown;
   timestamp: string;
+}
+
+// ============================================================================
+// Debug Mode Configuration
+// ============================================================================
+
+/**
+ * Runtime debug flag - can be enabled via Pillar.init({ debug: true })
+ */
+let runtimeDebugEnabled = false;
+
+/**
+ * Enable or disable runtime debug mode.
+ * Called by Pillar.init() when debug: true is passed.
+ */
+export function setDebugMode(enabled: boolean): void {
+  runtimeDebugEnabled = enabled;
+  if (enabled) {
+    // Use debugLog directly to avoid circular dependency during init
+    console.log('[Pillar] Debug mode enabled - verbose logging active');
+  }
+}
+
+/**
+ * Check if debug mode is enabled (either via environment or runtime flag).
+ */
+export function isDebugEnabled(): boolean {
+  return runtimeDebugEnabled || isDevelopment();
 }
 
 /**
@@ -30,7 +94,6 @@ const isDevelopment = (): boolean => {
   }
   // In browser without process.env, check for common dev indicators
   if (typeof window !== 'undefined') {
-    // Check for localhost or development ports
     const hostname = window.location?.hostname || '';
     return (
       hostname === 'localhost' ||
@@ -41,229 +104,415 @@ const isDevelopment = (): boolean => {
   return false;
 };
 
-const DEBUG = isDevelopment();
+// ============================================================================
+// Server Log Forwarder
+// ============================================================================
 
-// Configuration for server-side log forwarding
-let mcpClient: MCPClient | null = null;
-let forwardToServer = false;
+/** Prefixes that should be forwarded to the server */
+const FORWARD_PREFIXES = ['[Pillar]', '[MCPClient]', '[PlanExecutor]'];
 
-// Log buffering configuration
-const DEFAULT_FLUSH_INTERVAL_MS = 5000;
-const MAX_BUFFER_SIZE = 100;
-let logBuffer: LogEntry[] = [];
-let flushTimer: ReturnType<typeof setInterval> | null = null;
-let flushIntervalMs = DEFAULT_FLUSH_INTERVAL_MS;
-
-// Prefixes that should be forwarded to the server (action-related logs)
-const FORWARD_PREFIXES = [
-  '[Pillar]',
-  '[MCPClient]',
-  '[PlanExecutor]',
-];
+/** Sources that should be forwarded to the server */
+const FORWARD_SOURCES: DebugSource[] = ['sdk', 'handler', 'network'];
 
 /**
- * Check if a message should be forwarded to the server.
- * Only forwards logs with specific prefixes related to action execution.
+ * Handles buffering and forwarding logs to the server.
  */
-function shouldForward(args: unknown[]): boolean {
-  if (!forwardToServer || !mcpClient) return false;
-  
-  const firstArg = args[0];
-  if (typeof firstArg !== 'string') return false;
-  
-  return FORWARD_PREFIXES.some(prefix => firstArg.startsWith(prefix));
-}
+class ServerLogForwarder {
+  private mcpClient: MCPClient;
+  private buffer: LogEntry[] = [];
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private flushIntervalMs: number;
+  private maxBufferSize = 100;
 
-/**
- * Flush all buffered logs to the server.
- */
-function flush(): void {
-  if (logBuffer.length === 0 || !mcpClient) return;
-  
-  // Take all logs and clear buffer
-  const logs = logBuffer.splice(0);
-  mcpClient.sendLogBatch(logs);
-}
+  constructor(client: MCPClient, flushIntervalMs = 5000) {
+    this.mcpClient = client;
+    this.flushIntervalMs = flushIntervalMs;
+    this.startFlushTimer();
+    this.setupUnloadListener();
+  }
 
-/**
- * Buffer a log message for later sending to the server.
- * Errors are flushed immediately.
- */
-function bufferLog(level: 'log' | 'warn' | 'error', args: unknown[]): void {
-  if (!mcpClient) return;
-  
-  // Convert args to a message string
-  const message = args
-    .map(arg => {
-      if (typeof arg === 'string') return arg;
-      try {
-        return JSON.stringify(arg);
-      } catch {
-        return String(arg);
-      }
-    })
-    .join(' ');
-  
-  // Extract any object data from args for structured logging
-  const dataArg = args.find(arg => typeof arg === 'object' && arg !== null);
-  
-  const entry: LogEntry = {
-    level,
-    message,
-    data: dataArg,
-    timestamp: new Date().toISOString(),
+  /**
+   * Check if a debug entry should be forwarded to the server.
+   */
+  shouldForward(entry: DebugEntry): boolean {
+    // Forward based on source
+    if (FORWARD_SOURCES.includes(entry.source)) {
+      return true;
+    }
+    // Forward based on prefix (backward compatibility)
+    if (entry.prefix && FORWARD_PREFIXES.some(p => entry.prefix?.startsWith(p))) {
+      return true;
+    }
+    // Always forward errors
+    if (entry.level === 'error') {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Buffer a debug entry for server forwarding.
+   */
+  bufferEntry(entry: DebugEntry): void {
+    // Convert DebugEntry to LogEntry for server
+    const logEntry: LogEntry = {
+      level: entry.level === 'info' ? 'log' : entry.level,
+      message: entry.prefix
+        ? `${entry.prefix} ${entry.event}`
+        : `[${entry.source}] ${entry.event}`,
+      data: entry.data,
+      timestamp: new Date(entry.timestamp).toISOString(),
+    };
+
+    this.buffer.push(logEntry);
+
+    // Auto-flush if buffer is full
+    if (this.buffer.length >= this.maxBufferSize) {
+      this.flush();
+    }
+
+    // Immediately flush errors
+    if (entry.level === 'error') {
+      this.flush();
+    }
+  }
+
+  /**
+   * Flush all buffered logs to the server.
+   */
+  flush(): void {
+    if (this.buffer.length === 0) return;
+    const logs = this.buffer.splice(0);
+    this.mcpClient.sendLogBatch(logs);
+  }
+
+  private startFlushTimer(): void {
+    if (this.flushTimer) return;
+    this.flushTimer = setInterval(() => this.flush(), this.flushIntervalMs);
+  }
+
+  private stopFlushTimer(): void {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
+
+  private handleBeforeUnload = (): void => {
+    this.flush();
   };
-  
-  logBuffer.push(entry);
-  
-  // Auto-flush if buffer is full
-  if (logBuffer.length >= MAX_BUFFER_SIZE) {
-    flush();
+
+  private setupUnloadListener(): void {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+    }
   }
-  
-  // Immediately flush errors (don't wait for timer)
-  if (level === 'error') {
-    flush();
+
+  private removeUnloadListener(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    }
   }
-}
 
-/**
- * Start the flush timer.
- */
-function startFlushTimer(): void {
-  if (flushTimer) return; // Already running
-  
-  flushTimer = setInterval(flush, flushIntervalMs);
-}
-
-/**
- * Stop the flush timer and flush remaining logs.
- */
-function stopFlushTimer(): void {
-  if (flushTimer) {
-    clearInterval(flushTimer);
-    flushTimer = null;
-  }
-  flush(); // Flush any remaining logs
-}
-
-/**
- * Handle page unload - flush logs before page closes.
- */
-function handleBeforeUnload(): void {
-  flush();
-}
-
-/**
- * Set up beforeunload listener for flushing on page close.
- */
-function setupUnloadListener(): void {
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', handleBeforeUnload);
+  /**
+   * Clean up resources.
+   */
+  destroy(): void {
+    this.stopFlushTimer();
+    this.removeUnloadListener();
+    this.flush();
+    this.buffer = [];
   }
 }
 
+// ============================================================================
+// Debug Log Store (Single Source of Truth)
+// ============================================================================
+
 /**
- * Remove beforeunload listener.
+ * Central debug log store.
+ * All debug entries flow through here and are distributed to:
+ * - Console (in debug mode)
+ * - DebugPanel UI (via subscription)
+ * - Server (via ServerLogForwarder subscription)
  */
-function removeUnloadListener(): void {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
+class DebugLogStore {
+  private entries: DebugEntry[] = [];
+  private maxEntries = 500;
+  private listeners: Set<(entries: DebugEntry[]) => void> = new Set();
+  private serverForwarder: ServerLogForwarder | null = null;
+  private forwarderUnsubscribe: (() => void) | null = null;
+
+  /**
+   * Add a debug entry.
+   * This is the primary API for all logging.
+   */
+  add(entry: Omit<DebugEntry, 'timestamp'>): void {
+    const fullEntry: DebugEntry = {
+      ...entry,
+      timestamp: Date.now(),
+    };
+    this.entries.push(fullEntry);
+
+    // Trim old entries
+    if (this.entries.length > this.maxEntries) {
+      this.entries = this.entries.slice(-this.maxEntries);
+    }
+
+    // Notify all listeners
+    this.listeners.forEach((listener) => listener(this.entries));
+
+    // Log to console in debug mode (skip if already logged via debug.* wrapper)
+    // We check for prefix to avoid double-logging from debug.* calls
+    if (isDebugEnabled() && !entry.prefix) {
+      this.logToConsole(fullEntry);
+    }
+
+    // Forward to server if configured
+    if (this.serverForwarder?.shouldForward(fullEntry)) {
+      this.serverForwarder.bufferEntry(fullEntry);
+    }
+  }
+
+  private logToConsole(entry: DebugEntry): void {
+    const time = new Date(entry.timestamp).toISOString().split('T')[1].slice(0, 12);
+    const prefix = `[${time}] [${entry.source}]`;
+    const args = entry.data !== undefined ? [prefix, entry.event, entry.data] : [prefix, entry.event];
+
+    if (entry.level === 'error') {
+      console.error(...args);
+    } else if (entry.level === 'warn') {
+      console.warn(...args);
+    } else {
+      console.log(...args);
+    }
+  }
+
+  /**
+   * Enable server forwarding of logs.
+   */
+  enableServerForwarding(
+    client: MCPClient,
+    options?: { flushIntervalMs?: number }
+  ): void {
+    // Clean up previous forwarder
+    this.disableServerForwarding();
+
+    this.serverForwarder = new ServerLogForwarder(
+      client,
+      options?.flushIntervalMs
+    );
+  }
+
+  /**
+   * Disable server forwarding.
+   */
+  disableServerForwarding(): void {
+    if (this.serverForwarder) {
+      this.serverForwarder.destroy();
+      this.serverForwarder = null;
+    }
+    if (this.forwarderUnsubscribe) {
+      this.forwarderUnsubscribe();
+      this.forwarderUnsubscribe = null;
+    }
+  }
+
+  /**
+   * Manually flush logs to server.
+   */
+  flush(): void {
+    this.serverForwarder?.flush();
+  }
+
+  /**
+   * Get all entries.
+   */
+  getEntries(): DebugEntry[] {
+    return [...this.entries];
+  }
+
+  /**
+   * Clear all entries.
+   */
+  clear(): void {
+    this.entries = [];
+    this.listeners.forEach((listener) => listener(this.entries));
+  }
+
+  /**
+   * Subscribe to entry updates.
+   */
+  subscribe(listener: (entries: DebugEntry[]) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Clean up all resources.
+   */
+  destroy(): void {
+    this.disableServerForwarding();
+    this.entries = [];
+    this.listeners.clear();
   }
 }
 
 /**
- * Debug logger for Pillar SDK.
+ * Global debug log store instance.
+ */
+export const debugLog = new DebugLogStore();
+
+// ============================================================================
+// Convenience Wrappers (debug.log/warn/error)
+// ============================================================================
+
+/**
+ * Parse log arguments to extract prefix, event, and data.
+ * Handles the common pattern: debug.log('[Prefix]', 'message', { data })
+ */
+function parseLogArgs(args: unknown[]): {
+  prefix?: string;
+  event: string;
+  data?: unknown;
+} {
+  if (args.length === 0) {
+    return { event: '' };
+  }
+
+  const firstArg = args[0];
+  let prefix: string | undefined;
+  let eventParts: string[] = [];
+  let data: unknown;
+
+  // Check if first arg is a prefix like '[Pillar]'
+  if (typeof firstArg === 'string' && firstArg.startsWith('[') && firstArg.endsWith(']')) {
+    prefix = firstArg;
+    args = args.slice(1);
+  }
+
+  // Collect string parts as event, last object as data
+  for (const arg of args) {
+    if (typeof arg === 'string') {
+      eventParts.push(arg);
+    } else if (typeof arg === 'object' && arg !== null) {
+      data = arg;
+    }
+  }
+
+  return {
+    prefix,
+    event: eventParts.join(' '),
+    data,
+  };
+}
+
+/**
+ * Map prefix to source for backward compatibility.
+ */
+function prefixToSource(prefix?: string): DebugSource {
+  if (!prefix) return 'sdk';
+  if (prefix.includes('MCPClient')) return 'network';
+  if (prefix.includes('PlanExecutor')) return 'sdk';
+  return 'sdk';
+}
+
+/**
+ * Debug logger convenience API.
  *
- * - log: Only logs in development mode
- * - warn: Only logs in development mode
- * - error: Always logs (errors should never be silenced)
- *
- * When configured with an MCP client, logs are buffered and sent to the
- * server every 5 seconds (configurable). Errors are flushed immediately.
- *
- * Note: Messages should include their own prefix (e.g., [Pillar], [PlanExecutor])
- * for better traceability.
+ * Routes all calls through debugLog for unified handling.
+ * Maintains backward compatibility with existing debug.log/warn/error calls.
  */
 export const debug = {
   /**
-   * Configure the debug logger with an MCP client for server-side forwarding.
-   * 
-   * When enabled, important logs (action execution, errors) are buffered
-   * and sent to the server periodically for debugging.
-   * 
-   * @param client - The MCP client to use for sending logs
-   * @param options - Configuration options
+   * Configure server-side log forwarding.
+   * @deprecated Use debugLog.enableServerForwarding() instead
    */
-  configure: (client: MCPClient, options?: { 
-    forwardToServer?: boolean;
-    flushIntervalMs?: number;
-  }): void => {
-    // Clean up previous configuration
-    stopFlushTimer();
-    removeUnloadListener();
-    
-    mcpClient = client;
-    forwardToServer = options?.forwardToServer ?? DEBUG; // Default: forward in dev mode
-    flushIntervalMs = options?.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
-    
-    if (forwardToServer && mcpClient) {
-      startFlushTimer();
-      setupUnloadListener();
+  configure: (
+    client: MCPClient,
+    options?: {
+      forwardToServer?: boolean;
+      flushIntervalMs?: number;
+    }
+  ): void => {
+    if (options?.forwardToServer !== false) {
+      debugLog.enableServerForwarding(client, {
+        flushIntervalMs: options?.flushIntervalMs,
+      });
     }
   },
 
   /**
-   * Manually flush all buffered logs to the server.
-   * Called automatically on timer and page unload.
+   * Manually flush logs to server.
    */
-  flush,
+  flush: (): void => {
+    debugLog.flush();
+  },
 
   /**
-   * Log debug information. Only outputs in development mode.
+   * Log debug information.
+   * Only outputs in development mode or when debug is enabled.
    */
   log: (...args: unknown[]): void => {
-    if (DEBUG) {
-      console.log(...args);
-      if (shouldForward(args)) {
-        bufferLog('log', args);
-      }
-    }
+    if (!isDebugEnabled()) return;
+
+    const { prefix, event, data } = parseLogArgs(args);
+
+    // Log to console (debug.* calls handle their own console output for backward compat)
+    console.log(...args);
+
+    // Add to debugLog store (with prefix to avoid double console logging)
+    debugLog.add({
+      event,
+      data,
+      source: prefixToSource(prefix),
+      level: 'info',
+      prefix,
+    });
   },
 
   /**
-   * Log warnings. Only outputs in development mode.
+   * Log warnings.
+   * Only outputs in development mode or when debug is enabled.
    */
   warn: (...args: unknown[]): void => {
-    if (DEBUG) {
-      console.warn(...args);
-      if (shouldForward(args)) {
-        bufferLog('warn', args);
-      }
-    }
+    if (!isDebugEnabled()) return;
+
+    const { prefix, event, data } = parseLogArgs(args);
+
+    console.warn(...args);
+
+    debugLog.add({
+      event,
+      data,
+      source: prefixToSource(prefix),
+      level: 'warn',
+      prefix,
+    });
   },
 
   /**
-   * Log errors. Always outputs regardless of environment.
-   * Errors are buffered and immediately flushed to server when configured.
+   * Log errors.
+   * Always outputs regardless of environment.
    */
   error: (...args: unknown[]): void => {
+    const { prefix, event, data } = parseLogArgs(args);
+
     console.error(...args);
-    // Always forward errors to server when configured (and flush immediately)
-    if (mcpClient && forwardToServer) {
-      bufferLog('error', args);
-    }
+
+    debugLog.add({
+      event,
+      data,
+      source: prefixToSource(prefix),
+      level: 'error',
+      prefix,
+    });
   },
 
   /**
-   * Clean up resources (stop timer, remove listeners).
-   * Call this when the SDK is destroyed.
+   * Clean up resources.
    */
   destroy: (): void => {
-    stopFlushTimer();
-    removeUnloadListener();
-    logBuffer = [];
-    mcpClient = null;
-    forwardToServer = false;
+    debugLog.destroy();
   },
 };

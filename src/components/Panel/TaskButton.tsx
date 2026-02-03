@@ -3,6 +3,7 @@
  * 
  * Renders a task action button in chat responses.
  * When clicked, triggers the task execution via the Pillar SDK.
+ * For inline_ui actions, clicking toggles a confirmation card below the button.
  * 
  * Presentation (label, icon) is derived from task name and type.
  * The server only sends: name, task_type, data.
@@ -10,6 +11,8 @@
 
 import Pillar from '../../core/Pillar';
 import type { TaskExecutePayload } from '../../core/events';
+import { createConfirmActionCard } from '../Cards/ConfirmActionCard';
+import { debug } from '../../utils/debug';
 
 /**
  * Task data as received from the AI.
@@ -100,6 +103,7 @@ function getButtonClass(variant: string = 'primary'): string {
  * Create a TaskButton element.
  * 
  * Presentation is derived from task.name and task.taskType.
+ * For inline_ui actions, clicking toggles a confirmation card below the button.
  */
 export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
   const { task, onExecute } = props;
@@ -124,9 +128,21 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
   labelSpan.textContent = label;
   button.appendChild(labelSpan);
 
+  // Track inline card state for inline_ui actions
+  let inlineCardContainer: HTMLDivElement | null = null;
+  let isCardVisible = false;
+
   // Add click handler
   button.addEventListener('click', () => {
     const pillar = Pillar.getInstance();
+    
+    // For inline_ui actions, toggle the confirmation card instead of executing
+    if (task.taskType === 'inline_ui') {
+      toggleInlineCard();
+      return;
+    }
+    
+    // For other actions, execute directly
     if (pillar) {
       const data = task.data || {};
       
@@ -142,6 +158,79 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
     }
     onExecute?.();
   });
+
+  /**
+   * Toggle the inline confirmation card for inline_ui actions.
+   * Creates the card lazily on first click.
+   */
+  function toggleInlineCard(): void {
+    const pillar = Pillar.getInstance();
+    
+    if (isCardVisible && inlineCardContainer) {
+      // Hide the card
+      inlineCardContainer.style.display = 'none';
+      isCardVisible = false;
+      button.classList.remove('pillar-task-btn--active');
+      debug.log('[Pillar] Collapsed inline_ui card:', task.name);
+      return;
+    }
+
+    // Show or create the card
+    if (!inlineCardContainer) {
+      // Create card container - insert after the button's parent (the button group)
+      inlineCardContainer = document.createElement('div');
+      inlineCardContainer.className = 'pillar-task-btn-inline-card';
+      
+      const card = createConfirmActionCard(
+        task,
+        // onConfirm callback
+        (data) => {
+          if (pillar) {
+            pillar.executeTask({
+              id: task.id,
+              name: task.name,
+              taskType: task.taskType,
+              data: data || task.data || {},
+            });
+          }
+          // Collapse card after confirmation
+          if (inlineCardContainer) {
+            inlineCardContainer.style.display = 'none';
+            isCardVisible = false;
+            button.classList.remove('pillar-task-btn--active');
+          }
+          onExecute?.();
+        },
+        // onCancel callback
+        () => {
+          debug.log('[Pillar] Inline_ui action cancelled:', task.name);
+          // Collapse card on cancel
+          if (inlineCardContainer) {
+            inlineCardContainer.style.display = 'none';
+            isCardVisible = false;
+            button.classList.remove('pillar-task-btn--active');
+          }
+        }
+      );
+      
+      inlineCardContainer.appendChild(card);
+      
+      // Insert after the button group (parent of button)
+      const buttonGroup = button.parentElement;
+      if (buttonGroup && buttonGroup.parentElement) {
+        buttonGroup.parentElement.insertBefore(inlineCardContainer, buttonGroup.nextSibling);
+      }
+      
+      debug.log('[Pillar] Created inline_ui card for:', task.name);
+    } else {
+      // Show existing card
+      inlineCardContainer.style.display = 'block';
+    }
+    
+    isCardVisible = true;
+    button.classList.add('pillar-task-btn--active');
+    debug.log('[Pillar] Expanded inline_ui card:', task.name);
+  }
 
   return button;
 }
@@ -254,12 +343,35 @@ export const TASK_BUTTON_STYLES = `
   color: #1a1a1a;
 }
 
+/* Active state for inline_ui buttons with expanded card */
+.pillar-task-btn--active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
 /* Task button group */
 .pillar-task-btn-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+/* Inline card container for inline_ui actions */
+.pillar-task-btn-inline-card {
+  margin-top: 12px;
+  animation: pillar-slide-down 0.15s ease-out;
+}
+
+@keyframes pillar-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Task suggestion card in chat */

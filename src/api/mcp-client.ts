@@ -15,7 +15,7 @@ import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { ExecutionPlan } from '../core/plan';
 import type { UserContextItem } from '../types/user-context';
-import { debug, type LogEntry } from '../utils/debug';
+import { debug, debugLog, type LogEntry } from '../utils/debug';
 import type { ArticleSummary } from './client';
 
 // ============================================================================
@@ -233,6 +233,7 @@ export class MCPClient {
    * Call an MCP tool (non-streaming).
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const startTime = performance.now();
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
       id: this.nextId(),
@@ -243,18 +244,40 @@ export class MCPClient {
       },
     };
 
+    debugLog.add({
+      event: 'network:request',
+      data: { method: 'tools/call', tool: name, url: this.baseUrl },
+      source: 'network',
+      level: 'info',
+    });
+
     const response = await fetch(this.baseUrl, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(request),
     });
 
+    const duration = Math.round(performance.now() - startTime);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      debugLog.add({
+        event: 'network:response',
+        data: { status: response.status, duration, error: errorData.error?.message },
+        source: 'network',
+        level: 'error',
+      });
       throw new Error(errorData.error?.message || `MCP error: ${response.status}`);
     }
 
     const jsonResponse = await response.json() as JSONRPCResponse<ToolResult>;
+
+    debugLog.add({
+      event: 'network:response',
+      data: { status: response.status, duration, method: 'tools/call', tool: name },
+      source: 'network',
+      level: 'info',
+    });
 
     if (jsonResponse.error) {
       throw new Error(jsonResponse.error.message);
@@ -277,6 +300,7 @@ export class MCPClient {
     callbacks: StreamCallbacks,
     signal?: AbortSignal
   ): Promise<ToolResult> {
+    const startTime = performance.now();
     const requestId = this.nextId();
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -289,6 +313,13 @@ export class MCPClient {
       },
     };
 
+    debugLog.add({
+      event: 'network:request',
+      data: { method: 'tools/call', tool: name, stream: true, url: this.baseUrl },
+      source: 'network',
+      level: 'info',
+    });
+
     const response = await fetch(this.baseUrl, {
       method: 'POST',
       headers: {
@@ -299,10 +330,25 @@ export class MCPClient {
       signal,
     });
 
+    const connectionTime = Math.round(performance.now() - startTime);
+
     if (!response.ok) {
       const errorText = await response.text();
+      debugLog.add({
+        event: 'network:response',
+        data: { status: response.status, duration: connectionTime, error: errorText },
+        source: 'network',
+        level: 'error',
+      });
       throw new Error(`MCP streaming request failed: ${response.statusText} - ${errorText}`);
     }
+
+    debugLog.add({
+      event: 'network:stream:connected',
+      data: { status: response.status, connectionTime, tool: name },
+      source: 'network',
+      level: 'info',
+    });
 
     if (!response.body) {
       throw new Error('Response body is null');
@@ -352,6 +398,17 @@ export class MCPClient {
                 if (event.method === 'notifications/progress') {
                   const progress = event.params?.progress;
                   if (progress) {
+                    // Handle debug events from server (for SDK DebugPanel)
+                    if (progress.type === 'debug') {
+                      debugLog.add({
+                        event: progress.event || 'server:event',
+                        data: progress.data,
+                        source: 'server',
+                        level: 'info',
+                      });
+                      continue;
+                    }
+
                     // Handle new nested format: {type: 'progress', data: {...}}
                     // This is the new schema from Phase 1 streaming_events.py
                     if (progress.type === 'progress' && progress.data) {
@@ -494,6 +551,13 @@ export class MCPClient {
       throw error;
     } finally {
       reader.releaseLock();
+      const totalDuration = Math.round(performance.now() - startTime);
+      debugLog.add({
+        event: 'network:stream:complete',
+        data: { duration: totalDuration, tool: name },
+        source: 'network',
+        level: 'info',
+      });
     }
 
     // Build result if not received via final event
@@ -748,6 +812,13 @@ export class MCPClient {
       },
     };
 
+    debugLog.add({
+      event: 'network:request',
+      data: { method: 'action/result', action: actionName, url: this.baseUrl },
+      source: 'network',
+      level: 'info',
+    });
+
     try {
       debug.log(`[MCPClient] Sending action result for "${actionName}"...`);
       
@@ -766,6 +837,12 @@ export class MCPClient {
       
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
+        debugLog.add({
+          event: 'network:response',
+          data: { status: response.status, duration: elapsed, action: actionName, error: errorText },
+          source: 'network',
+          level: 'error',
+        });
         debug.error(
           `[MCPClient] Action result delivery failed: ${response.status} ${response.statusText}`,
           errorText
@@ -773,6 +850,12 @@ export class MCPClient {
         throw new Error(`Failed to send action result: ${response.status}`);
       }
       
+      debugLog.add({
+        event: 'network:response',
+        data: { status: response.status, duration: elapsed, action: actionName },
+        source: 'network',
+        level: 'info',
+      });
       debug.log(`[MCPClient] Action result for "${actionName}" delivered in ${elapsed}ms`);
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
