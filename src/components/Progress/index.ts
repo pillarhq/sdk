@@ -1,2 +1,3 @@
 export { ProgressRow, type ProgressRowProps } from './ProgressRow';
-export { AGUIProgress } from './AGUIProgress';
+export { ProgressStack, type ProgressStackProps } from './ProgressStack';
+export { ReasoningDisclosure, type ReasoningDisclosureProps } from './ReasoningDisclosure';

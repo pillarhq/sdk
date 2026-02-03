@@ -28,18 +28,6 @@ export interface TaskButtonData {
   autoRun?: boolean;
   /** If true, action completes without waiting for host confirmation */
   autoComplete?: boolean;
-  
-  // Legacy fields (may still be sent by older responses)
-  /** @deprecated SDK now derives label from name */
-  label?: string;
-  /** @deprecated SDK now derives icon from taskType */
-  icon?: string;
-  /** @deprecated Use default variant */
-  buttonVariant?: 'default' | 'primary' | 'secondary' | 'outline' | 'ghost';
-  /** @deprecated Included in data.path */
-  path?: string;
-  /** @deprecated Included in data.url */
-  externalUrl?: string;
 }
 
 interface TaskButtonProps {
@@ -111,19 +99,17 @@ function getButtonClass(variant: string = 'primary'): string {
 /**
  * Create a TaskButton element.
  * 
- * Presentation is derived:
- * - Label: from task.label (legacy) or derived from task.name
- * - Icon: from task.icon (legacy) or derived from task.taskType
+ * Presentation is derived from task.name and task.taskType.
  */
 export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
   const { task, onExecute } = props;
   
   const button = document.createElement('button');
-  button.className = getButtonClass(task.buttonVariant || 'primary');
+  button.className = getButtonClass('primary');
   button.type = 'button';
 
-  // Derive icon - use explicit icon if provided, otherwise derive from taskType
-  const iconName = task.icon || getDefaultIcon(task.taskType);
+  // Derive icon from taskType
+  const iconName = getDefaultIcon(task.taskType);
   if (iconName && ICONS[iconName]) {
     const iconSpan = document.createElement('span');
     iconSpan.className = 'pillar-task-btn__icon';
@@ -131,8 +117,8 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
     button.appendChild(iconSpan);
   }
 
-  // Derive label - use explicit label if provided, otherwise derive from name
-  const label = task.label || deriveLabel(task.name);
+  // Derive label from name
+  const label = deriveLabel(task.name);
   const labelSpan = document.createElement('span');
   labelSpan.className = 'pillar-task-btn__label';
   labelSpan.textContent = label;
@@ -142,20 +128,15 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
   button.addEventListener('click', () => {
     const pillar = Pillar.getInstance();
     if (pillar) {
-      // Build the data payload
       const data = task.data || {};
-      
-      // Extract path/url from data if not at top level (new format)
-      const path = task.path || (data.path as string | undefined);
-      const externalUrl = task.externalUrl || (data.url as string | undefined);
       
       const payload: TaskExecutePayload = {
         id: task.id,
         name: task.name,
         data: data,
         taskType: task.taskType,
-        path: path,
-        externalUrl: externalUrl,
+        path: data.path as string | undefined,
+        externalUrl: data.url as string | undefined,
       };
       pillar.executeTask(payload);
     }

@@ -9,6 +9,7 @@ import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { ExecutionPlan } from '../core/plan';
 import type { UserContextItem } from '../types/user-context';
+import { debug } from '../utils/debug';
 import type { ArticleSummary } from './client';
 
 // ============================================================================
@@ -96,14 +97,14 @@ export interface StepCompleteResponse {
   error?: string;
 }
 
-/** Query request from agent (for executing actions that return data) */
-export interface QueryRequest {
-  /** Unique request ID */
-  request_id: string;
+/** Action request from agent (unified for all action execution) */
+export interface ActionRequest {
   /** Action name to execute */
   action_name: string;
-  /** Arguments for the action */
-  arguments: Record<string, unknown>;
+  /** Parameters for the action */
+  parameters: Record<string, unknown>;
+  /** Full action definition (optional, for handler lookup) */
+  action?: ActionData;
 }
 
 /** Streaming callbacks for tool calls */
@@ -122,17 +123,21 @@ export interface StreamCallbacks {
   onConversationStarted?: (conversationId: string, messageId?: string) => void;
   /** Called when stream is complete */
   onComplete?: (conversationId?: string, queryLogId?: string) => void;
-  /** Called for progress updates - now markdown-based */
+  /** Called for progress updates (search, query, generating, thinking, etc.) */
   onProgress?: (progress: {
-    progress_id?: string;     // Unique ID for updating/replacing events
-    markdown: string;         // Markdown content to render
-    is_streaming?: boolean;   // True if this is a streaming chunk
-    is_step_start?: boolean;  // True if this starts a new reasoning step
-    is_step_complete?: boolean; // True if this completes a reasoning step
-    iteration?: number;       // Iteration number for multi-step reasoning
+    kind: string;              // Event type: "thinking", "search", "tool_call", "plan", "generating"
+    id?: string;               // Unique ID for streaming updates (new schema)
+    label?: string;            // Display label from server (e.g., "Thinking...", "Searching...")
+    status?: 'active' | 'done' | 'error';  // Event status for UI rendering
+    text?: string;             // Streaming text content (delta mode)
+    children?: Array<{id: string; label: string; url?: string}>;  // Sub-items (e.g., sources)
+    metadata?: Record<string, unknown>;  // Event-specific data
+    // Legacy fields for backwards compatibility
+    progress_id?: string;      // Deprecated: use id
+    message?: string;          // Deprecated: use label
   }) => void;
-  /** Called when agent requests data from host app */
-  onQueryRequest?: (request: QueryRequest) => Promise<void>;
+  /** Called when agent requests action execution (unified handler) */
+  onActionRequest?: (request: ActionRequest) => Promise<void>;
 }
 
 /** Image for chat requests (from upload-image endpoint) */
@@ -157,21 +162,8 @@ export class MCPClient {
   private config: ResolvedConfig;
   private requestId = 0;
 
-  // External user ID for cross-device conversation history
-  private _externalUserId: string | null = null;
-
-  // Visitor and session IDs (initialized eagerly on construction)
-  private _visitorId: string = '';
-  private _sessionId: string = '';
-
   constructor(config: ResolvedConfig) {
     this.config = config;
-    
-    // Initialize visitor and session IDs immediately
-    this._visitorId = this.initVisitorId();
-    this._sessionId = this.initSessionId();
-    // External user ID is set via identify() - no localStorage persistence
-    this._externalUserId = null;
   }
 
   /**
@@ -199,84 +191,11 @@ export class MCPClient {
     return `${this.config.apiBaseUrl}/mcp/`;
   }
 
-  /**
-   * Initialize the persistent visitor ID on SDK init.
-   * Stored in localStorage to persist across sessions.
-   */
-  private initVisitorId(): string {
-    if (typeof window === 'undefined') return '';
-    
-    const KEY = 'pillar_visitor_id';
-    try {
-      let id = localStorage.getItem(KEY);
-      if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem(KEY, id);
-      }
-      return id;
-    } catch {
-      // localStorage might be unavailable (e.g., private browsing)
-      return '';
-    }
-  }
-
-  /**
-   * Initialize the session ID on SDK init.
-   * Stored in sessionStorage to persist only for the current browser session.
-   */
-  private initSessionId(): string {
-    if (typeof window === 'undefined') return '';
-    
-    const KEY = 'pillar_session_id';
-    try {
-      let id = sessionStorage.getItem(KEY);
-      if (!id) {
-        id = crypto.randomUUID();
-        sessionStorage.setItem(KEY, id);
-      }
-      return id;
-    } catch {
-      // sessionStorage might be unavailable
-      return '';
-    }
-  }
-
-  /**
-   * Get the current page URL for analytics tracking.
-   */
-  private getPageUrl(): string {
-    if (typeof window === 'undefined') return '';
-    return window.location.href;
-  }
-
-  /**
-   * Set the external user ID for authenticated users.
-   * This ID will be included in all subsequent requests.
-   */
-  setExternalUserId(userId: string): void {
-    this._externalUserId = userId;
-  }
-
-  /**
-   * Clear the external user ID (for logout).
-   */
-  clearExternalUserId(): void {
-    this._externalUserId = null;
-  }
-
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey,
-      'x-visitor-id': this._visitorId,
-      'x-session-id': this._sessionId,
-      'x-page-url': this.getPageUrl(),
     };
-
-    // Add external user ID header for authenticated users (enables cross-device history)
-    if (this._externalUserId) {
-      headers['x-external-user-id'] = this._externalUserId;
-    }
 
     // Add session ID for request correlation (critical for query actions)
     const sessionId = this.getSessionId();
@@ -423,17 +342,39 @@ export class MCPClient {
                   throw new Error(event.error.message);
                 }
 
-                // Handle streaming notifications (notifications/progress)
+                // Handle streaming token events (notifications/progress)
                 if (event.method === 'notifications/progress') {
                   const progress = event.params?.progress;
                   if (progress) {
-                    // Handle special control events (not markdown-based)
+                    // Handle new nested format: {type: 'progress', data: {...}}
+                    // This is the new schema from Phase 1 streaming_events.py
+                    if (progress.type === 'progress' && progress.data) {
+                      const data = progress.data;
+                      debug.log(`[MCPClient] Progress event (new schema): ${data.kind}`, data);
+                      
+                      // Map new schema to ProgressEvent
+                      callbacks.onProgress?.({
+                        kind: data.kind,
+                        id: data.id,
+                        label: data.label,
+                        status: data.status,
+                        text: data.text,        // Delta text - store will accumulate
+                        children: data.children,
+                        metadata: data.metadata,
+                      });
+                      continue;
+                    }
+
+                    // Log all progress events for debugging (except tokens which are too verbose)
+                    if (progress.kind !== 'token') {
+                      debug.log(`[MCPClient] Progress event: ${progress.kind}`, progress);
+                    }
+
                     if (progress.kind === 'token' && progress.token) {
-                      // Token streaming for response text
                       collectedText.push(progress.token);
                       callbacks.onToken?.(progress.token);
                     } else if (progress.kind === 'conversation_started') {
-                      // Conversation started - early conversation_id
+                      // Conversation started - early conversation_id from pre-generated UUID
                       callbacks.onConversationStarted?.(
                         progress.conversation_id,
                         progress.message_id
@@ -444,30 +385,50 @@ export class MCPClient {
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
                       break;
-                    } else if (progress.kind === 'query_request') {
-                      // Query request - agent needs data from host app
-                      if (callbacks.onQueryRequest) {
-                        const queryRequest: QueryRequest = {
-                          request_id: progress.request_id || crypto.randomUUID(),
+                    } else if (progress.kind === 'action_request') {
+                      // Unified action request - agent wants to execute any action
+                      debug.log('[MCPClient] Received action_request:', progress.action_name, progress.parameters);
+                      
+                      // Validate required fields
+                      if (!progress.action_name || typeof progress.action_name !== 'string' || progress.action_name.trim() === '') {
+                        debug.error('[MCPClient] Received action_request with missing or invalid action_name:', progress);
+                        continue;
+                      }
+                      
+                      if (callbacks.onActionRequest) {
+                        const actionRequest: ActionRequest = {
                           action_name: progress.action_name,
-                          arguments: progress.arguments || {},
+                          parameters: progress.parameters || {},
+                          action: progress.action,
                         };
-                        callbacks.onQueryRequest(queryRequest).catch((error) => {
-                          console.error('[MCPClient] Query request handler failed:', error);
+                        
+                        // Execute async but don't await - let the stream continue
+                        callbacks.onActionRequest(actionRequest).catch((error) => {
+                          debug.error('[MCPClient] Action request handler failed:', error);
                         });
                       } else {
-                        console.warn('[MCPClient] Received query_request but no handler registered');
+                        debug.warn('[MCPClient] Received action_request but no handler registered');
                       }
-                    } else if (progress.markdown || progress.is_step_start || progress.is_step_complete) {
-                      // Markdown-based progress events (thinking, search results, step markers, etc.)
-                      // Note: step_start may have empty markdown, so also check for step flags
+                    } else {
+                      // Progress types - pass through all fields from server
+                      // The backend sends id, label, status, text for the new schema
+                      // Also supports legacy progress_id and message fields
                       callbacks.onProgress?.({
-                        progress_id: progress.progress_id,
-                        markdown: progress.markdown || '',
-                        is_streaming: progress.is_streaming,
-                        is_step_start: progress.is_step_start,
-                        is_step_complete: progress.is_step_complete,
-                        iteration: progress.iteration,
+                        kind: progress.kind,
+                        id: progress.id,  // New schema: unique ID for event updates
+                        label: progress.label,
+                        status: progress.status,  // New schema: active/done/error
+                        text: progress.text || progress.content,  // content is legacy for thinking events
+                        children: progress.children,  // New schema: sub-items
+                        message: progress.message,  // Legacy: display message
+                        progress_id: progress.progress_id,  // Legacy: unique ID
+                        metadata: {
+                          sources: progress.sources || progress.metadata?.sources,
+                          result_count: progress.result_count ?? progress.metadata?.result_count,
+                          query: progress.query || progress.metadata?.query,
+                          action_name: progress.action_name || progress.metadata?.action_name,
+                          no_sources_used: progress.no_sources_used ?? progress.metadata?.no_sources_used,
+                        },
                       });
                     }
                   }
@@ -501,7 +462,7 @@ export class MCPClient {
                 }
               }
             } catch (parseError) {
-              console.error('[MCPClient] Failed to parse event:', parseError, line);
+              debug.error('[MCPClient] Failed to parse event:', parseError, line);
             }
           }
         }
@@ -511,7 +472,19 @@ export class MCPClient {
         // Request was cancelled
         throw error;
       }
-      callbacks.onError?.(error instanceof Error ? error.message : 'Stream reading failed');
+      
+      // Emit a progress event for the error so UI can display it
+      const errorMessage = error instanceof Error ? error.message : 'Stream reading failed';
+      callbacks.onProgress?.({
+        kind: 'error',
+        id: 'stream-error',
+        label: 'Connection interrupted',
+        status: 'error',
+        text: errorMessage,
+        metadata: { error: errorMessage },
+      });
+      
+      callbacks.onError?.(errorMessage);
       throw error;
     } finally {
       reader.releaseLock();
@@ -683,36 +656,15 @@ export class MCPClient {
    * Retry a failed step.
    * 
    * Increments the retry count and resets the step to ready status.
-   * Only works if the step is retriable and hasn't exceeded max_retries.
    * 
    * @param planId - UUID of the plan
    * @param stepId - UUID of the step to retry
    * @returns Updated plan with step reset to ready
    */
   async retryStep(planId: string, stepId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/retry-step', {
+    const response = await this.callTool('plans/retry', {
       plan_id: planId,
       step_id: stepId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Mark a step as failed.
-   * 
-   * Records the error and determines if the plan should also fail
-   * (if step is not retriable or out of retries).
-   * 
-   * @param planId - UUID of the plan
-   * @param stepId - UUID of the failed step
-   * @param errorMessage - Optional error message
-   * @returns Updated plan with failed step
-   */
-  async failStep(planId: string, stepId: string, errorMessage?: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/fail-step', {
-      plan_id: planId,
-      step_id: stepId,
-      error_message: errorMessage || '',
     });
     return response as unknown as { plan: ExecutionPlan };
   }
@@ -725,7 +677,7 @@ export class MCPClient {
    * @returns Updated plan with skipped step and next step ready
    */
   async skipStep(planId: string, stepId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/skip-step', {
+    const response = await this.callTool('plans/skip', {
       plan_id: planId,
       step_id: stepId,
     });
@@ -775,13 +727,14 @@ export class MCPClient {
    * 
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
-   * @returns Promise that resolves when the request completes
+   * @returns Promise that resolves when the result is delivered, or rejects on error
    */
   async sendActionResult(actionName: string, result: unknown): Promise<void> {
-    const requestId = this.nextId();
+    const startTime = performance.now();
+    
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
-      id: requestId,
+      id: this.nextId(),
       method: 'action/result',
       params: {
         action_name: actionName,
@@ -789,44 +742,42 @@ export class MCPClient {
       },
     };
 
-    const body = JSON.stringify(request);
-    const sessionId = this.getSessionId();
-    
-    console.log(
-      `[MCPClient] Sending action result: action=${actionName}, ` +
-      `request_id=${requestId}, session=${sessionId?.slice(0, 8) || 'none'}..., ` +
-      `size=${body.length} bytes`
-    );
-
     try {
+      debug.log(`[MCPClient] Sending action result for "${actionName}"...`);
+      
+      // Yield to event loop before fetch to ensure other async operations can complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: this.headers,
-        body,
+        body: JSON.stringify(request),
+        // Use keepalive to ensure request completes even if page unloads
+        keepalive: true,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.error(
-          `[MCPClient] Action result delivery failed: action=${actionName}, ` +
-          `status=${response.status}, error=${errorText}`
-        );
-        return;
-      }
-
-      const responseData = await response.json().catch(() => null);
       
-      console.log(
-        `[MCPClient] Action result delivered: action=${actionName}, ` +
-        `signaled=${responseData?.result?.signaled ?? 'unknown'}`
-      );
+      const elapsed = Math.round(performance.now() - startTime);
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        debug.error(
+          `[MCPClient] Action result delivery failed: ${response.status} ${response.statusText}`,
+          errorText
+        );
+        throw new Error(`Failed to send action result: ${response.status}`);
+      }
+      
+      debug.log(`[MCPClient] Action result for "${actionName}" delivered in ${elapsed}ms`);
     } catch (error) {
-      console.error(
-        `[MCPClient] Action result fetch failed: action=${actionName}, ` +
-        `error=${error instanceof Error ? error.message : String(error)}`
+      const elapsed = Math.round(performance.now() - startTime);
+      debug.error(
+        `[MCPClient] Failed to send action result for "${actionName}" after ${elapsed}ms:`,
+        error
       );
+      throw error;
     }
   }
+
 }
 
 /**

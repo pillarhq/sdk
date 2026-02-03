@@ -7,6 +7,7 @@ import { render } from 'preact';
 import type { APIClient } from '../../api/client';
 import type { ResolvedConfig } from '../../core/config';
 import type { EventEmitter } from '../../core/events';
+import { debug } from '../../utils/debug';
 import { resetChat, setPendingMessage, triggerInputFocus, triggerSubmitPending } from '../../store/chat';
 import {
   closePanel,
@@ -482,7 +483,7 @@ export class Panel {
       // CSS selector
       mountTarget = document.querySelector<HTMLElement>(container);
       if (!mountTarget) {
-        console.warn(`[Pillar] Container element not found: ${container}, falling back to root container`);
+        debug.warn(`[Pillar] Container element not found: ${container}, falling back to root container`);
         mountTarget = defaultTarget;
       }
     } else if (container instanceof HTMLElement) {
@@ -502,7 +503,7 @@ export class Panel {
    */
   mountTo(container: HTMLElement): void {
     if (!this.host) {
-      console.warn('[Pillar] Panel host not created yet');
+      debug.warn('[Pillar] Panel host not created yet');
       return;
     }
 

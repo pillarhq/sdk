@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { SuggestedQuestion } from '../../api/client';
 import { setPendingMessage } from '../../store/chat';
+import { debug } from '../../utils/debug';
 import { navigateToChat } from '../../store/router';
 import { useAPI } from '../context';
 import { UnifiedChatInput } from '../Panel/UnifiedChatInput';
@@ -28,7 +29,7 @@ export function HomeView() {
         }
       } catch (err) {
         if (mounted) {
-          console.error('[Pillar] Failed to load suggested questions:', err);
+          debug.error('[Pillar] Failed to load suggested questions:', err);
           // On error, just show empty state - not critical
           setQuestions([]);
           setLoading(false);

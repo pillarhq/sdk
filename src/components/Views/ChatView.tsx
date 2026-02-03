@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { ArticleSummary } from '../../api/client';
 import Pillar from '../../core/Pillar';
+import { debug } from '../../utils/debug';
 import type { ExecutionPlan } from '../../core/plan';
 import {
   addAssistantMessage,
@@ -13,7 +14,6 @@ import {
   addUserMessage,
   clearPendingMessage,
   clearPendingUserContext,
-  clearProgressEvents,
   clearProgressStatus,
   conversationId,
   isLoading,
@@ -31,7 +31,7 @@ import {
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
 } from '../../store/chat';
-import { ProgressRow, AGUIProgress } from '../Progress';
+import { ProgressRow, ProgressStack, ReasoningDisclosure } from '../Progress';
 import { hasActivePlan } from '../../store/plan';
 import type { UserContextItem } from '../../types/user-context';
 import { PreactMarkdown } from '../../utils/preact-markdown';
@@ -122,7 +122,7 @@ export function ChatView() {
    * Passes the plan to PlanExecutor for orchestration.
    */
   const handlePlanReceived = useCallback((plan: ExecutionPlan) => {
-    console.log('[Pillar] Plan received:', plan.id, plan.goal);
+    debug.log('[Pillar] Plan received:', plan.id, plan.goal);
     const pillar = Pillar.getInstance();
     if (pillar) {
       pillar.handlePlanReceived(plan);
@@ -148,18 +148,18 @@ export function ChatView() {
   const handleActionsReceived = useCallback((actions: TaskButtonData[]): TaskButtonData[] => {
     const pillar = Pillar.getInstance();
     
-    console.log('[Pillar] handleActionsReceived called with', actions.length, 'actions');
-    console.log('[Pillar] Actions detail:', actions.map(a => ({ name: a.name, autoRun: a.autoRun })));
+    debug.log('[Pillar] handleActionsReceived called with', actions.length, 'actions');
+    debug.log('[Pillar] Actions detail:', actions.map(a => ({ name: a.name, autoRun: a.autoRun })));
     
     // Separate auto-run actions from manual actions
     const autoRunActions = actions.filter(a => a.autoRun === true);
     const manualActions = actions.filter(a => !a.autoRun);
     
-    console.log('[Pillar] Auto-run actions:', autoRunActions.length, ', Manual actions:', manualActions.length);
+    debug.log('[Pillar] Auto-run actions:', autoRunActions.length, ', Manual actions:', manualActions.length);
     
     // Execute auto-run actions immediately
     if (pillar && autoRunActions.length > 0) {
-      console.log('[Pillar] Executing auto-run actions...');
+      debug.log('[Pillar] Executing auto-run actions...');
       autoRunActions.forEach(action => {
         const data = action.data || {};
         const path = (data.path as string | undefined);
@@ -171,7 +171,7 @@ export function ChatView() {
           setActionPending(messageIndex, action.name);
         }
         
-        console.log('[Pillar] Executing action:', action.name);
+        debug.log('[Pillar] Executing action:', action.name);
         pillar.executeTask({
           id: action.id,
           name: action.name,
@@ -186,7 +186,7 @@ export function ChatView() {
       // This prevents confusing UX where buttons appear briefly before navigation
       return [];
     } else if (!pillar) {
-      console.warn('[Pillar] No Pillar instance available for auto-run');
+      debug.warn('[Pillar] No Pillar instance available for auto-run');
       // Return all as buttons since we can't execute
       return actions;
     } else {
@@ -198,9 +198,6 @@ export function ChatView() {
   const sendMessage = useCallback(async (message: string, userContext?: UserContextItem[], images?: ChatImage[]) => {
     // Add user message with context and images
     addUserMessage(message, userContext, images);
-
-    // Clear previous progress events before starting new response
-    clearProgressEvents();
 
     // Show loading state
     setLoading(true);
@@ -240,17 +237,56 @@ export function ChatView() {
           addProgressEvent(progress as StoreProgressEvent);
         },
         // Conversation started callback - store ID early for optimistic UI
-        (convId) => {
-          setConversationId(convId);
+        (conversationIdFromServer) => {
+          setConversationId(conversationIdFromServer);
         },
-        // Query request callback - execute query action and send result back
+        // Unified action request callback - execute action and send result back
         async (request) => {
-          console.log('[Pillar] Received query_request:', request.action_name, request.arguments);
+          const requestStartTime = performance.now();
+          const startTimestamp = new Date().toISOString();
+          debug.log('[Pillar] Received action_request:', request.action_name, request.parameters, `at ${startTimestamp}`);
           const pillar = Pillar.getInstance();
           if (pillar) {
-            await pillar.executeQueryAction(request.action_name, request.arguments);
+            try {
+              // Get handler for the action
+              const handler = pillar.getHandler(request.action_name);
+              let result: unknown = undefined;
+              
+              if (handler) {
+                // Execute the registered handler with parameters
+                result = await Promise.resolve(handler(request.parameters));
+              } else {
+                // Fall back to executeTask for built-in action types
+                await pillar.executeTask({
+                  id: `action-${request.action_name}`,
+                  name: request.action_name,
+                  data: request.parameters,
+                });
+              }
+              
+              // Send success result back to agent
+              await api.mcp.sendActionResult(request.action_name, { success: true, result });
+              
+              const elapsed = Math.round(performance.now() - requestStartTime);
+              debug.log(`[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              
+              // Send failure result back to agent
+              await api.mcp.sendActionResult(request.action_name, { 
+                success: false, 
+                error: errorMessage 
+              });
+              
+              const elapsed = Math.round(performance.now() - requestStartTime);
+              debug.error(`[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`, error);
+            }
           } else {
-            console.error('[Pillar] SDK not initialized, cannot execute query action');
+            debug.error('[Pillar] SDK not initialized, cannot execute action');
+            await api.mcp.sendActionResult(request.action_name, { 
+              success: false, 
+              error: 'SDK not initialized' 
+            });
           }
         }
       );
@@ -286,12 +322,11 @@ export function ChatView() {
         setConversationId(response.conversationId);
       }
     } catch (error) {
-      console.error('[Pillar] Chat error:', error);
+      debug.error('[Pillar] Chat error:', error);
       updateLastAssistantMessage('Sorry, I encountered an error. Please try again.');
     } finally {
       setLoading(false);
       clearProgressStatus();
-      clearProgressEvents();
     }
   }, [api, handleActionsReceived]);
 
@@ -315,9 +350,6 @@ export function ChatView() {
       images.length > 0 ? images : undefined
     );
   }, [sendMessage]);
-
-  // Sources are displayed but not clickable (article views have been removed)
-  // TODO: Consider linking sources to external URLs if available
 
   // Create refs map for action containers per message
   const actionContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -352,7 +384,7 @@ export function ChatView() {
               },
               // onCancel callback
               () => {
-                console.log('[Pillar] Confirm action cancelled:', action.name);
+                debug.log('[Pillar] Confirm action cancelled:', action.name);
               }
             );
             container.appendChild(card);
@@ -410,33 +442,19 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Live streaming progress - use AG-UI state-based component */}
-                  {!msg.content && isLoading.value && index === messages.value.length - 1 && (
-                    <AGUIProgress />
+                  {/* Live streaming progress - show ProgressStack during loading */}
+                  {!msg.content && isLoading.value && index === messages.value.length - 1 && msg.progressEvents && msg.progressEvents.length > 0 && (
+                    <ProgressStack events={msg.progressEvents} />
                   )}
-                  {/* Legacy progress events during loading (fallback) */}
+                  {/* Progress events after loading complete but no content yet */}
                   {!msg.content && !isLoading.value && msg.progressEvents && msg.progressEvents.length > 0 && (
-                    <div class="_pillar-progress-events pillar-progress-events">
-                      {msg.progressEvents.map((event, idx) => (
-                        <ProgressRow
-                          key={event.progress_id || idx}
-                          progress={event}
-                        />
-                      ))}
-                    </div>
+                    <ProgressStack events={msg.progressEvents} />
                   )}
                   {msg.content ? (
                     <>
-                      {/* Progress events rendered as markdown (collapsible reasoning) */}
-                      {msg.progressEvents && msg.progressEvents.length > 0 && (
-                        <div class="_pillar-reasoning-events pillar-reasoning-events">
-                          {msg.progressEvents.map((event, idx) => (
-                            <ProgressRow
-                              key={event.progress_id || idx}
-                              progress={event}
-                            />
-                          ))}
-                        </div>
+                      {/* Progress events as collapsible disclosure - hide when plan is active since plan shows steps */}
+                      {msg.progressEvents && msg.progressEvents.length > 0 && !hasActivePlan.value && (
+                        <ReasoningDisclosure events={msg.progressEvents} />
                       )}
                       {/* Main message content rendered as markdown */}
                       <div class="_pillar-message-assistant pillar-message-assistant">

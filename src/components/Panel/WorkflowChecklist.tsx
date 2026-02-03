@@ -13,39 +13,7 @@ import {
 } from '../../store/workflow';
 import type { WorkflowStep, WorkflowStepStatus } from '../../core/workflow';
 import Pillar from '../../core/Pillar';
-
-// ============================================================================
-// Icons
-// ============================================================================
-
-const ICONS = {
-  pending: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`,
-  awaiting: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`,
-  active: `<svg class="pillar-workflow-step__spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
-  completed: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9,12 12,15 16,10"/></svg>`,
-  skipped: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-dasharray="4,2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
-  failed: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-  workflow: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
-};
-
-function getStatusIcon(status: WorkflowStepStatus): string {
-  switch (status) {
-    case 'pending':
-      return ICONS.pending;
-    case 'awaiting_initiation':
-      return ICONS.awaiting;
-    case 'active':
-      return ICONS.active;
-    case 'completed':
-      return ICONS.completed;
-    case 'skipped':
-      return ICONS.skipped;
-    case 'failed':
-      return ICONS.failed;
-    default:
-      return ICONS.pending;
-  }
-}
+import { getWorkflowStatusIcon, getWorkflowIcon } from '../shared/icons';
 
 // ============================================================================
 // WorkflowStep Component
@@ -76,7 +44,7 @@ function WorkflowStepItem({ step, isCurrentStep }: WorkflowStepItemProps) {
   return (
     <div class={statusClass}>
       <div class="pillar-workflow-step__icon">
-        <span dangerouslySetInnerHTML={{ __html: getStatusIcon(step.status) }} />
+        <span dangerouslySetInnerHTML={{ __html: getWorkflowStatusIcon(step.status, 18, 'pillar-workflow-step__spinner') }} />
       </div>
       <div class="pillar-workflow-step__content">
         <div class="pillar-workflow-step__label">{step.label}</div>
@@ -134,7 +102,7 @@ export function WorkflowChecklist() {
     <div class="pillar-workflow">
       <div class="pillar-workflow__header">
         <div class="pillar-workflow__icon">
-          <span dangerouslySetInnerHTML={{ __html: ICONS.workflow }} />
+          <span dangerouslySetInnerHTML={{ __html: getWorkflowIcon(16) }} />
         </div>
         <div class="pillar-workflow__title">{workflow.title}</div>
         <div class="pillar-workflow__progress">

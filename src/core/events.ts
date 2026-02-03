@@ -6,6 +6,7 @@ import type { ResolvedThemeConfig } from './config';
 import type { Context, UserProfile } from './context';
 import type { ExecutionPlan, ExecutionStep } from './plan';
 import type { Workflow, WorkflowStep } from './workflow';
+import { debug } from '../utils/debug';
 
 export type EventCallback<T = unknown> = (data: T) => void;
 
@@ -215,7 +216,7 @@ export class EventEmitter {
         try {
           callback(data);
         } catch (error) {
-          console.error(`[Pillar] Error in event handler for "${event}":`, error);
+          debug.error(`[Pillar] Error in event handler for "${event}":`, error);
         }
       });
     }

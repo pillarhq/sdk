@@ -9,9 +9,9 @@ import type { Context, Suggestion, UserProfile } from '../core/context';
 import type { ExecutionPlan } from '../core/plan';
 import type { Workflow } from '../core/workflow';
 import type { UserContextItem } from '../types/user-context';
-import type { ActionData, ChatImage, ImageUploadResponse, QueryRequest } from './mcp-client';
+import { debug } from '../utils/debug';
+import type { ActionData, ActionRequest, ChatImage, ImageUploadResponse } from './mcp-client';
 import { MCPClient, actionToTaskButton } from './mcp-client';
-import { AGUIClientAdapter } from './ag-ui-adapter';
 
 // ============================================================================
 // Types
@@ -45,13 +45,33 @@ export interface ChatResponse {
   actions?: TaskButtonData[];
 }
 
+/**
+ * Child item within a progress event (e.g., search source, plan step).
+ */
+export interface ProgressChild {
+  id: string;
+  label: string;
+  url?: string;              // For clickable items like sources
+}
+
+/**
+ * Progress event for tracking AI response generation steps.
+ * Uses a generic design where the server controls display text via `label`.
+ * 
+ * The new schema uses `id` and `status` fields. Legacy fields are kept
+ * for backwards compatibility with older backend versions.
+ */
 export interface ProgressEvent {
-  progress_id?: string;      // Unique ID for updating/replacing events (enables streaming)
-  markdown: string;          // Markdown content to render
-  is_streaming?: boolean;    // True if this is a streaming chunk
-  is_step_start?: boolean;   // True if this starts a new reasoning step
-  is_step_complete?: boolean; // True if this completes a reasoning step
-  iteration?: number;        // Iteration number for multi-step reasoning
+  kind: string;              // Event type: "thinking", "search", "tool_call", "plan", "generating"
+  id?: string;               // Unique ID for streaming updates (new schema)
+  label?: string;            // Display label from server (e.g., "Thinking...", "Searching...")
+  status?: 'active' | 'done' | 'error';  // Event status for UI rendering
+  text?: string;             // Accumulated streaming text (delta mode - appended by store)
+  children?: ProgressChild[];  // Sub-items (e.g., sources, plan steps)
+  metadata?: Record<string, unknown>;  // Event-specific data
+  // Legacy fields for backwards compatibility
+  progress_id?: string;      // Deprecated: use id
+  message?: string;          // Deprecated: use label
 }
 
 /**
@@ -107,42 +127,21 @@ export class APIClient {
   private config: ResolvedConfig;
   private abortControllers: Map<string, AbortController> = new Map();
   private mcpClient: MCPClient;
-  private aguiClient: AGUIClientAdapter;
 
   // External user ID for cross-device conversation history
   private _externalUserId: string | null = null;
 
-  // Visitor and session IDs (initialized eagerly on construction)
-  private _visitorId: string = '';
-  private _sessionId: string = '';
-
   constructor(config: ResolvedConfig) {
     this.config = config;
-    // MCPClient is still used for plan management and other non-streaming operations
     this.mcpClient = new MCPClient(config);
-    // AG-UI client is used for all chat streaming
-    this.aguiClient = new AGUIClientAdapter(config);
-    
-    // Initialize visitor and session IDs immediately
-    this._visitorId = this.initVisitorId();
-    this._sessionId = this.initSessionId();
-    // External user ID is set via identify() - no localStorage persistence
-    this._externalUserId = null;
   }
 
   /**
    * Get the underlying MCP client.
-   * Used by Pillar for plan management operations.
+   * Used by Pillar for direct MCP operations like sendActionResult.
    */
   get mcp(): MCPClient {
     return this.mcpClient;
-  }
-
-  /**
-   * Get the AG-UI client adapter for chat operations.
-   */
-  get agui(): AGUIClientAdapter {
-    return this.aguiClient;
   }
 
   private get baseUrl(): string {
@@ -155,8 +154,6 @@ export class APIClient {
    */
   setExternalUserId(userId: string): void {
     this._externalUserId = userId;
-    // Also update the MCP client
-    this.mcpClient.setExternalUserId(userId);
   }
 
   /**
@@ -164,8 +161,6 @@ export class APIClient {
    */
   clearExternalUserId(): void {
     this._externalUserId = null;
-    // Also clear from the MCP client
-    this.mcpClient.clearExternalUserId();
   }
 
   // ============================================================================
@@ -173,10 +168,10 @@ export class APIClient {
   // ============================================================================
 
   /**
-   * Initialize the persistent visitor ID on SDK init.
+   * Get or create a persistent visitor ID.
    * Stored in localStorage to persist across sessions.
    */
-  private initVisitorId(): string {
+  private getVisitorId(): string {
     if (typeof window === 'undefined') return '';
     
     const KEY = 'pillar_visitor_id';
@@ -194,10 +189,10 @@ export class APIClient {
   }
 
   /**
-   * Initialize the session ID on SDK init.
+   * Get or create a session ID.
    * Stored in sessionStorage to persist only for the current browser session.
    */
-  private initSessionId(): string {
+  private getSessionId(): string {
     if (typeof window === 'undefined') return '';
     
     const KEY = 'pillar_session_id';
@@ -226,8 +221,8 @@ export class APIClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey, // Product key for middleware resolution
-      'x-visitor-id': this._visitorId,
-      'x-session-id': this._sessionId,
+      'x-visitor-id': this.getVisitorId(),
+      'x-session-id': this.getSessionId(),
       'x-page-url': this.getPageUrl(),
     };
 
@@ -281,7 +276,7 @@ export class APIClient {
       if ((error as Error).name === 'AbortError') {
         throw error; // Re-throw abort errors
       }
-      console.error(`[Pillar API] Error fetching ${endpoint}:`, error);
+      debug.error(`[Pillar API] Error fetching ${endpoint}:`, error);
       throw error;
     } finally {
       if (requestId) {
@@ -313,110 +308,13 @@ export class APIClient {
       );
       
       if (!response.ok) {
-        console.warn('[Pillar] Failed to fetch embed config:', response.status);
+        debug.warn('[Pillar] Failed to fetch embed config:', response.status);
         return null;
       }
       
       return await response.json();
     } catch (error) {
-      console.warn('[Pillar] Failed to fetch embed config:', error);
-      return null;
-    }
-  }
-
-  // ============================================================================
-  // User Identification
-  // ============================================================================
-
-  /**
-   * Identify the current user after login.
-   * Links the anonymous visitor to the authenticated user ID, enabling
-   * cross-device conversation history.
-   * 
-   * @param userId - Client's authenticated user ID
-   * @param profile - Optional user profile data
-   */
-  async identify(
-    userId: string,
-    profile?: { name?: string; email?: string; metadata?: Record<string, unknown> }
-  ): Promise<void> {
-    const url = `${this.config.apiBaseUrl}/mcp/identify/`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        userId,
-        name: profile?.name,
-        email: profile?.email,
-        metadata: profile?.metadata,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Identify failed: ${response.status}`);
-    }
-  }
-
-  // ============================================================================
-  // Conversation History
-  // ============================================================================
-
-  /**
-   * List past conversations for the current visitor.
-   * 
-   * @param limit - Max number of conversations to return (default: 20, max: 50)
-   * @returns List of conversation summaries
-   */
-  async listConversations(limit: number = 20): Promise<ConversationSummary[]> {
-    const url = `${this.config.apiBaseUrl}/mcp/conversations/?limit=${Math.min(limit, 50)}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.headers,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to list conversations: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.conversations || [];
-    } catch (error) {
-      console.warn('[Pillar] Failed to list conversations:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get a single conversation with all messages.
-   * 
-   * @param conversationId - The conversation ID to fetch
-   * @returns Full conversation with messages
-   */
-  async getConversation(conversationId: string): Promise<ConversationDetail | null> {
-    const url = `${this.config.apiBaseUrl}/mcp/conversations/${conversationId}/`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to get conversation: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.warn('[Pillar] Failed to get conversation:', error);
+      debug.warn('[Pillar] Failed to fetch embed config:', error);
       return null;
     }
   }
@@ -443,7 +341,7 @@ export class APIClient {
       
       return [];
     } catch (error) {
-      console.warn('[Pillar] Failed to get suggested questions:', error);
+      debug.warn('[Pillar] Failed to get suggested questions:', error);
       return [];
     }
   }
@@ -474,29 +372,66 @@ export class APIClient {
     images?: ChatImage[],
     onProgress?: (progress: ProgressEvent) => void,
     onConversationStarted?: (conversationId: string, messageId?: string) => void,
-    onQueryRequest?: (request: QueryRequest) => Promise<void>
+    onActionRequest?: (request: ActionRequest) => Promise<void>
   ): Promise<ChatResponse> {
-    // Use AG-UI client for chat streaming
+    // Use MCP client for chat via the 'ask' tool
+    let fullMessage = '';
+    let sources: ArticleSummary[] = [];
+    let actions: TaskButtonData[] = [];
+
     try {
-      const result = await this.aguiClient.chat(message, {
-        onToken: onChunk,
-        onSources: () => {}, // Sources come via onStateDelta in adapter
-        onActions: onActions,
-        onPlan: onPlan,
-        onProgress: onProgress,
-        onConversationStarted: onConversationStarted,
-        onError: (error) => {
-          console.error('[Pillar API] AG-UI chat error:', error);
+      const result = await this.mcpClient.ask(
+        message,
+        {
+          onToken: (token) => {
+            fullMessage += token;
+            onChunk?.(token);
+          },
+          onSources: (s) => {
+            sources = s;
+          },
+          onActions: (a: ActionData[]) => {
+            actions = a.map(actionToTaskButton);
+            onActions?.(actions);
+          },
+          onPlan: (plan) => {
+            onPlan?.(plan);
+          },
+          onProgress: (p) => {
+            onProgress?.(p as ProgressEvent);
+          },
+          onConversationStarted: (convId, msgId) => {
+            onConversationStarted?.(convId, msgId);
+          },
+          onActionRequest: async (request) => {
+            if (onActionRequest) {
+              await onActionRequest(request);
+            }
+          },
+          onError: (error) => {
+            debug.error('[Pillar API] MCP chat error:', error);
+          },
         },
-        onComplete: () => {},
-      }, {
-        history,
-        userContext,
-      });
-      
-      return result;
+        { articleSlug, userContext, images, history }
+      );
+
+      // If no streaming content was received, extract from result
+      if (!fullMessage && result.content[0]?.type === 'text') {
+        fullMessage = result.content[0].text || '';
+      }
+
+      // Extract conversation/message IDs from result _meta if available
+      const meta = result._meta || {};
+
+      return {
+        message: fullMessage,
+        sources,
+        actions,
+        conversationId: meta.conversation_id,
+        messageId: meta.query_log_id,
+      };
     } catch (error) {
-      console.error('[Pillar API] Chat error:', error);
+      debug.error('[Pillar API] Chat error:', error);
       throw error;
     }
   }
@@ -641,7 +576,7 @@ export class APIClient {
       });
     } catch (error) {
       // Fire-and-forget - don't throw on feedback errors
-      console.warn('[Pillar] Feedback submission failed:', error);
+      debug.warn('[Pillar] Feedback submission failed:', error);
     }
   }
 
@@ -685,7 +620,7 @@ export class APIClient {
       });
     } catch (error) {
       // Fire-and-forget - don't throw on confirmation errors
-      console.warn('[Pillar] Failed to confirm task execution:', error);
+      debug.warn('[Pillar] Failed to confirm task execution:', error);
     }
   }
 
@@ -714,7 +649,7 @@ export class APIClient {
       );
       return response.suggestions || [];
     } catch (error) {
-      console.warn('[Pillar] Failed to get suggestions:', error);
+      debug.warn('[Pillar] Failed to get suggestions:', error);
       return [];
     }
   }
@@ -763,7 +698,7 @@ export class APIClient {
             onActions?.(actions);
           },
           onError: (error) => {
-            console.error('[Pillar API] MCP chat with context error:', error);
+            debug.error('[Pillar API] MCP chat with context error:', error);
           },
         }
       );
@@ -784,8 +719,102 @@ export class APIClient {
         messageId: meta.query_log_id,
       };
     } catch (error) {
-      console.error('[Pillar API] Chat with context error:', error);
+      debug.error('[Pillar API] Chat with context error:', error);
       throw error;
+    }
+  }
+
+  // ============================================================================
+  // User Identification
+  // ============================================================================
+
+  /**
+   * Identify the current user after login.
+   * Links the anonymous visitor to the authenticated user ID, enabling
+   * cross-device conversation history.
+   * 
+   * @param userId - Client's authenticated user ID
+   * @param profile - Optional user profile data
+   */
+  async identify(
+    userId: string,
+    profile?: { name?: string; email?: string; metadata?: Record<string, unknown> }
+  ): Promise<void> {
+    const url = `${this.config.apiBaseUrl}/mcp/identify/`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        userId,
+        name: profile?.name,
+        email: profile?.email,
+        metadata: profile?.metadata,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Identify failed: ${response.status}`);
+    }
+  }
+
+  // ============================================================================
+  // Conversation History
+  // ============================================================================
+
+  /**
+   * List past conversations for the current visitor.
+   * 
+   * @param limit - Max number of conversations to return (default: 20, max: 50)
+   * @returns List of conversation summaries
+   */
+  async listConversations(limit: number = 20): Promise<ConversationSummary[]> {
+    const url = `${this.config.apiBaseUrl}/mcp/conversations/?limit=${Math.min(limit, 50)}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to list conversations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.conversations || [];
+    } catch (error) {
+      debug.warn('[Pillar] Failed to list conversations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single conversation with all messages.
+   * 
+   * @param conversationId - UUID of the conversation
+   * @returns Conversation with messages
+   */
+  async getConversation(conversationId: string): Promise<ConversationDetail | null> {
+    const url = `${this.config.apiBaseUrl}/mcp/conversations/${conversationId}/`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to get conversation: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      debug.warn('[Pillar] Failed to get conversation:', error);
+      return null;
     }
   }
 

@@ -7,6 +7,7 @@
 
 import { h, VNode, Fragment, ComponentChildren } from 'preact';
 import { marked, Token, Tokens } from 'marked';
+import { debug } from './debug';
 import {
   CollapsibleSection,
   CodeBlock,
@@ -48,7 +49,7 @@ export function PreactMarkdown({ content, class: className }: PreactMarkdownProp
       </div>
     );
   } catch (error) {
-    console.error('[Pillar] Markdown parsing error:', error);
+    debug.error('[Pillar] Markdown parsing error:', error);
     // Fallback to plain text
     return (
       <div class={`_pillar-markdown pillar-markdown ${className || ''}`}>
@@ -212,7 +213,7 @@ function renderCode(token: Tokens.Code, key: number): VNode {
       const sources: Source[] = JSON.parse(text);
       return <SourceList key={key} sources={sources} />;
     } catch {
-      console.warn('[Pillar] Failed to parse sources JSON');
+      debug.warn('[Pillar] Failed to parse sources JSON');
     }
   }
 
@@ -339,7 +340,7 @@ function renderHtml(token: Tokens.HTML, key: number): VNode {
             const sources: Source[] = JSON.parse(props.sources);
             return <SourceList key={key} sources={sources} />;
           } catch {
-            console.warn('[Pillar] Failed to parse SourceList sources');
+            debug.warn('[Pillar] Failed to parse SourceList sources');
           }
         }
         break;

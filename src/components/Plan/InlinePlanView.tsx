@@ -10,13 +10,11 @@
  */
 
 import { h } from 'preact';
-import { useRef, useEffect } from 'preact/hooks';
-import type { ExecutionPlan, ExecutionStep, StepStatus } from '../../core/plan';
-import type { CardCallbacks } from '../../core/events';
-import Pillar from '../../core/Pillar';
-import { createDefaultConfirmCard } from '../Cards/ConfirmActionCard';
-import { PlanDocument } from './PlanDocument';
-import type { TaskButtonData } from '../Panel/TaskButton';
+import { useRef } from 'preact/hooks';
+import type { ExecutionPlan, ExecutionStep } from '../../core/plan';
+import { getStepStatusIcon, getGuidanceIcon } from '../shared/icons';
+import { useInlineCard, usePillarInstance } from '../../hooks';
+import { PreactMarkdown } from '../../utils/preact-markdown';
 
 // ============================================================================
 // Constants
@@ -24,26 +22,6 @@ import type { TaskButtonData } from '../Panel/TaskButton';
 
 /** Maximum steps before using full PlanView instead of inline */
 export const INLINE_PLAN_MAX_STEPS = 3;
-
-// ============================================================================
-// Icons
-// ============================================================================
-
-const ICONS = {
-  pending: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`,
-  ready: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`,
-  awaiting_confirmation: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-  executing: `<svg class="pillar-inline-plan__spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
-  awaiting_result: `<svg class="pillar-inline-plan__spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
-  completed: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9,12 12,15 16,10"/></svg>`,
-  skipped: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-dasharray="4,2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
-  failed: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-  guidance: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-};
-
-function getStatusIcon(status: StepStatus): string {
-  return ICONS[status] || ICONS.pending;
-}
 
 // ============================================================================
 // InlineStepItem Component
@@ -66,68 +44,19 @@ function InlineStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlineConf
   const isAwaitingResult = step.status === 'awaiting_result';
   const isGuidance = step.step_type === 'guidance';
   
-  // Check if this is an inline_ui action that should render a card
-  const isInlineUI = step.action_type === 'inline_ui';
-  const shouldShowInlineCard = isInlineUI && (step.status === 'ready' || step.status === 'awaiting_result');
-  
-  // Render inline_ui card when step is active
-  useEffect(() => {
-    if (!shouldShowInlineCard || !inlineCardRef.current) return;
-    
-    // Clear existing content
-    inlineCardRef.current.innerHTML = '';
-    
-    const pillar = Pillar.getInstance();
-    const cardType = (step.action_data?.card_type as string) || step.action_name || 'default';
-    const customRenderer = pillar?.getCardRenderer(cardType);
-    
-    // Create TaskButtonData-like object for the card
-    const actionForCard: TaskButtonData = {
-      id: step.id,
-      name: step.action_name || 'action',
-      taskType: 'inline_ui',
-      data: step.action_data || {},
-    };
-    
-    const callbacks: CardCallbacks = {
-      onConfirm: (data) => {
-        console.log('[InlineStepItem] Inline card confirmed with data:', data);
-        if (onInlineConfirm) {
-          onInlineConfirm(step.id, data);
-        } else if (pillar) {
-          pillar.executeTask({
-            id: step.id,
-            name: step.action_name || 'action',
-            taskType: 'inline_ui',
-            data: data || step.action_data || {},
-          });
-        }
-      },
-      onCancel: () => {
-        console.log('[InlineStepItem] Inline card cancelled');
-        onSkip(step.id);
-      },
-      onStateChange: (state, message) => {
-        console.log(`[InlineStepItem] Card state: ${state}${message ? ` - ${message}` : ''}`);
-      },
-    };
-    
-    if (customRenderer) {
-      try {
-        customRenderer(inlineCardRef.current, step.action_data || {}, callbacks);
-      } catch (err) {
-        console.error('[InlineStepItem] Custom card renderer error:', err);
-      }
-    } else {
-      const defaultCard = createDefaultConfirmCard(actionForCard, callbacks);
-      inlineCardRef.current.appendChild(defaultCard);
-    }
-  }, [shouldShowInlineCard, step.id, step.action_data, step.action_name]);
+  // Use shared hook for inline card rendering
+  const { shouldShow: shouldShowInlineCard, isInlineUI } = useInlineCard({
+    step,
+    containerRef: inlineCardRef,
+    onConfirm: onInlineConfirm,
+    onSkip,
+    componentName: 'InlineStepItem',
+  });
 
   // For guidance steps, use the guidance icon; otherwise use status icon
   const icon = isGuidance && step.status !== 'completed' 
-    ? ICONS.guidance 
-    : getStatusIcon(step.status);
+    ? getGuidanceIcon(14) 
+    : getStepStatusIcon(step.status, 14, 'pillar-inline-plan__spinner');
 
   return (
     <div class={`pillar-inline-plan__step pillar-inline-plan__step--${step.status} ${isGuidance ? 'pillar-inline-plan__step--guidance' : ''}`}>
@@ -225,7 +154,7 @@ interface InlinePlanViewProps {
 }
 
 export function InlinePlanView({ plan }: InlinePlanViewProps) {
-  const pillar = Pillar.getInstance();
+  const pillar = usePillarInstance();
 
   const handleConfirm = (stepId: string) => {
     pillar?.confirmPlanStep(stepId);
@@ -262,9 +191,11 @@ export function InlinePlanView({ plan }: InlinePlanViewProps) {
 
   return (
     <div class={`pillar-inline-plan pillar-inline-plan--${plan.status}`}>
-      {/* Plan document section */}
+      {/* Plan approach shown as inline text */}
       {plan.document && (
-        <PlanDocument document={plan.document} />
+        <div class="pillar-inline-plan__approach">
+          <PreactMarkdown content={plan.document} />
+        </div>
       )}
 
       {/* Steps */}
@@ -341,7 +272,23 @@ export const INLINE_PLAN_STYLES = `
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 0;
+  padding: 4px 0;
+}
+
+/* Approach text - simple inline text */
+.pillar-inline-plan__approach {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pillar-text-secondary, #6b7280);
+  margin-bottom: 2px;
+}
+
+.pillar-inline-plan__approach p {
+  margin: 0 0 4px 0;
+}
+
+.pillar-inline-plan__approach p:last-child {
+  margin-bottom: 0;
 }
 
 /* Steps list */
@@ -440,7 +387,6 @@ export const INLINE_PLAN_STYLES = `
 }
 
 .pillar-inline-plan__step--completed .pillar-inline-plan__step-text {
-  text-decoration: line-through;
   color: var(--pillar-text-secondary, #6b7280);
 }
 

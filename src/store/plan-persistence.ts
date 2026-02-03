@@ -7,6 +7,7 @@
  */
 
 import type { ExecutionPlan } from '../core/plan';
+import { debug } from '../utils/debug';
 
 // ============================================================================
 // Constants
@@ -57,9 +58,9 @@ export function savePlan(plan: ExecutionPlan, siteId: string): void {
     const key = getStorageKey(siteId);
     localStorage.setItem(key, JSON.stringify(data));
 
-    console.log(`[PlanPersistence] Saved plan ${plan.id} to localStorage`);
+    debug.log(`[PlanPersistence] Saved plan ${plan.id} to localStorage`);
   } catch (error) {
-    console.warn('[PlanPersistence] Failed to save plan:', error);
+    debug.warn('[PlanPersistence] Failed to save plan:', error);
   }
 }
 
@@ -82,14 +83,14 @@ export function loadSavedPlan(siteId: string): ExecutionPlan | null {
 
     // Version check
     if (data.version !== STORAGE_VERSION) {
-      console.warn('[PlanPersistence] Stored plan has incompatible version, clearing');
+      debug.warn('[PlanPersistence] Stored plan has incompatible version, clearing');
       clearSavedPlan(siteId);
       return null;
     }
 
     // Site ID check
     if (data.siteId !== siteId) {
-      console.warn('[PlanPersistence] Stored plan is for different site, clearing');
+      debug.warn('[PlanPersistence] Stored plan is for different site, clearing');
       clearSavedPlan(siteId);
       return null;
     }
@@ -101,17 +102,17 @@ export function loadSavedPlan(siteId: string): ExecutionPlan | null {
     const ageMinutes = (now.getTime() - storedAt.getTime()) / (1000 * 60);
 
     if (ageMinutes > timeoutMinutes) {
-      console.warn(
+      debug.warn(
         `[PlanPersistence] Stored plan has timed out (${Math.round(ageMinutes)} minutes old, timeout: ${timeoutMinutes} minutes)`
       );
       clearSavedPlan(siteId);
       return null;
     }
 
-    console.log(`[PlanPersistence] Loaded plan ${data.plan.id} from localStorage`);
+    debug.log(`[PlanPersistence] Loaded plan ${data.plan.id} from localStorage`);
     return data.plan;
   } catch (error) {
-    console.warn('[PlanPersistence] Failed to load plan:', error);
+    debug.warn('[PlanPersistence] Failed to load plan:', error);
     clearSavedPlan(siteId);
     return null;
   }
@@ -128,9 +129,9 @@ export function clearSavedPlan(siteId: string): void {
   try {
     const key = getStorageKey(siteId);
     localStorage.removeItem(key);
-    console.log('[PlanPersistence] Cleared saved plan');
+    debug.log('[PlanPersistence] Cleared saved plan');
   } catch (error) {
-    console.warn('[PlanPersistence] Failed to clear plan:', error);
+    debug.warn('[PlanPersistence] Failed to clear plan:', error);
   }
 }
 

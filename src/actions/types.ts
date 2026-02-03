@@ -196,7 +196,7 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
  *
  * Action names should be snake_case identifiers.
  */
-export type ActionDefinitions = Record<string, ActionDefinition<any>>;
+export type ActionDefinitions = Record<string, ActionDefinition<unknown>>;
 
 /**
  * Metadata for a single action in the manifest (no handler).
@@ -321,7 +321,7 @@ export interface SyncActionDefinition<TData = Record<string, unknown>> {
  *
  * Use this type for your actions file that gets synced via CI/CD.
  */
-export type SyncActionDefinitions = Record<string, SyncActionDefinition<any>>;
+export type SyncActionDefinitions = Record<string, SyncActionDefinition<unknown>>;
 
 // ============================================================================
 // Type Utilities for Type-Safe onTask

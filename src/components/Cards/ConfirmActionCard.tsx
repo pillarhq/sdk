@@ -9,6 +9,7 @@
 import Pillar from '../../core/Pillar';
 import type { CardCallbacks } from '../../core/events';
 import type { TaskButtonData } from '../Panel/TaskButton';
+import { debug } from '../../utils/debug';
 
 // Icons
 const CHECK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>`;
@@ -170,7 +171,7 @@ export function createConfirmActionCard(
     },
     onCancel,
     onStateChange: (state, message) => {
-      console.log(`[Pillar] Card state changed to ${state}${message ? `: ${message}` : ''}`);
+      debug.log(`[Pillar] Card state changed to ${state}${message ? `: ${message}` : ''}`);
     },
   };
   
@@ -181,7 +182,7 @@ export function createConfirmActionCard(
       // Store cleanup function for later
       (wrapper as unknown as { _cleanup?: () => void })._cleanup = cleanup || undefined;
     } catch (err) {
-      console.error('[Pillar] Custom card renderer error:', err);
+      debug.error('[Pillar] Custom card renderer error:', err);
     }
   } else {
     // Use default card

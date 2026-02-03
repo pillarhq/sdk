@@ -39,32 +39,57 @@ export const messages = signal<StoredChatMessage[]>([]);
 // Current conversation ID (server-assigned, persists across messages in a conversation)
 export const conversationId = signal<string | null>(null);
 
+/**
+ * @deprecated Use `conversationId` instead. Will be removed in v2.0.
+ */
+export const threadId = conversationId;
+
 // Incremented when conversation history should be invalidated (e.g., new conversation created)
 export const historyInvalidationCounter = signal<number>(0);
 
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
 
-// Current progress status during loading (simple message display)
+// Current progress status during loading (e.g., "Searching...", "Generating answer...")
 export interface ProgressStatus {
+  kind: string | null;  // Event type identifier (server-defined)
   message?: string;
 }
 
-export const progressStatus = signal<ProgressStatus>({});
+export const progressStatus = signal<ProgressStatus>({ kind: null });
 
-// Progress event for accumulating all progress events during a response
-// Uses markdown-first design where the server sends pre-formatted markdown content
-export interface ProgressEvent {
-  progress_id?: string;      // Unique ID for updating/replacing events (enables streaming)
-  markdown: string;          // Markdown content to render (collapsible sections, progress indicators, etc.)
-  is_streaming?: boolean;    // True if this is a streaming chunk (accumulate with previous)
-  is_step_start?: boolean;   // True if this starts a new reasoning step
-  is_step_complete?: boolean; // True if this completes a reasoning step
-  iteration?: number;        // Iteration number for multi-step reasoning
+/**
+ * Child item within a progress event (e.g., search source, plan step).
+ */
+export interface ProgressChild {
+  id: string;
+  label: string;
+  url?: string;              // For clickable items like sources
 }
 
 /**
- * @deprecated Use message.progressEvents instead.
+ * Progress event for tracking AI response generation steps.
+ * Uses a generic design where the server controls display text via `label`.
+ * 
+ * The new schema uses `id` and `status` fields. Legacy fields are kept
+ * for backwards compatibility with older backend versions.
+ */
+export interface ProgressEvent {
+  kind: string;              // Event type: "thinking", "search", "tool_call", "plan", "generating"
+  id?: string;               // Unique ID for streaming updates (new schema)
+  label?: string;            // Display label from server (e.g., "Thinking...", "Searching...")
+  status?: 'active' | 'done' | 'error';  // Event status for UI rendering
+  text?: string;             // Accumulated streaming text (delta mode - appended by store)
+  children?: ProgressChild[];  // Sub-items (e.g., sources, plan steps)
+  metadata?: Record<string, unknown>;  // Event-specific data
+  // Legacy fields for backwards compatibility
+  progress_id?: string;      // Deprecated: use id
+  message?: string;          // Deprecated: use label
+}
+
+/**
+ * @deprecated Use `message.progressEvents` instead. Will be removed in v2.0.
+ *
  * This global signal is kept for backwards compatibility with progressStatus.
  */
 export const progressEvents = signal<ProgressEvent[]>([]);
@@ -73,11 +98,13 @@ export const progressEvents = signal<ProgressEvent[]>([]);
  * Add a progress event to the last assistant message.
  * Events are stored directly on the message as they arrive.
  * 
- * If an event with the same progress_id already exists, it is updated
- * rather than appended. This enables streaming updates to a single step.
+ * If the event has an id (or legacy progress_id) that matches an existing event,
+ * the existing event is updated:
+ * - Text is appended (delta mode for streaming)
+ * - Status transitions are handled (active → done/error)
+ * - Other fields are merged
  * 
- * For streaming events (is_streaming=true), markdown is accumulated.
- * For non-streaming events, markdown replaces the existing content.
+ * This prevents multiple rows from appearing for the same event.
  */
 export const addProgressEventToLastMessage = (event: ProgressEvent) => {
   const msgs = messages.value;
@@ -87,49 +114,45 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
 
     let updatedEvents: ProgressEvent[];
 
-    // Check if this event should update an existing one (by progress_id)
-    if (event.progress_id) {
+    // Use id field with fallback to legacy progress_id
+    const eventId = event.id || event.progress_id;
+
+    // Check if we should update an existing event by id
+    if (eventId) {
       const existingIndex = existingEvents.findIndex(
-        (e) => e.progress_id === event.progress_id
+        (e) => (e.id || e.progress_id) === eventId
       );
 
-      if (existingIndex !== -1) {
+      if (existingIndex >= 0) {
         // Update existing event
-        updatedEvents = [...existingEvents];
         const existing = existingEvents[existingIndex];
-        
-        let newMarkdown: string;
-        
-        if (event.is_streaming) {
-          // Accumulate markdown for streaming events
-          newMarkdown = (existing.markdown || '') + (event.markdown || '');
-        } else if (event.is_step_complete) {
-          // Step complete: wrap accumulated thinking in a "Thinking" collapsible
-          // Note: Don't add step summary here - the backend already sent a separate 
-          // progress event with the query result summary
-          if (existing.markdown) {
-            // Wrap thinking content with "Thinking" title
-            newMarkdown = `\`\`\`collapsible:Thinking\n${existing.markdown}\n\`\`\``;
-          } else {
-            // No thinking content - just mark complete (content was in separate progress event)
-            newMarkdown = '';
-          }
-        } else {
-          // Non-streaming, non-step-complete: replace
-          newMarkdown = event.markdown;
-        }
-        
-        updatedEvents[existingIndex] = {
+        const updatedEvent: ProgressEvent = {
           ...existing,
           ...event,
-          markdown: newMarkdown,
+          // Preserve the id (use new if provided, otherwise keep existing)
+          id: event.id || existing.id,
+          progress_id: event.progress_id || existing.progress_id,
+          // Append text for streaming events (delta mode)
+          // Text is appended when both existing and new have text
+          text: existing.text && event.text
+            ? existing.text + event.text
+            : event.text ?? existing.text,
+          // Merge children arrays if both exist
+          children: event.children || existing.children,
+          // Merge metadata
+          metadata: { ...existing.metadata, ...event.metadata },
         };
+        updatedEvents = [
+          ...existingEvents.slice(0, existingIndex),
+          updatedEvent,
+          ...existingEvents.slice(existingIndex + 1),
+        ];
       } else {
-        // New progress_id - append as new event
+        // New event with id
         updatedEvents = [...existingEvents, event];
       }
     } else {
-      // No progress_id - always append
+      // No id - just append
       updatedEvents = [...existingEvents, event];
     }
 
@@ -146,12 +169,18 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
 // Whether chat area is expanded (shows messages)
 export const isExpanded = signal(false);
 
-// Current sources from the last response (deprecated - now stored per message)
-// Kept for backwards compatibility with resetChat()
+/**
+ * @deprecated Sources are now stored per-message on `StoredChatMessage.sources`. Will be removed in v2.0.
+ *
+ * Kept for backwards compatibility with resetChat().
+ */
 export const currentSources = signal<ArticleSummary[]>([]);
 
-// Current actions from the last response (deprecated - now stored per message)
-// Kept for backwards compatibility with resetChat()
+/**
+ * @deprecated Actions are now stored per-message on `StoredChatMessage.actions`. Will be removed in v2.0.
+ *
+ * Kept for backwards compatibility with resetChat().
+ */
 export const currentActions = signal<TaskButtonData[]>([]);
 
 // Pre-filled text for chat input (from text selection)
@@ -238,155 +267,6 @@ export const clearPendingImages = () => {
   pendingImages.value.forEach((img) => URL.revokeObjectURL(img.preview));
   pendingImages.value = [];
 };
-
-// ============================================================================
-// AG-UI State Signals
-// ============================================================================
-
-import type {
-  AGUIState,
-  StreamingMessage,
-  ToolCallState,
-  StateDeltaData,
-} from '../api/ag-ui-handler';
-import type { ExecutionPlan } from '../core/plan';
-
-// Re-export types for convenience
-export type { AGUIState, StreamingMessage, ToolCallState, StateDeltaData };
-
-/** Current AG-UI run state */
-export const aguiState = signal<AGUIState | null>(null);
-
-/** Current step name (e.g., "reasoning", "tool_execution") */
-export const currentStep = computed(() => aguiState.value?.currentStep ?? null);
-
-/** Whether a run is in progress (not complete) */
-export const isRunning = computed(
-  () => aguiState.value !== null && !aguiState.value.isComplete
-);
-
-/** Streaming messages from current run */
-export const streamingMessages = computed(
-  () => aguiState.value?.messages ?? new Map<string, StreamingMessage>()
-);
-
-/** Active tool calls */
-export const activeToolCalls = computed(
-  () => aguiState.value?.toolCalls ?? new Map<string, ToolCallState>()
-);
-
-/** All state deltas received */
-export const stateDeltas = computed(
-  () => aguiState.value?.stateDeltas ?? []
-);
-
-/** Extract sources from STATE_DELTA events */
-export const aguiSources = computed((): ArticleSummary[] => {
-  const deltas = aguiState.value?.stateDeltas ?? [];
-  const sourceDelta = deltas.find((d) => d.type === 'sources');
-  if (sourceDelta && sourceDelta.data && typeof sourceDelta.data === 'object') {
-    const data = sourceDelta.data as Record<string, unknown>;
-    return (data.sources as ArticleSummary[]) ?? [];
-  }
-  return [];
-});
-
-/** Extract actions from STATE_DELTA events */
-export const aguiActions = computed((): TaskButtonData[] => {
-  const deltas = aguiState.value?.stateDeltas ?? [];
-  const actionDelta = deltas.find((d) => d.type === 'actions');
-  if (actionDelta && actionDelta.data && typeof actionDelta.data === 'object') {
-    const data = actionDelta.data as Record<string, unknown>;
-    return (data.actions as TaskButtonData[]) ?? [];
-  }
-  return [];
-});
-
-/** Extract plan from STATE_DELTA events */
-export const aguiPlan = computed((): ExecutionPlan | null => {
-  const deltas = aguiState.value?.stateDeltas ?? [];
-  const planDelta = deltas.find((d) => d.type === 'plan');
-  if (planDelta && planDelta.data && typeof planDelta.data === 'object') {
-    const data = planDelta.data as Record<string, unknown>;
-    return (data.plan as ExecutionPlan) ?? null;
-  }
-  return null;
-});
-
-// ============================================================================
-// AG-UI State Actions
-// ============================================================================
-
-/**
- * Update AG-UI state from handler.
- * Called by the AG-UI event handler on every state change.
- */
-export const updateAGUIState = (newState: AGUIState) => {
-  aguiState.value = newState;
-};
-
-/**
- * Clear AG-UI state when starting new conversation.
- */
-export const clearAGUIState = () => {
-  aguiState.value = null;
-};
-
-/**
- * Finalize current run and convert to stored messages.
- * Called when RUN_FINISHED is received.
- */
-export const finalizeRun = () => {
-  const state = aguiState.value;
-  if (!state) return;
-
-  // Find the final assistant message (non-thinking/non-reasoning)
-  const assistantMessages = Array.from(state.messages.values()).filter(
-    (m) => m.role === 'assistant' && m.stepName !== 'reasoning'
-  );
-
-  const finalMessage = assistantMessages[assistantMessages.length - 1];
-
-  if (finalMessage) {
-    // Extract thinking messages for collapsible display
-    const thinkingMessages = Array.from(state.messages.values()).filter(
-      (m) => m.stepName === 'reasoning'
-    );
-
-    // Convert thinking to progress events (for history storage)
-    const thinkingEvents: ProgressEvent[] = thinkingMessages.map((m) => ({
-      progress_id: m.id,
-      markdown: m.content
-        ? `\`\`\`collapsible:Thinking\n${m.content}\n\`\`\``
-        : '',
-      is_step_complete: true,
-    }));
-
-    // Get sources and actions from state deltas
-    const sources = aguiSources.value;
-    const actions = aguiActions.value;
-
-    // Update last assistant message with final content
-    const msgs = messages.value;
-    if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
-      messages.value = [
-        ...msgs.slice(0, -1),
-        {
-          ...msgs[msgs.length - 1],
-          content: finalMessage.content,
-          progressEvents: thinkingEvents.filter((e) => e.markdown),
-          sources: sources.length > 0 ? sources : msgs[msgs.length - 1].sources,
-          actions: actions.length > 0 ? actions : msgs[msgs.length - 1].actions,
-        },
-      ];
-    }
-  }
-
-  // Clear AG-UI state
-  clearAGUIState();
-};
-
-// ============================================================================
 
 // Computed: has messages
 export const hasMessages = computed(() => messages.value.length > 0);
@@ -518,14 +398,13 @@ export const updateActionMessageContent = (actionName: string, content: string) 
 };
 
 export const setConversationId = (id: string) => {
-  const isNewConversation = conversationId.value === null;
   conversationId.value = id;
-  
-  // Invalidate history cache when a new conversation is created
-  if (isNewConversation) {
-    historyInvalidationCounter.value += 1;
-  }
 };
+
+/**
+ * @deprecated Use `setConversationId` instead. Will be removed in v2.0.
+ */
+export const setThreadId = setConversationId;
 
 export const clearConversationId = () => {
   conversationId.value = null;
@@ -558,12 +437,36 @@ export const setProgressStatus = (status: ProgressStatus) => {
 };
 
 export const clearProgressStatus = () => {
-  progressStatus.value = {};
+  progressStatus.value = { kind: null };
 };
 
 export const addProgressEvent = (event: ProgressEvent) => {
   // Update global (deprecated, for progressStatus backwards compat)
-  progressEvents.value = [...progressEvents.value, event];
+  // Use same deduplication logic as per-message storage
+  if (event.progress_id) {
+    const existingIndex = progressEvents.value.findIndex(
+      (e) => e.progress_id === event.progress_id
+    );
+    if (existingIndex >= 0) {
+      const existing = progressEvents.value[existingIndex];
+      const updatedEvent: ProgressEvent = {
+        ...existing,
+        ...event,
+        text: event.kind === 'thinking' && existing.text && event.text
+          ? existing.text + event.text
+          : event.text ?? existing.text,
+      };
+      progressEvents.value = [
+        ...progressEvents.value.slice(0, existingIndex),
+        updatedEvent,
+        ...progressEvents.value.slice(existingIndex + 1),
+      ];
+    } else {
+      progressEvents.value = [...progressEvents.value, event];
+    }
+  } else {
+    progressEvents.value = [...progressEvents.value, event];
+  }
   // Also update per-message storage (new approach)
   addProgressEventToLastMessage(event);
 };
@@ -632,7 +535,7 @@ export const resetChat = () => {
   messages.value = [];
   conversationId.value = null;
   isLoading.value = false;
-  progressStatus.value = {};
+  progressStatus.value = { kind: null };
   progressEvents.value = [];
   isExpanded.value = false;
   currentSources.value = [];
@@ -643,8 +546,6 @@ export const resetChat = () => {
   userContext.value = [];
   pendingUserContext.value = [];
   clearPendingImages();
-  // Clear AG-UI state
-  clearAGUIState();
   // Clear any active plan when starting a new chat
   clearPlan(true);
 };
@@ -672,5 +573,8 @@ export const loadConversation = (
   
   // Expand chat to show messages
   isExpanded.value = true;
+  
+  // Increment history invalidation counter
+  historyInvalidationCounter.value += 1;
 };
 

@@ -9,50 +9,10 @@
  */
 
 import { h } from 'preact';
-import { useRef, useEffect } from 'preact/hooks';
-import Pillar from '../../core/Pillar';
-import type { CardCallbacks } from '../../core/events';
-import type { ExecutionStep, StepStatus } from '../../core/plan';
-import { createDefaultConfirmCard } from '../Cards/ConfirmActionCard';
-import type { TaskButtonData } from '../Panel/TaskButton';
-
-// ============================================================================
-// Icons
-// ============================================================================
-
-const ICONS = {
-  pending: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`,
-  ready: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`,
-  awaiting_confirmation: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-  executing: `<svg class="pillar-plan-step__spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
-  awaiting_result: `<svg class="pillar-plan-step__spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
-  completed: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9,12 12,15 16,10"/></svg>`,
-  skipped: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-dasharray="4,2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
-  failed: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-};
-
-function getStatusIcon(status: StepStatus): string {
-  switch (status) {
-    case 'pending':
-      return ICONS.pending;
-    case 'ready':
-      return ICONS.ready;
-    case 'awaiting_confirmation':
-      return ICONS.awaiting_confirmation;
-    case 'executing':
-      return ICONS.executing;
-    case 'awaiting_result':
-      return ICONS.awaiting_result;
-    case 'completed':
-      return ICONS.completed;
-    case 'skipped':
-      return ICONS.skipped;
-    case 'failed':
-      return ICONS.failed;
-    default:
-      return ICONS.pending;
-  }
-}
+import { useRef } from 'preact/hooks';
+import type { ExecutionStep } from '../../core/plan';
+import { getStepStatusIcon } from '../shared/icons';
+import { useInlineCard } from '../../hooks/useInlineCard';
 
 // ============================================================================
 // PlanStepItem Component
@@ -94,67 +54,14 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlin
     step.status === 'awaiting_confirmation' ||
     step.status === 'awaiting_result';
   
-  // Check if this is an inline_ui action that should render a card
-  const isInlineUI = step.action_type === 'inline_ui';
-  const shouldShowInlineCard = isInlineUI && (step.status === 'ready' || step.status === 'awaiting_result');
-
-  // Render inline_ui card when step is active
-  useEffect(() => {
-    if (!shouldShowInlineCard || !inlineCardRef.current) return;
-    
-    // Clear existing content
-    inlineCardRef.current.innerHTML = '';
-    
-    const pillar = Pillar.getInstance();
-    const cardType = (step.action_data?.card_type as string) || step.action_name || 'default';
-    const customRenderer = pillar?.getCardRenderer(cardType);
-    
-    // Create TaskButtonData-like object for the card
-    const actionForCard: TaskButtonData = {
-      id: step.id,
-      name: step.action_name || 'action',
-      taskType: 'inline_ui',
-      data: step.action_data || {},
-    };
-    
-    const callbacks: CardCallbacks = {
-      onConfirm: (data) => {
-        console.log('[PlanStepItem] Inline card confirmed with data:', data);
-        // Call the inline confirm handler which will execute the step
-        if (onInlineConfirm) {
-          onInlineConfirm(step.id, data);
-        } else if (pillar) {
-          // Execute the task with the data
-          pillar.executeTask({
-            id: step.id,
-            name: step.action_name || 'action',
-            taskType: 'inline_ui',
-            data: data || step.action_data || {},
-          });
-        }
-      },
-      onCancel: () => {
-        console.log('[PlanStepItem] Inline card cancelled');
-        onSkip(step.id);
-      },
-      onStateChange: (state, message) => {
-        console.log(`[PlanStepItem] Card state: ${state}${message ? ` - ${message}` : ''}`);
-      },
-    };
-    
-    if (customRenderer) {
-      // Use custom renderer registered by host app
-      try {
-        customRenderer(inlineCardRef.current, step.action_data || {}, callbacks);
-      } catch (err) {
-        console.error('[PlanStepItem] Custom card renderer error:', err);
-      }
-    } else {
-      // Use default confirm card
-      const defaultCard = createDefaultConfirmCard(actionForCard, callbacks);
-      inlineCardRef.current.appendChild(defaultCard);
-    }
-  }, [shouldShowInlineCard, step.id, step.action_data, step.action_name]);
+  // Use shared hook for inline card rendering
+  const { shouldShow: shouldShowInlineCard, isInlineUI } = useInlineCard({
+    step,
+    containerRef: inlineCardRef,
+    onConfirm: onInlineConfirm,
+    onSkip,
+    componentName: 'PlanStepItem',
+  });
 
   const canRetry = step.status === 'failed' && step.is_retriable && step.retry_count < step.max_retries;
   const statusClass = `pillar-plan-step pillar-plan-step--${step.status}`;
@@ -162,7 +69,7 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlin
   return (
     <div class={statusClass}>
       <div class="pillar-plan-step__icon">
-        <span dangerouslySetInnerHTML={{ __html: getStatusIcon(step.status) }} />
+        <span dangerouslySetInnerHTML={{ __html: getStepStatusIcon(step.status, 18, 'pillar-plan-step__spinner') }} />
       </div>
       <div class="pillar-plan-step__content">
         <div class="pillar-plan-step__description">{step.description}</div>
@@ -250,16 +157,12 @@ export function PlanStepItem({ step, onConfirm, onSkip, onRetry, onDone, onInlin
 // ============================================================================
 
 export const PLAN_STEP_STYLES = `
-/* Individual Step */
+/* Individual Step - minimal checklist style */
 .pillar-plan-step {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--pillar-bg-primary, #ffffff);
-  border: 1px solid var(--pillar-border, #e5e7eb);
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  gap: 8px;
+  padding: 4px 0;
 }
 
 .pillar-plan-step__icon {
@@ -267,14 +170,15 @@ export const PLAN_STEP_STYLES = `
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
   color: var(--pillar-text-tertiary, #9ca3af);
 }
 
 .pillar-plan-step__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .pillar-plan-step__content {
@@ -282,20 +186,19 @@ export const PLAN_STEP_STYLES = `
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pillar-plan-step__description {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--pillar-text-primary, #374151);
   line-height: 1.4;
 }
 
 .pillar-plan-step__status-text {
   font-size: 12px;
-  color: var(--pillar-primary, #2563eb);
-  font-style: italic;
+  color: var(--pillar-text-tertiary, #9ca3af);
 }
 
 .pillar-plan-step__error {
@@ -306,36 +209,24 @@ export const PLAN_STEP_STYLES = `
 .pillar-plan-step__actions {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
-/* Step States */
+/* Step States - minimal styling */
 .pillar-plan-step--pending {
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
-.pillar-plan-step--ready {
-  background: var(--pillar-bg-info-subtle, #eff6ff);
-  border-color: var(--pillar-info, #93c5fd);
+.pillar-plan-step--pending .pillar-plan-step__icon {
+  color: var(--pillar-text-tertiary, #9ca3af);
 }
 
 .pillar-plan-step--ready .pillar-plan-step__icon {
   color: var(--pillar-primary, #2563eb);
 }
 
-.pillar-plan-step--awaiting_confirmation {
-  background: var(--pillar-bg-warning-subtle, #fef3c7);
-  border-color: var(--pillar-warning, #fcd34d);
-}
-
 .pillar-plan-step--awaiting_confirmation .pillar-plan-step__icon {
   color: var(--pillar-warning-dark, #d97706);
-}
-
-.pillar-plan-step--executing,
-.pillar-plan-step--awaiting_result {
-  background: var(--pillar-bg-info-subtle, #eff6ff);
-  border-color: var(--pillar-info, #93c5fd);
 }
 
 .pillar-plan-step--executing .pillar-plan-step__icon,
@@ -348,7 +239,6 @@ export const PLAN_STEP_STYLES = `
 }
 
 .pillar-plan-step--completed .pillar-plan-step__description {
-  text-decoration: line-through;
   color: var(--pillar-text-secondary, #6b7280);
 }
 
@@ -363,11 +253,6 @@ export const PLAN_STEP_STYLES = `
 .pillar-plan-step--skipped .pillar-plan-step__description {
   text-decoration: line-through;
   color: var(--pillar-text-tertiary, #9ca3af);
-}
-
-.pillar-plan-step--failed {
-  background: var(--pillar-bg-danger-subtle, #fef2f2);
-  border-color: var(--pillar-danger-light, #fca5a5);
 }
 
 .pillar-plan-step--failed .pillar-plan-step__icon {

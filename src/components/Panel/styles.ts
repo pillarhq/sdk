@@ -2365,7 +2365,129 @@ export const PANEL_STYLES = `
   margin-top: 2px;
 }
 
+/* Chevron indicator for progress rows - rotates based on expanded state */
+._pillar-progress-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--pillar-text-muted);
+  transition: transform 0.2s ease;
+}
+
+._pillar-progress-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--pillar-error, #dc2626);
+}
+
+/* Text preview for streaming content */
+._pillar-progress-text-preview-wrapper {
+  position: relative;
+  margin-top: 4px;
+  padding-left: 20px;
+}
+
+._pillar-progress-text-preview {
+  max-height: 80px;
+  overflow-y: auto;
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  line-height: 1.4;
+  scroll-behavior: smooth;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pillar-scrollbar-thumb) transparent;
+}
+
+/* Top gradient - fades out older text at the top */
+._pillar-progress-text-gradient {
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to bottom, var(--pillar-bg), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar {
+  width: 4px;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar-thumb {
+  background-color: var(--pillar-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+/* Active state indicator */
+._pillar-progress-row--active ._pillar-progress-message {
+  font-weight: 500;
+}
+
+/* Long text truncation for labels */
+._pillar-progress-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+/* Children/sub-items styling */
+._pillar-progress-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+._pillar-progress-child-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+._pillar-progress-child-link {
+  color: var(--pillar-text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+._pillar-progress-child-link:hover {
+  color: var(--pillar-text-secondary);
+  text-decoration: underline;
+}
+
+._pillar-progress-child-label {
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+}
+
 .pillar-progress-events {}
+.pillar-progress-chevron {}
+.pillar-progress-error-icon {}
+.pillar-progress-text-preview-wrapper {}
+.pillar-progress-text-preview {}
+.pillar-progress-text-gradient {}
+.pillar-progress-children {}
+.pillar-progress-child-item {}
+.pillar-progress-child-link {}
+.pillar-progress-child-label {}
 .pillar-progress-row {}
 .pillar-progress-row-header {}
 .pillar-progress-expand-icon {}
@@ -2423,9 +2545,25 @@ export const PANEL_STYLES = `
   flex: 1;
 }
 
+/* Animated content wrapper using CSS Grid for smooth height transition */
+._pillar-reasoning-content-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease-out;
+  border-top: 1px solid var(--pillar-border);
+}
+
+._pillar-reasoning-content-wrapper--expanded {
+  grid-template-rows: 1fr;
+}
+
+._pillar-reasoning-content-wrapper > ._pillar-reasoning-content {
+  overflow: hidden;
+  min-height: 0;
+}
+
 ._pillar-reasoning-content {
   padding: 0 10px 10px 10px;
-  border-top: 1px solid var(--pillar-border);
 }
 
 ._pillar-reasoning-content ._pillar-progress-row {
@@ -2436,7 +2574,13 @@ export const PANEL_STYLES = `
   margin-top: 10px;
 }
 
+/* Chevron rotation when expanded */
+._pillar-reasoning-header[data-expanded="true"] ._pillar-reasoning-icon {
+  transform: rotate(90deg);
+}
+
 .pillar-reasoning-disclosure {}
+.pillar-reasoning-content-wrapper {}
 .pillar-reasoning-header {}
 .pillar-reasoning-icon {}
 .pillar-reasoning-label {}

@@ -109,35 +109,27 @@ export {
   type ProgressEvent,
 } from './api/client';
 
-// MCP Client types (for image upload, query requests)
+// MCP Client types (for image upload, action requests)
 export {
   type ChatImage,
   type ImageUploadResponse,
-  type QueryRequest,
+  type ActionRequest,
 } from './api/mcp-client';
 
 // Auto-initialization for script tags
 import { Pillar } from './core/Pillar';
+import { debug } from './utils/debug';
 
 // Check for auto-init configuration in script tag
 if (typeof window !== 'undefined') {
   // Make Pillar available globally for script tag usage
   (window as unknown as { Pillar: typeof Pillar }).Pillar = Pillar;
 
-  // Support auto-initialization via data attributes
-  // Supports both data-product-key (new) and data-help-center (deprecated)
+  // Support auto-initialization via data-product-key attribute
   const autoInit = () => {
     const script = document.currentScript as HTMLScriptElement | null;
-    if (script) {
-      const productKey = script.dataset.productKey ?? script.dataset.helpCenter;
-
-      if (script.dataset.helpCenter && !script.dataset.productKey) {
-        console.warn('[Pillar] data-help-center is deprecated. Use data-product-key instead.');
-      }
-
-      if (productKey) {
-        Pillar.init({ productKey }).catch(console.error);
-      }
+    if (script?.dataset.productKey) {
+      Pillar.init({ productKey: script.dataset.productKey }).catch(debug.error);
     }
   };
 
@@ -146,18 +138,12 @@ if (typeof window !== 'undefined') {
     document.addEventListener('DOMContentLoaded', autoInit);
   } else {
     // Script is being executed after DOM is ready (async/defer)
-    // Try to find the script tag by searching for one with our data attributes
-    const scripts = document.querySelectorAll('script[data-product-key], script[data-help-center]');
+    // Try to find the script tag with our data attribute
+    const scripts = document.querySelectorAll('script[data-product-key]');
     if (scripts.length > 0) {
       const script = scripts[scripts.length - 1] as HTMLScriptElement;
-      const productKey = script.dataset.productKey ?? script.dataset.helpCenter;
-
-      if (script.dataset.helpCenter && !script.dataset.productKey) {
-        console.warn('[Pillar] data-help-center is deprecated. Use data-product-key instead.');
-      }
-
-      if (productKey) {
-        Pillar.init({ productKey }).catch(console.error);
+      if (script.dataset.productKey) {
+        Pillar.init({ productKey: script.dataset.productKey }).catch(debug.error);
       }
     }
   }

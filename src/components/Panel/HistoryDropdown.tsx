@@ -7,12 +7,13 @@ import { h, Fragment } from 'preact';
 import { useState, useRef, useEffect, useMemo } from 'preact/hooks';
 import { getApiClient } from '../../core/Pillar';
 import { historyInvalidationCounter } from '../../store/chat';
+import { debug } from '../../utils/debug';
 import type { ConversationSummary } from '../../api/client';
 
 const CLOCK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>`;
 
 interface HistoryDropdownProps {
-  onSelectConversation: (conversationId: string) => void;
+  onSelectThread: (threadId: string) => void;
 }
 
 interface GroupedConversations {
@@ -84,7 +85,7 @@ function groupConversationsByDay(conversations: ConversationSummary[]): GroupedC
   }));
 }
 
-export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) {
+export function HistoryDropdown({ onSelectThread }: HistoryDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -137,7 +138,7 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
         setConversations(result);
       }
     } catch (error) {
-      console.error('[Pillar] Failed to fetch conversations:', error);
+      debug.error('[Pillar] Failed to fetch conversations:', error);
     } finally {
       setIsLoading(false);
       setHasFetched(true);
@@ -154,9 +155,9 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
     }
   };
 
-  const handleSelectConversation = (conversationId: string) => {
+  const handleSelectThread = (threadId: string) => {
     setIsOpen(false);
-    onSelectConversation(conversationId);
+    onSelectThread(threadId);
   };
 
   return (
@@ -193,7 +194,7 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
                     <button
                       key={conv.id}
                       class="_pillar-history-item pillar-history-item"
-                      onClick={() => handleSelectConversation(conv.id)}
+                      onClick={() => handleSelectThread(conv.id)}
                       type="button"
                     >
                       <span class="_pillar-history-item-title pillar-history-item-title">

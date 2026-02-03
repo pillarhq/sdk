@@ -7,19 +7,11 @@
  */
 
 import { h } from 'preact';
-import { activePlan, planProgress } from '../../store/plan';
-import type { ExecutionStep } from '../../core/plan';
-import { PlanDocument } from './PlanDocument';
+import { activePlan } from '../../store/plan';
 import { PlanStepItem } from './PlanStepItem';
-import Pillar from '../../core/Pillar';
-
-// ============================================================================
-// Icons
-// ============================================================================
-
-const ICONS = {
-  plan: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
-};
+import { debug } from '../../utils/debug';
+import { usePillarInstance } from '../../hooks';
+import { PreactMarkdown } from '../../utils/preact-markdown';
 
 // ============================================================================
 // PlanView Component
@@ -32,8 +24,7 @@ export function PlanView() {
   const isAwaitingStart = plan.status === 'awaiting_start';
   const isExecuting = plan.status === 'executing';
   const isReady = plan.status === 'ready';
-  const progress = planProgress.value;
-  const pillar = Pillar.getInstance();
+  const pillar = usePillarInstance();
 
   // Check if plan appears stuck - has auto_execute but no step is actively executing
   const hasActiveStep = plan.steps.some(s => s.status === 'executing');
@@ -49,7 +40,7 @@ export function PlanView() {
 
   const handleResume = async () => {
     // Manually trigger execution of next step
-    console.log('[PlanView] Manual resume triggered');
+    debug.log('[PlanView] Manual resume triggered');
     await pillar?.resumePlan();
   };
 
@@ -79,28 +70,13 @@ export function PlanView() {
 
   return (
     <div class="pillar-plan">
-      <div class="pillar-plan__header">
-        <div class="pillar-plan__icon">
-          <span dangerouslySetInnerHTML={{ __html: ICONS.plan }} />
-        </div>
-        <div class="pillar-plan__title">{plan.goal}</div>
-        <div class="pillar-plan__progress">
-          {plan.completed_steps}/{plan.total_steps}
-        </div>
-      </div>
+      {/* Plan goal as simple text */}
+      <div class="pillar-plan__goal">{plan.goal}</div>
 
-      {/* Plan document section */}
+      {/* Plan document/approach shown as regular text */}
       {plan.document && (
-        <PlanDocument document={plan.document} />
-      )}
-
-      {/* Progress bar */}
-      {(isExecuting || isReady) && (
-        <div class="pillar-plan__progress-bar">
-          <div
-            class="pillar-plan__progress-fill"
-            style={{ width: `${progress * 100}%` }}
-          />
+        <div class="pillar-plan__approach">
+          <PreactMarkdown content={plan.document} />
         </div>
       )}
 
@@ -161,92 +137,65 @@ export function PlanView() {
 // ============================================================================
 
 export const PLAN_STYLES = `
-/* Plan Container */
+/* Plan Container - minimal, chat-native styling */
 .pillar-plan {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--pillar-bg-secondary, #f9fafb);
-  border: 1px solid var(--pillar-border, #e5e7eb);
-  border-radius: 12px;
-  margin: 12px 0;
-}
-
-/* Header */
-.pillar-plan__header {
-  display: flex;
-  align-items: center;
   gap: 8px;
+  margin: 4px 0;
 }
 
-.pillar-plan__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--pillar-text-secondary, #6b7280);
-}
-
-.pillar-plan__title {
-  flex: 1;
+/* Plan goal - simple text styling */
+.pillar-plan__goal {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--pillar-text-primary, #1a1a1a);
   line-height: 1.4;
 }
 
-.pillar-plan__progress {
-  font-size: 12px;
-  font-weight: 500;
+/* Approach text - simple inline text, not collapsible */
+.pillar-plan__approach {
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--pillar-text-secondary, #6b7280);
-  padding: 2px 8px;
-  background: var(--pillar-bg-tertiary, #e5e7eb);
-  border-radius: 10px;
+  margin-bottom: 4px;
 }
 
-/* Progress Bar */
-.pillar-plan__progress-bar {
-  height: 4px;
-  background: var(--pillar-bg-tertiary, #e5e7eb);
-  border-radius: 2px;
-  overflow: hidden;
+.pillar-plan__approach p {
+  margin: 0 0 4px 0;
 }
 
-.pillar-plan__progress-fill {
-  height: 100%;
-  background: var(--pillar-primary, #2563eb);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+.pillar-plan__approach p:last-child {
+  margin-bottom: 0;
 }
 
 /* Steps List */
 .pillar-plan__steps {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
-/* Footer */
+/* Footer - minimal */
 .pillar-plan__footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--pillar-border, #e5e7eb);
+  margin-top: 4px;
 }
 
 /* Start Button */
 .pillar-plan__start-btn {
   display: inline-flex;
   align-items: center;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
   background: var(--pillar-primary, #2563eb);
   color: #ffffff;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -255,26 +204,25 @@ export const PLAN_STYLES = `
   background: var(--pillar-primary-hover, #1d4ed8);
 }
 
-/* Cancel Button */
+/* Cancel Button - text-only style */
 .pillar-plan__cancel-btn {
   display: inline-flex;
   align-items: center;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 6px 12px;
+  font-size: 12px;
   font-weight: 500;
   font-family: inherit;
   background: transparent;
-  color: var(--pillar-text-secondary, #6b7280);
-  border: 1px solid var(--pillar-border, #d1d5db);
-  border-radius: 6px;
+  color: var(--pillar-text-tertiary, #9ca3af);
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .pillar-plan__cancel-btn:hover {
-  background: var(--pillar-bg-tertiary, #f3f4f6);
   color: var(--pillar-danger, #dc2626);
-  border-color: var(--pillar-danger, #dc2626);
+  background: var(--pillar-bg-tertiary, #f3f4f6);
 }
 
 /* Warning Message */

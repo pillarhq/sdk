@@ -13,6 +13,7 @@ import type { ExecutionPlan, ExecutionStep } from './plan';
 import type { EventEmitter } from './events';
 import type { MCPClient } from '../api/mcp-client';
 import { getActionDefinition, getHandler, hasAction } from '../actions/registry';
+import { debug } from '../utils/debug';
 import {
   activePlan,
   updatePlan,
@@ -43,7 +44,7 @@ export class PlanExecutor {
    * Called when the ReAct agent creates a plan via the create_plan tool.
    */
   async handlePlanReceived(plan: ExecutionPlan): Promise<void> {
-    console.log(`[PlanExecutor] Received plan ${plan.id} (auto_execute=${plan.auto_execute}, status=${plan.status})`);
+    debug.log(`[PlanExecutor] Received plan ${plan.id} (auto_execute=${plan.auto_execute}, status=${plan.status})`);
 
     setPlan(plan);
     this.persistPlan(plan);
@@ -71,11 +72,11 @@ export class PlanExecutor {
   async recoverPlan(): Promise<ExecutionPlan | null> {
     const savedPlan = loadSavedPlan(this.siteId);
     if (!savedPlan) {
-      console.log('[PlanExecutor] No saved plan found');
+      debug.log('[PlanExecutor] No saved plan found');
       return null;
     }
 
-    console.log(`[PlanExecutor] Found saved plan ${savedPlan.id}, fetching latest state from server`);
+    debug.log(`[PlanExecutor] Found saved plan ${savedPlan.id}, fetching latest state from server`);
 
     try {
       // Fetch latest state from server
@@ -85,7 +86,7 @@ export class PlanExecutor {
       // Check if plan is still active
       const activeStatuses = ['planning', 'ready', 'executing', 'awaiting_start', 'awaiting_input', 'awaiting_result'];
       if (!activeStatuses.includes(latestPlan.status)) {
-        console.log(
+        debug.log(
           `[PlanExecutor] Plan ${latestPlan.id} is no longer active (status: ${latestPlan.status}), clearing`
         );
         clearSavedPlan(this.siteId);
@@ -96,7 +97,7 @@ export class PlanExecutor {
       setPlan(latestPlan);
       this.events.emit('plan:updated', latestPlan);
 
-      console.log(`[PlanExecutor] Recovered plan ${latestPlan.id} with status ${latestPlan.status}`);
+      debug.log(`[PlanExecutor] Recovered plan ${latestPlan.id} with status ${latestPlan.status}`);
 
       // If plan was executing, continue
       if (latestPlan.status === 'executing') {
@@ -105,7 +106,7 @@ export class PlanExecutor {
 
       return latestPlan;
     } catch (error) {
-      console.error('[PlanExecutor] Failed to recover plan from server:', error);
+      debug.error('[PlanExecutor] Failed to recover plan from server:', error);
       // Clear the stale saved plan
       clearSavedPlan(this.siteId);
       return null;
@@ -125,12 +126,12 @@ export class PlanExecutor {
   async startPlan(): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan to start');
+      debug.warn('[PlanExecutor] No active plan to start');
       return;
     }
 
     if (plan.status !== 'awaiting_start') {
-      console.warn(
+      debug.warn(
         `[PlanExecutor] Plan ${plan.id} is not in awaiting_start status`
       );
       return;
@@ -142,7 +143,7 @@ export class PlanExecutor {
       this.events.emit('plan:start', response.plan);
       await this.executeNextStep();
     } catch (error) {
-      console.error('[PlanExecutor] Failed to start plan:', error);
+      debug.error('[PlanExecutor] Failed to start plan:', error);
       this.events.emit('plan:error', {
         plan,
         error: error instanceof Error ? error : new Error(String(error)),
@@ -197,7 +198,7 @@ export class PlanExecutor {
       );
 
       if (allDone) {
-        console.log(`[PlanExecutor] Plan ${plan.id} complete`);
+        debug.log(`[PlanExecutor] Plan ${plan.id} complete`);
         updatePlan({ ...plan, status: 'completed' });
         this.events.emit('plan:complete', activePlan.value!);
         clearSavedPlan(this.siteId);
@@ -243,7 +244,7 @@ export class PlanExecutor {
 
     const step = plan.steps.find((s) => s.id === stepId);
     if (!step) {
-      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      debug.warn(`[PlanExecutor] Step ${stepId} not found`);
       return;
     }
 
@@ -278,13 +279,13 @@ export class PlanExecutor {
   ): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan for inline confirmation');
+      debug.warn('[PlanExecutor] No active plan for inline confirmation');
       return;
     }
 
     const step = plan.steps.find((s) => s.id === stepId);
     if (!step) {
-      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      debug.warn(`[PlanExecutor] Step ${stepId} not found`);
       return;
     }
 
@@ -305,7 +306,7 @@ export class PlanExecutor {
 
     const step = plan.steps.find((s) => s.id === stepId);
     if (!step) {
-      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      debug.warn(`[PlanExecutor] Step ${stepId} not found`);
       return;
     }
 
@@ -318,7 +319,7 @@ export class PlanExecutor {
       // Continue to next step
       await this.executeNextStep();
     } catch (error) {
-      console.error('[PlanExecutor] Failed to skip step:', error);
+      debug.error('[PlanExecutor] Failed to skip step:', error);
       // Update locally even if server call fails
       updatePlanStep(stepId, { status: 'skipped' });
       
@@ -348,17 +349,17 @@ export class PlanExecutor {
 
     const step = plan.steps.find((s) => s.id === stepId);
     if (!step) {
-      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      debug.warn(`[PlanExecutor] Step ${stepId} not found`);
       return;
     }
 
     if (!step.is_retriable) {
-      console.warn(`[PlanExecutor] Step ${stepId} is not retriable`);
+      debug.warn(`[PlanExecutor] Step ${stepId} is not retriable`);
       return;
     }
 
     if (step.retry_count >= step.max_retries) {
-      console.warn(
+      debug.warn(
         `[PlanExecutor] Step ${stepId} has exceeded max retries (${step.retry_count}/${step.max_retries})`
       );
       return;
@@ -379,7 +380,7 @@ export class PlanExecutor {
       // Execute the step again
       await this.executeNextStep();
     } catch (error) {
-      console.error('[PlanExecutor] Failed to retry step:', error);
+      debug.error('[PlanExecutor] Failed to retry step:', error);
       this.events.emit('plan:error', {
         plan: activePlan.value!,
         error: error instanceof Error ? error : new Error(String(error)),
@@ -393,7 +394,7 @@ export class PlanExecutor {
   async cancel(): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan to cancel');
+      debug.warn('[PlanExecutor] No active plan to cancel');
       return;
     }
 
@@ -404,7 +405,7 @@ export class PlanExecutor {
       clearPlan(true);
       clearSavedPlan(this.siteId);
     } catch (error) {
-      console.error('[PlanExecutor] Failed to cancel plan:', error);
+      debug.error('[PlanExecutor] Failed to cancel plan:', error);
       // Still clear locally even if server call fails
       this.events.emit('plan:cancel', plan);
       clearPlan(true);
@@ -421,12 +422,12 @@ export class PlanExecutor {
   dismissPlan(): void {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan to dismiss');
+      debug.warn('[PlanExecutor] No active plan to dismiss');
       return;
     }
 
     if (plan.status !== 'completed' && plan.status !== 'failed') {
-      console.warn(`[PlanExecutor] Plan ${plan.id} is not completed/failed (status: ${plan.status}), use cancel() instead`);
+      debug.warn(`[PlanExecutor] Plan ${plan.id} is not completed/failed (status: ${plan.status}), use cancel() instead`);
       return;
     }
 
@@ -466,7 +467,7 @@ export class PlanExecutor {
       return;
     }
 
-    console.log(
+    debug.log(
       `[PlanExecutor] Completing step ${step.index} (${actionName}) via callback: success=${success}`
     );
 
@@ -491,18 +492,18 @@ export class PlanExecutor {
   async markStepDone(stepId: string): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan');
+      debug.warn('[PlanExecutor] No active plan');
       return;
     }
 
     const step = plan.steps.find((s) => s.id === stepId);
     if (!step) {
-      console.warn(`[PlanExecutor] Step ${stepId} not found`);
+      debug.warn(`[PlanExecutor] Step ${stepId} not found`);
       return;
     }
 
     if (step.status !== 'awaiting_result') {
-      console.warn(`[PlanExecutor] Step ${stepId} is not awaiting result (status: ${step.status})`);
+      debug.warn(`[PlanExecutor] Step ${stepId} is not awaiting result (status: ${step.status})`);
       return;
     }
 
@@ -627,12 +628,12 @@ export class PlanExecutor {
           
           if (shouldAutoComplete) {
             // Auto-complete: report success to server immediately
-            console.log(`[PlanExecutor] Step ${step.index} auto-completing (auto_complete=true, requires_result_feedback=false)`);
+            debug.log(`[PlanExecutor] Step ${step.index} auto-completing (auto_complete=true, requires_result_feedback=false)`);
             await this.reportStepComplete(step, true, undefined, undefined);
           } else {
             // Manual completion: wait for host app to signal completion via task:complete event
             // or for user to click "Done" button (which calls markStepDone)
-            console.log(`[PlanExecutor] Step ${step.index} executed via fallback - awaiting result (auto_complete=${step.auto_complete}, requires_result_feedback=${step.requires_result_feedback})`);
+            debug.log(`[PlanExecutor] Step ${step.index} executed via fallback - awaiting result (auto_complete=${step.auto_complete}, requires_result_feedback=${step.requires_result_feedback})`);
             updatePlanStep(step.id, { status: 'awaiting_result' });
             this.events.emit('plan:step:active', { plan: activePlan.value!, step });
           }
@@ -666,7 +667,7 @@ export class PlanExecutor {
       await this.reportStepComplete(step, stepSuccess, result, stepError);
       
     } catch (error) {
-      console.error(
+      debug.error(
         `[PlanExecutor] Step ${step.index} failed:`,
         error
       );
@@ -694,7 +695,7 @@ export class PlanExecutor {
   ): Promise<void> {
     const plan = activePlan.value;
     if (!plan) {
-      console.warn('[PlanExecutor] No active plan for step completion');
+      debug.warn('[PlanExecutor] No active plan for step completion');
       return;
     }
 
@@ -710,7 +711,7 @@ export class PlanExecutor {
       // Handle the server's decision
       await this.handleServerDecision(step, response, success, errorMessage);
     } catch (serverError) {
-      console.error('[PlanExecutor] Failed to report step completion:', serverError);
+      debug.error('[PlanExecutor] Failed to report step completion:', serverError);
       
       // Fallback: handle locally
       if (success) {
@@ -789,7 +790,7 @@ export class PlanExecutor {
           });
           await this.executeStep(retryStep);
         } else {
-          console.error('[PlanExecutor] Retry step not found');
+          debug.error('[PlanExecutor] Retry step not found');
           await this.executeNextStep();
         }
         break;
@@ -819,7 +820,7 @@ export class PlanExecutor {
         break;
 
       default:
-        console.warn(`[PlanExecutor] Unknown server action: ${action}`);
+        debug.warn(`[PlanExecutor] Unknown server action: ${action}`);
         await this.executeNextStep();
     }
   }

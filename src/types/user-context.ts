@@ -29,17 +29,34 @@ export interface HighlightedTextContext extends BaseUserContext {
   text_content: string;
 }
 
-// Add future context types here:
-// export interface FileContext extends BaseUserContext { ... }
-// export interface UrlContext extends BaseUserContext { ... }
+/** Product context for context-aware chat */
+export interface ProductContext extends BaseUserContext {
+  type: 'product_context';
+  [key: string]: unknown;
+}
+
+/** User profile context */
+export interface UserProfileContext extends BaseUserContext {
+  type: 'user_profile';
+  [key: string]: unknown;
+}
+
+/** Generic context for arbitrary data */
+export interface GenericContext extends BaseUserContext {
+  type: string;
+  [key: string]: unknown;
+}
 
 // ============================================================================
 // Union Type
 // ============================================================================
 
 /** Union of all possible user context item types */
-export type UserContextItem = HighlightedTextContext;
-// Extend as: UserContextItem = HighlightedTextContext | FileContext | UrlContext;
+export type UserContextItem =
+  | HighlightedTextContext
+  | ProductContext
+  | UserProfileContext
+  | GenericContext;
 
 // ============================================================================
 // Helpers
@@ -59,12 +76,10 @@ export function isHighlightedTextContext(
 
 /** Get display label for a context item */
 export function getContextDisplayLabel(item: UserContextItem): string {
-  switch (item.type) {
-    case 'highlighted_text':
-      return item.text_content.length > 40
-        ? item.text_content.substring(0, 40) + '...'
-        : item.text_content;
-    default:
-      return 'Context';
+  if (isHighlightedTextContext(item)) {
+    return item.text_content.length > 40
+      ? item.text_content.substring(0, 40) + '...'
+      : item.text_content;
   }
+  return 'Context';
 }

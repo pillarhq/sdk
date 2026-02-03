@@ -7,6 +7,7 @@
 
 import { h, ComponentChildren, VNode } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
+import { debug } from './debug';
 
 // ============================================================================
 // CollapsibleSection - Replaces ProgressRow + ReasoningDisclosure
@@ -158,7 +159,7 @@ export function CodeBlock({ language, children }: CodeBlockProps): VNode {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('[Pillar] Failed to copy code:', err);
+      debug.error('[Pillar] Failed to copy code:', err);
     }
   };
 

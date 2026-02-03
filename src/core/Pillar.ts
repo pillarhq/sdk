@@ -41,6 +41,7 @@ import {
   startWorkflow as storeStartWorkflow,
   updateStepStatus,
 } from "../store/workflow";
+import { debug } from "../utils/debug";
 import { domReady } from "../utils/dom";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
@@ -75,8 +76,8 @@ export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
  * Chat context for escalation to human support.
  */
 export interface ChatContext {
-  /** Server-assigned conversation ID, or null if not yet assigned */
-  conversationId: string | null;
+  /** Server-assigned thread ID, or null if not yet assigned */
+  threadId: string | null;
   /** Messages in the conversation */
   messages: Array<{
     role: "user" | "assistant";
@@ -175,8 +176,7 @@ export class Pillar {
    * Initialize the Pillar SDK
    */
   static async init(config: PillarConfig): Promise<Pillar> {
-    // Support both productKey (new) and helpCenter (deprecated)
-    if (!config.productKey && !config.helpCenter) {
+    if (!config.productKey) {
       throw new Error("[Pillar] productKey is required");
     }
 
@@ -335,14 +335,14 @@ export class Pillar {
    */
   getChatContext(): ChatContext | null {
     const messages = chatMessages.value;
-    const conversationId = chatConversationId.value;
+    const currentConversationId = chatConversationId.value;
 
     if (messages.length === 0) {
       return null;
     }
 
     return {
-      conversationId,
+      threadId: currentConversationId,
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -508,12 +508,12 @@ export class Pillar {
     options?: { preserveConversation?: boolean }
   ): Promise<void> {
     if (!this._api) {
-      console.warn("[Pillar] SDK not initialized, cannot identify user");
+      debug.warn("[Pillar] SDK not initialized, cannot identify user");
       return;
     }
 
     if (!userId) {
-      console.warn("[Pillar] userId is required for identify()");
+      debug.warn("[Pillar] userId is required for identify()");
       return;
     }
 
@@ -545,7 +545,7 @@ export class Pillar {
 
       this._events.emit("user:identified", { userId, profile });
     } catch (error) {
-      console.error("[Pillar] Failed to identify user:", error);
+      debug.error("[Pillar] Failed to identify user:", error);
       throw error;
     }
   }
@@ -666,14 +666,14 @@ export class Pillar {
    */
   async getSuggestions(): Promise<Suggestion[]> {
     if (!this._api) {
-      console.warn("[Pillar] SDK not initialized, cannot get suggestions");
+      debug.warn("[Pillar] SDK not initialized, cannot get suggestions");
       return [];
     }
 
     try {
       return await this._api.getSuggestions(this._context, this._userProfile);
     } catch (error) {
-      console.error("[Pillar] Failed to get suggestions:", error);
+      debug.error("[Pillar] Failed to get suggestions:", error);
       return [];
     }
   }
@@ -738,7 +738,7 @@ export class Pillar {
     const { name, ...definition } = action;
 
     if (!name) {
-      console.warn("[Pillar] registerAction called without a name");
+      debug.warn("[Pillar] registerAction called without a name");
       return;
     }
 
@@ -752,7 +752,7 @@ export class Pillar {
       autoComplete: definition.autoComplete ?? definition.auto_complete ?? true,
     });
 
-    console.debug(`[Pillar] Registered action: ${name}`);
+    debug.log(`[Pillar] Registered action: ${name}`);
   }
 
   /**
@@ -853,7 +853,7 @@ export class Pillar {
       try {
         this._anyTaskHandler(name, data);
       } catch (error) {
-        console.error(`[Pillar] Error in onAnyTask handler:`, error);
+        debug.error(`[Pillar] Error in onAnyTask handler:`, error);
       }
     }
 
@@ -917,7 +917,7 @@ export class Pillar {
               }
             })
             .catch((error) => {
-              console.error(`[Pillar] Error in query action "${name}":`, error);
+              debug.error(`[Pillar] Error in query action "${name}":`, error);
               this._events.emit("task:complete", {
                 name,
                 success: false,
@@ -929,7 +929,7 @@ export class Pillar {
           this._events.emit("task:complete", { name, success: true, data });
         }
       } catch (error) {
-        console.error(`[Pillar] Error executing task "${name}":`, error);
+        debug.error(`[Pillar] Error executing task "${name}":`, error);
         this._events.emit("task:complete", { name, success: false, data });
       }
     } else {
@@ -938,7 +938,7 @@ export class Pillar {
         case "navigate":
           if (path && typeof window !== "undefined") {
             // Fallback to hard redirect only if no handler was registered
-            console.warn(
+            debug.warn(
               `[Pillar] No 'navigate' handler registered. Using window.location.href as fallback.`
             );
             window.location.href = path;
@@ -976,7 +976,7 @@ export class Pillar {
           }
           break;
         default:
-          console.warn(
+          debug.warn(
             `[Pillar] No handler registered for task "${name}". Register one with pillar.onTask('${name}', handler)`
           );
           // Emit failure for unhandled tasks
@@ -1072,12 +1072,12 @@ export class Pillar {
     }
   ): void {
     if (!taskId) {
-      console.warn("[Pillar] confirmTaskExecution called without taskId");
+      debug.warn("[Pillar] confirmTaskExecution called without taskId");
       return;
     }
 
     if (!this._api) {
-      console.warn(
+      debug.warn(
         "[Pillar] SDK not initialized, cannot confirm task execution"
       );
       return;
@@ -1178,7 +1178,7 @@ export class Pillar {
   initiateWorkflowStep(stepIndex?: number): void {
     const workflow = activeWorkflow.value;
     if (!workflow) {
-      console.warn("[Pillar] No active workflow");
+      debug.warn("[Pillar] No active workflow");
       return;
     }
 
@@ -1186,12 +1186,12 @@ export class Pillar {
     const step = workflow.steps[idx];
 
     if (!step) {
-      console.warn(`[Pillar] Invalid step index: ${idx}`);
+      debug.warn(`[Pillar] Invalid step index: ${idx}`);
       return;
     }
 
     if (step.status !== "awaiting_initiation") {
-      console.warn(`[Pillar] Step ${idx} is not awaiting initiation`);
+      debug.warn(`[Pillar] Step ${idx} is not awaiting initiation`);
       return;
     }
 
@@ -1362,7 +1362,7 @@ export class Pillar {
    * execution of the next ready step.
    */
   async resumePlan(): Promise<void> {
-    console.log("[Pillar] Manual plan resume triggered");
+    debug.log("[Pillar] Manual plan resume triggered");
     await this._planExecutor?.resumeExecution();
   }
 
@@ -1449,11 +1449,11 @@ export class Pillar {
    */
   async sendActionResult(actionName: string, result: unknown): Promise<void> {
     if (!this._api) {
-      console.warn("[Pillar] SDK not initialized, cannot send action result");
+      debug.warn("[Pillar] SDK not initialized, cannot send action result");
       return;
     }
 
-    console.log(`[Pillar] Sending action result for "${actionName}":`, result);
+    debug.log(`[Pillar] Sending action result for "${actionName}":`, result);
     await this._api.mcp.sendActionResult(actionName, result);
     this._events.emit("action:result", { actionName, result });
   }
@@ -1467,11 +1467,37 @@ export class Pillar {
    *
    * @param actionName - The name of the action to execute
    * @param args - Arguments for the action
+   * @param schema - Optional schema for parameter validation
    */
   async executeQueryAction(
     actionName: string,
-    args: Record<string, unknown> = {}
+    args: Record<string, unknown> = {},
+    schema?: { properties?: Record<string, unknown>; required?: string[] }
   ): Promise<void> {
+    const startTime = performance.now();
+    
+    // Defensive validation: ensure actionName is valid
+    if (!actionName || typeof actionName !== 'string' || actionName.trim() === '') {
+      debug.error('[Pillar] executeQueryAction called with missing or invalid actionName:', actionName);
+      // Cannot send result back without a valid actionName
+      return;
+    }
+
+    debug.log(`[Pillar] Starting query action "${actionName}"`, args);
+
+    // Validate parameters against schema if provided
+    if (schema?.properties) {
+      const validationError = this._validateQueryParams(args, schema);
+      if (validationError) {
+        debug.error(`[Pillar] Query param validation failed: ${validationError}`);
+        await this.sendActionResult(actionName, {
+          success: false,
+          error: validationError,
+        });
+        return;
+      }
+    }
+
     // Look for handlers
     const actionDefinition = hasAction(actionName)
       ? getActionDefinition(actionName)
@@ -1483,7 +1509,7 @@ export class Pillar {
     const handler = registryHandler || specificHandler || queryTypeHandler;
 
     if (!handler) {
-      console.error(
+      debug.error(
         `[Pillar] No handler registered for query action "${actionName}". ` +
           `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`
       );
@@ -1496,16 +1522,21 @@ export class Pillar {
     }
 
     try {
+      const handlerStart = performance.now();
       const result = await Promise.resolve(handler(args));
-      console.log(
-        `[Pillar] Query action "${actionName}" completed with result:`,
+      const handlerElapsed = Math.round(performance.now() - handlerStart);
+      
+      debug.log(
+        `[Pillar] Query action "${actionName}" handler completed in ${handlerElapsed}ms`,
         result
       );
 
       if (result !== undefined) {
         await this.sendActionResult(actionName, result);
+        const totalElapsed = Math.round(performance.now() - startTime);
+        debug.log(`[Pillar] Query action "${actionName}" total time: ${totalElapsed}ms`);
       } else {
-        console.warn(
+        debug.warn(
           `[Pillar] Query action "${actionName}" returned undefined. ` +
             `Make sure your handler returns data for the agent.`
         );
@@ -1515,8 +1546,9 @@ export class Pillar {
         });
       }
     } catch (error) {
-      console.error(
-        `[Pillar] Error executing query action "${actionName}":`,
+      const elapsed = Math.round(performance.now() - startTime);
+      debug.error(
+        `[Pillar] Error executing query action "${actionName}" after ${elapsed}ms:`,
         error
       );
       await this.sendActionResult(actionName, {
@@ -1524,6 +1556,33 @@ export class Pillar {
         success: false,
       });
     }
+  }
+
+  /**
+   * Validate query parameters against a schema.
+   * @returns Error message if validation fails, null if valid
+   */
+  private _validateQueryParams(
+    params: Record<string, unknown>,
+    schema: { properties?: Record<string, unknown>; required?: string[] }
+  ): string | null {
+    const properties = schema.properties || {};
+    const required = schema.required || [];
+    const expectedParams = Object.keys(properties);
+
+    // Check required params are present
+    const missing = required.filter((p) => !(p in params));
+    if (missing.length > 0) {
+      return `Missing required parameters: ${missing.join(", ")}. Expected: ${expectedParams.join(", ")}`;
+    }
+
+    // Check for unknown params (LLM used wrong names)
+    const unknown = Object.keys(params).filter((p) => !(p in properties));
+    if (unknown.length > 0) {
+      return `Unknown parameters: ${unknown.join(", ")}. Expected: ${expectedParams.join(", ")}`;
+    }
+
+    return null;
   }
 
   // ============================================================================
@@ -1536,13 +1595,13 @@ export class Pillar {
   private async _init(config: PillarConfig): Promise<void> {
     // If already initializing, wait for it to complete
     if (this._state === "initializing" && this._initPromise) {
-      console.log("[Pillar] Already initializing, waiting for completion");
+      debug.log("[Pillar] Already initializing, waiting for completion");
       await this._initPromise;
       return;
     }
 
     if (this._state === "ready") {
-      console.log("[Pillar] Already initialized");
+      debug.log("[Pillar] Already initialized");
       return;
     }
 
@@ -1570,7 +1629,7 @@ export class Pillar {
       // This allows admins to change SDK behavior without requiring
       // customers to update their integration code
       const serverConfig = await tempApi.fetchEmbedConfig().catch((error) => {
-        console.warn(
+        debug.warn(
           "[Pillar] Failed to fetch server config, using local config only:",
           error
         );
@@ -1592,7 +1651,7 @@ export class Pillar {
       // Initialize API client with the final merged config
       this._api = new APIClient(this._config);
 
-      // Initialize PlanExecutor for multi-step plans (uses APIClient's MCPClient)
+      // Initialize PlanExecutor for multi-step plans
       this._planExecutor = new PlanExecutor(
         this._api.mcp,
         this._events,
@@ -1676,7 +1735,7 @@ export class Pillar {
       this._events.emit("ready");
       this._config.onReady?.();
 
-      console.log("[Pillar] SDK initialized successfully");
+      debug.log("[Pillar] SDK initialized successfully");
 
       // Attempt to recover any active plan from localStorage
       await this._planExecutor?.recoverPlan();
@@ -1690,7 +1749,7 @@ export class Pillar {
       const err = error instanceof Error ? error : new Error(String(error));
       this._events.emit("error", err);
       this._config?.onError?.(err);
-      console.error("[Pillar] Failed to initialize:", error);
+      debug.error("[Pillar] Failed to initialize:", error);
       throw error;
     }
   }
@@ -1761,7 +1820,7 @@ export class Pillar {
     this._config = null;
     this._state = "uninitialized";
 
-    console.log("[Pillar] SDK destroyed");
+    debug.log("[Pillar] SDK destroyed");
   }
 }
 

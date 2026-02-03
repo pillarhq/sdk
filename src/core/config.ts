@@ -198,11 +198,6 @@ export interface PillarConfig {
   productKey?: string;
   
   /**
-   * @deprecated Use `productKey` instead. Will be removed in v1.0.
-   */
-  helpCenter?: string;
-  
-  /**
    * Platform identifier for code-first actions.
    * Used to filter actions by deployment platform.
    * @default 'web'
@@ -397,23 +392,12 @@ function mergeSidebarTabs(userTabs?: SidebarTabConfig[]): SidebarTabConfig[] {
 }
 
 export function resolveConfig(config: PillarConfig): ResolvedConfig {
-  // Support both productKey (new) and helpCenter (deprecated)
-  const productKey = config.productKey ?? config.helpCenter;
-  
-  if (!productKey) {
+  if (!config.productKey) {
     throw new Error('[Pillar] productKey is required');
   }
   
-  // Warn about deprecated helpCenter usage
-  if (config.helpCenter && !config.productKey) {
-    console.warn(
-      '[Pillar] "helpCenter" is deprecated and will be removed in v1.0. ' +
-      'Please use "productKey" instead.'
-    );
-  }
-  
   return {
-    productKey,
+    productKey: config.productKey,
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     platform: config.platform || 'web',
     version: config.version,
