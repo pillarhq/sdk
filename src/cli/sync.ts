@@ -201,9 +201,32 @@ async function loadActions(actionsPath: string): Promise<LoadedModule> {
       const importPath = absolutePath.replace(/\\/g, '/');
       
       // Extract both actions and agentGuidance
+      // Handle both direct exports and cases where tsx wraps exports in module.default
       const extractScript = `import * as module from '${importPath}';
-const actions = module.default || module.actions;
-const agentGuidance = module.agentGuidance;
+
+// Resolve actions - tsx may wrap all exports in module.default
+function resolveActions(mod) {
+  // Direct named export
+  if (mod.actions && typeof mod.actions === 'object' && !mod.actions.default) {
+    return mod.actions;
+  }
+  // Default export is the actions object directly
+  if (mod.default && typeof mod.default === 'object') {
+    // Check if default is a module namespace (has nested default or actions)
+    if (mod.default.default && typeof mod.default.default === 'object') {
+      return mod.default.default;
+    }
+    if (mod.default.actions && typeof mod.default.actions === 'object') {
+      return mod.default.actions;
+    }
+    // default is the actions object itself
+    return mod.default;
+  }
+  return null;
+}
+
+const actions = resolveActions(module);
+const agentGuidance = module.agentGuidance || module.default?.agentGuidance;
 console.log(JSON.stringify({ actions, agentGuidance }));`;
       
       fs.writeFileSync(tempFile, extractScript, 'utf-8');
@@ -248,9 +271,30 @@ console.log(JSON.stringify({ actions, agentGuidance }));`;
   try {
     const module = await import(fileUrl);
 
-    // Support default export or named 'actions' export
-    const actions = module.default || module.actions;
-    const agentGuidance = module.agentGuidance;
+    // Resolve actions - handle both direct exports and wrapped module namespaces
+    function resolveActions(mod: Record<string, unknown>): SyncActionDefinitions | null {
+      // Direct named export
+      if (mod.actions && typeof mod.actions === 'object' && !(mod.actions as Record<string, unknown>).default) {
+        return mod.actions as SyncActionDefinitions;
+      }
+      // Default export is the actions object directly
+      if (mod.default && typeof mod.default === 'object') {
+        const defaultExport = mod.default as Record<string, unknown>;
+        // Check if default is a module namespace (has nested default or actions)
+        if (defaultExport.default && typeof defaultExport.default === 'object') {
+          return defaultExport.default as SyncActionDefinitions;
+        }
+        if (defaultExport.actions && typeof defaultExport.actions === 'object') {
+          return defaultExport.actions as SyncActionDefinitions;
+        }
+        // default is the actions object itself
+        return defaultExport as SyncActionDefinitions;
+      }
+      return null;
+    }
+
+    const actions = resolveActions(module);
+    const agentGuidance = module.agentGuidance || (module.default as Record<string, unknown>)?.agentGuidance;
 
     if (!actions || typeof actions !== 'object') {
       throw new Error(
@@ -258,7 +302,7 @@ console.log(JSON.stringify({ actions, agentGuidance }));`;
       );
     }
 
-    return { actions, agentGuidance };
+    return { actions, agentGuidance: agentGuidance as string | undefined };
   } catch (error) {
     throw error;
   }

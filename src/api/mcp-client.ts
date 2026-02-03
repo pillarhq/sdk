@@ -15,7 +15,7 @@ import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { ExecutionPlan } from '../core/plan';
 import type { UserContextItem } from '../types/user-context';
-import { debug } from '../utils/debug';
+import { debug, type LogEntry } from '../utils/debug';
 import type { ArticleSummary } from './client';
 
 // ============================================================================
@@ -781,6 +781,87 @@ export class MCPClient {
         error
       );
       throw error;
+    }
+  }
+
+  // ============================================================================
+  // Client Logging Methods
+  // ============================================================================
+
+  /**
+   * Send a client-side log to the server for debugging.
+   * 
+   * Logs are correlated with agent sessions via the MCP session ID.
+   * Use this to forward important SDK events to server logs.
+   * 
+   * @param level - Log level: 'log', 'warn', or 'error'
+   * @param message - The log message
+   * @param data - Optional additional data to include
+   */
+  async sendLog(
+    level: 'log' | 'warn' | 'error',
+    message: string,
+    data?: unknown
+  ): Promise<void> {
+    const request: JSONRPCRequest = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'client/log',
+      params: {
+        level,
+        message,
+        data,
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    try {
+      // Fire and forget - don't block on log delivery
+      // Use keepalive to ensure request completes even if page unloads
+      fetch(this.baseUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(request),
+        keepalive: true,
+      }).catch(() => {
+        // Silently ignore log delivery failures - don't spam console
+      });
+    } catch {
+      // Silently ignore - logging should never throw
+    }
+  }
+
+  /**
+   * Send a batch of client-side logs to the server.
+   * 
+   * Logs are buffered and sent periodically (every 5 seconds by default)
+   * to reduce network requests. This method is called by the debug module.
+   * 
+   * @param logs - Array of log entries to send
+   */
+  sendLogBatch(logs: LogEntry[]): void {
+    if (logs.length === 0) return;
+
+    const request: JSONRPCRequest = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'client/log-batch',
+      params: { logs },
+    };
+
+    try {
+      // Fire and forget - don't block on log delivery
+      // Use keepalive to ensure request completes even if page unloads
+      fetch(this.baseUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(request),
+        keepalive: true,
+      }).catch(() => {
+        // Silently ignore log delivery failures
+      });
+    } catch {
+      // Silently ignore - logging should never throw
     }
   }
 

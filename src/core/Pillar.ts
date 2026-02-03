@@ -1651,6 +1651,9 @@ export class Pillar {
       // Initialize API client with the final merged config
       this._api = new APIClient(this._config);
 
+      // Configure debug logger to forward logs to server (for debugging client-server issues)
+      debug.configure(this._api.mcp, { forwardToServer: true });
+
       // Initialize PlanExecutor for multi-step plans
       this._planExecutor = new PlanExecutor(
         this._api.mcp,
