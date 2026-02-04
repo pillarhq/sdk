@@ -165,7 +165,7 @@ export interface PillarEvents {
   };
   "user:logout": Record<string, never>;
   // Query action events - for actions that return data to the agent
-  "action:result": { actionName: string; result: unknown };
+  "action:result": { actionName: string; result: unknown; toolCallId?: string };
   // Task events - for AI-suggested actions
   "task:execute": TaskExecutePayload;
   "task:complete": {

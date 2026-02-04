@@ -51,12 +51,12 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
     closePanel();
   };
 
-  const handleSelectThread = async (threadId: string) => {
+  const handleSelectConversation = async (conversationId: string) => {
     const apiClient = getApiClient();
     if (!apiClient) return;
 
     try {
-      const conversation = await apiClient.getConversation(threadId);
+      const conversation = await apiClient.getConversation(conversationId);
       if (conversation && conversation.messages.length > 0) {
         // Load the conversation into chat store
         loadConversation(conversation.id, conversation.messages);
@@ -102,7 +102,7 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
             dangerouslySetInnerHTML={{ __html: NEW_CHAT_ICON }}
           />
         )}
-        <HistoryDropdown onSelectThread={handleSelectThread} />
+        <HistoryDropdown onSelectConversation={handleSelectConversation} />
         <button
           class="_pillar-icon-btn pillar-icon-btn pillar-close-btn"
           onClick={handleClose}

@@ -43,16 +43,22 @@ export const conversationId = signal<string | null>(null);
 // These are actions discovered via search that can be called directly by the LLM
 export const registeredActions = signal<Record<string, unknown>[]>([]);
 
-/**
- * @deprecated Use `conversationId` instead. Will be removed in v2.0.
- */
-export const threadId = conversationId;
-
 // Incremented when conversation history should be invalidated (e.g., new conversation created)
 export const historyInvalidationCounter = signal<number>(0);
 
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
+
+// Session resumption - tracks if there's an interrupted session to resume
+export interface InterruptedSession {
+  conversationId: string;
+  userMessage: string;
+  partialResponse: string;
+  summary: string;
+  elapsedMs: number;
+}
+
+export const interruptedSession = signal<InterruptedSession | null>(null);
 
 // Current progress status during loading (e.g., "Searching...", "Generating answer...")
 export interface ProgressStatus {
@@ -504,6 +510,15 @@ export const addProgressEvent = (event: ProgressEvent) => {
 
 export const clearProgressEvents = () => {
   progressEvents.value = [];
+};
+
+// Session resumption functions
+export const setInterruptedSession = (session: InterruptedSession | null) => {
+  interruptedSession.value = session;
+};
+
+export const clearInterruptedSession = () => {
+  interruptedSession.value = null;
 };
 
 export const expandChat = () => {

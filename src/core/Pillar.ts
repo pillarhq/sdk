@@ -79,8 +79,8 @@ export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
  * Chat context for escalation to human support.
  */
 export interface ChatContext {
-  /** Server-assigned thread ID, or null if not yet assigned */
-  threadId: string | null;
+  /** Server-assigned conversation ID, or null if not yet assigned */
+  conversationId: string | null;
   /** Messages in the conversation */
   messages: Array<{
     role: "user" | "assistant";
@@ -379,7 +379,7 @@ export class Pillar {
     }
 
     return {
-      threadId: currentConversationId,
+      conversationId: currentConversationId,
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -2031,18 +2031,19 @@ export class Pillar {
    *
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
+   * @param toolCallId - Unique ID for this specific tool invocation (for result correlation)
    * @returns Promise that resolves when the result is delivered
    * @internal
    */
-  async sendActionResult(actionName: string, result: unknown): Promise<void> {
+  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
     if (!this._api) {
       debug.warn("[Pillar] SDK not initialized, cannot send action result");
       return;
     }
 
-    debug.log(`[Pillar] Sending action result for "${actionName}":`, result);
-    await this._api.mcp.sendActionResult(actionName, result);
-    this._events.emit("action:result", { actionName, result });
+    debug.log(`[Pillar] Sending action result for "${actionName}" (tool_call_id: ${toolCallId}):`, result);
+    await this._api.mcp.sendActionResult(actionName, result, toolCallId);
+    this._events.emit("action:result", { actionName, result, toolCallId });
   }
 
   /**
@@ -2376,6 +2377,9 @@ export class Pillar {
       // Attempt to recover any active plan from localStorage
       await this._planExecutor?.recoverPlan();
 
+      // Attempt to recover any interrupted session from localStorage
+      await this._recoverSession();
+
       // Check URL params for auto-opening
       if (this._config.urlParams.enabled) {
         await this._handleUrlParams();
@@ -2387,6 +2391,58 @@ export class Pillar {
       this._config?.onError?.(err);
       debug.error("[Pillar] Failed to initialize:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Attempt to recover an interrupted session from localStorage.
+   * Checks if there's a saved session hint and validates with the server.
+   */
+  private async _recoverSession(): Promise<void> {
+    if (!this._config || !this._api) return;
+
+    const siteId = this._config.productKey;
+    
+    // Import session persistence functions
+    const { loadActiveSession, clearActiveSession } = await import('../store/session-persistence');
+    const { setInterruptedSession, setConversationId } = await import('../store/chat');
+    
+    // Check for saved session hint
+    const savedSession = loadActiveSession(siteId);
+    if (!savedSession) return;
+
+    debug.log('[Pillar] Found saved session hint, checking with server...');
+
+    try {
+      // Validate with server
+      const status = await this._api.mcp.getConversationStatus(savedSession.conversationId);
+      
+      if (!status || !status.resumable) {
+        // Session is no longer resumable, clear the hint
+        debug.log('[Pillar] Session is no longer resumable, clearing hint');
+        clearActiveSession(siteId);
+        return;
+      }
+
+      // Session is resumable - set up the interrupted session state
+      debug.log('[Pillar] Session is resumable, setting up resume state');
+      
+      // Set conversation ID so we can resume into the same conversation
+      setConversationId(savedSession.conversationId);
+      
+      // Set the interrupted session signal for the UI to pick up
+      setInterruptedSession({
+        conversationId: savedSession.conversationId,
+        userMessage: status.user_message ?? '',
+        partialResponse: status.partial_response ?? '',
+        summary: status.summary ?? '',
+        elapsedMs: status.elapsed_ms ?? 0,
+      });
+
+      debug.log('[Pillar] Resume state set up successfully');
+    } catch (error) {
+      debug.warn('[Pillar] Failed to check session status:', error);
+      clearActiveSession(siteId);
     }
   }
 

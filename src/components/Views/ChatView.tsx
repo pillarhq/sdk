@@ -3,7 +3,7 @@
  * Standalone full-screen chat view (used when starting chat from home/categories)
  */
 
-import { useCallback, useEffect, useRef } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { ProgressEvent } from "../../api/client";
 import Pillar from "../../core/Pillar";
 import type { ExecutionPlan } from "../../core/plan";
@@ -11,10 +11,12 @@ import {
   addAssistantMessage,
   addProgressEvent,
   addUserMessage,
+  clearInterruptedSession,
   clearPendingMessage,
   clearPendingUserContext,
   clearProgressStatus,
   conversationId,
+  interruptedSession,
   isLoading,
   messages,
   pendingMessage,
@@ -30,6 +32,7 @@ import {
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
 } from "../../store/chat";
+import { clearActiveSession } from "../../store/session-persistence";
 import { hasActivePlan } from "../../store/plan";
 import type {
   DOMSnapshotContext,
@@ -49,6 +52,7 @@ import {
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
 import { PlanView } from "../Plan/PlanView";
 import { ProgressRow, ProgressStack, ReasoningDisclosure } from "../Progress";
+import { ResumePrompt } from "./ResumePrompt";
 
 const THUMBS_UP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
 
@@ -86,6 +90,79 @@ function getCompletionText(actionName: string, success: boolean): string {
 export function ChatView() {
   const api = useAPI();
   const messagesRef = useRef<HTMLDivElement>(null);
+  const [isResuming, setIsResuming] = useState(false);
+
+  // Handle resuming an interrupted session
+  const handleResume = useCallback(async () => {
+    const session = interruptedSession.value;
+    if (!session) return;
+
+    const pillar = Pillar.getInstance();
+    const siteId = pillar?.config?.productKey ?? '';
+
+    setIsResuming(true);
+    setLoading(true);
+
+    // Add placeholder assistant message for the resumed response
+    addAssistantMessage("");
+
+    try {
+      let fullResponse = "";
+
+      await api.mcp.resumeConversation(
+        session.conversationId,
+        undefined, // TODO: add user context
+        {
+          onToken: (token) => {
+            fullResponse += token;
+            updateLastAssistantMessage(fullResponse);
+          },
+          onProgress: (progress) => {
+            addProgressEvent(progress as StoreProgressEvent);
+          },
+          onComplete: () => {
+            debug.log("[Pillar] Resume completed");
+          },
+          onError: (error) => {
+            debug.error("[Pillar] Resume error:", error);
+            updateLastAssistantMessage("Sorry, failed to resume the conversation. Please try again.");
+          },
+          onRegisteredActions: () => {
+            // Handle registered actions if needed
+          },
+        }
+      );
+
+      // Clear interrupted session state
+      clearInterruptedSession();
+      clearActiveSession(siteId);
+    } catch (error) {
+      debug.error("[Pillar] Resume error:", error);
+      updateLastAssistantMessage("Sorry, failed to resume the conversation. Please try again.");
+    } finally {
+      setIsResuming(false);
+      setLoading(false);
+      clearProgressStatus();
+    }
+  }, [api]);
+
+  // Handle discarding an interrupted session
+  const handleDiscard = useCallback(() => {
+    const pillar = Pillar.getInstance();
+    const siteId = pillar?.config?.productKey ?? '';
+    
+    clearInterruptedSession();
+    clearActiveSession(siteId);
+  }, []);
+
+  // Auto-resume for quick reconnects (under 15 seconds)
+  useEffect(() => {
+    const session = interruptedSession.value;
+    if (session && session.elapsedMs < 15000) {
+      // Seamless resume - trigger automatically
+      handleResume();
+    }
+  }, [interruptedSession.value, handleResume]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -253,6 +330,15 @@ export function ChatView() {
           // Conversation started callback - store ID early for optimistic UI
           (conversationIdFromServer) => {
             setConversationId(conversationIdFromServer);
+            
+            // Save active session hint for recovery on page navigation
+            const pillar = Pillar.getInstance();
+            const siteId = pillar?.config?.productKey ?? '';
+            if (siteId && conversationIdFromServer) {
+              import("../../store/session-persistence").then(({ saveActiveSession }) => {
+                saveActiveSession(conversationIdFromServer, siteId);
+              });
+            }
           },
           // Unified action request callback - execute action and send result back
           async (request) => {
@@ -284,7 +370,8 @@ export function ChatView() {
 
                   await api.mcp.sendActionResult(
                     request.action_name,
-                    interactionResult
+                    interactionResult,
+                    request.tool_call_id
                   );
 
                   const elapsed = Math.round(
@@ -314,10 +401,11 @@ export function ChatView() {
                 }
 
                 // Send success result back to agent
-                await api.mcp.sendActionResult(request.action_name, {
-                  success: true,
-                  result,
-                });
+                await api.mcp.sendActionResult(
+                  request.action_name,
+                  { success: true, result },
+                  request.tool_call_id
+                );
 
                 const elapsed = Math.round(
                   performance.now() - requestStartTime
@@ -330,10 +418,11 @@ export function ChatView() {
                   error instanceof Error ? error.message : String(error);
 
                 // Send failure result back to agent
-                await api.mcp.sendActionResult(request.action_name, {
-                  success: false,
-                  error: errorMessage,
-                });
+                await api.mcp.sendActionResult(
+                  request.action_name,
+                  { success: false, error: errorMessage },
+                  request.tool_call_id
+                );
 
                 const elapsed = Math.round(
                   performance.now() - requestStartTime
@@ -347,10 +436,11 @@ export function ChatView() {
               debug.error(
                 "[Pillar] SDK not initialized, cannot execute action"
               );
-              await api.mcp.sendActionResult(request.action_name, {
-                success: false,
-                error: "SDK not initialized",
-              });
+              await api.mcp.sendActionResult(
+                request.action_name,
+                { success: false, error: "SDK not initialized" },
+                request.tool_call_id
+              );
             }
           }
         );
@@ -393,6 +483,13 @@ export function ChatView() {
       } finally {
         setLoading(false);
         clearProgressStatus();
+        
+        // Clear session hint on successful completion
+        const pillar = Pillar.getInstance();
+        const siteId = pillar?.config?.productKey ?? '';
+        if (siteId) {
+          clearActiveSession(siteId);
+        }
       }
     },
     [api, handleActionsReceived]
@@ -541,7 +638,27 @@ export function ChatView() {
         class="_pillar-chat-view-messages pillar-chat-view-messages"
         ref={messagesRef}
       >
-        {messages.value.length === 0 && (
+        {/* Resume prompt for interrupted sessions (only show for non-seamless disconnects) */}
+        {interruptedSession.value && interruptedSession.value.elapsedMs >= 15000 && (
+          <ResumePrompt
+            session={interruptedSession.value}
+            onResume={handleResume}
+            onDiscard={handleDiscard}
+            isResuming={isResuming}
+          />
+        )}
+        
+        {/* Seamless resume indicator */}
+        {isResuming && interruptedSession.value && interruptedSession.value.elapsedMs < 15000 && (
+          <ResumePrompt
+            session={interruptedSession.value}
+            onResume={handleResume}
+            onDiscard={handleDiscard}
+            isResuming={true}
+          />
+        )}
+
+        {messages.value.length === 0 && !interruptedSession.value && (
           <div class="_pillar-chat-view-welcome pillar-chat-view-welcome">
             <div class="_pillar-chat-view-welcome-icon pillar-chat-view-welcome-icon">
               💬

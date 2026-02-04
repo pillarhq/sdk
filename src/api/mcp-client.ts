@@ -113,6 +113,8 @@ export interface ActionRequest {
   parameters: Record<string, unknown>;
   /** Full action definition (optional, for handler lookup) */
   action?: ActionData;
+  /** Unique ID for this specific tool invocation (for result correlation) */
+  tool_call_id?: string;
 }
 
 /** Streaming callbacks for tool calls */
@@ -513,10 +515,18 @@ export class MCPClient {
                       
                       if (callbacks.onActionRequest) {
                         console.log('[MCPClient] *** CALLING onActionRequest handler ***');
+                        
+                        // Validate tool_call_id is present - critical for result correlation
+                        if (!progress.tool_call_id) {
+                          console.warn('[MCPClient] action_request missing tool_call_id - result correlation may fail');
+                          debug.warn('[MCPClient] action_request missing tool_call_id for action:', progress.action_name);
+                        }
+                        
                         const actionRequest: ActionRequest = {
                           action_name: progress.action_name,
                           parameters: progress.parameters || {},
                           action: progress.action,
+                          tool_call_id: progress.tool_call_id,
                         };
                         
                         // Execute async but don't await - let the stream continue
@@ -865,10 +875,17 @@ export class MCPClient {
    * 
    * @param actionName - The name of the action that was executed
    * @param result - The result data to send back to the agent
+   * @param toolCallId - Unique ID for this specific tool invocation (for result correlation)
    * @returns Promise that resolves when the result is delivered, or rejects on error
    */
-  async sendActionResult(actionName: string, result: unknown): Promise<void> {
+  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
     const startTime = performance.now();
+    
+    // Warn if tool_call_id is missing - will cause result correlation to fail on server
+    if (!toolCallId) {
+      console.warn(`[MCPClient] sendActionResult called without toolCallId for action "${actionName}" - server will not be able to correlate result`);
+      debug.warn('[MCPClient] Missing toolCallId in sendActionResult for:', actionName);
+    }
     
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -877,12 +894,13 @@ export class MCPClient {
       params: {
         action_name: actionName,
         result,
+        tool_call_id: toolCallId,
       },
     };
 
     debugLog.add({
       event: 'network:request',
-      data: { method: 'action/result', action: actionName, url: this.baseUrl },
+      data: { method: 'action/result', action: actionName, tool_call_id: toolCallId, url: this.baseUrl },
       source: 'network',
       level: 'info',
     });
@@ -1016,6 +1034,187 @@ export class MCPClient {
     }
   }
 
+  // ============================================================================
+  // Session Resumption Methods
+  // ============================================================================
+
+  /**
+   * Check if a conversation has a resumable interrupted session.
+   * 
+   * @param conversationId - The conversation UUID to check
+   * @returns Session status with resumption details, or null if not resumable
+   */
+  async getConversationStatus(conversationId: string): Promise<ConversationStatus | null> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}conversations/${conversationId}/status/`,
+        {
+          method: 'GET',
+          headers: this.headers,
+        }
+      );
+
+      if (!response.ok) {
+        debug.warn(`[MCPClient] Failed to get conversation status: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      return data as ConversationStatus;
+    } catch (error) {
+      debug.warn('[MCPClient] Error getting conversation status:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Resume an interrupted conversation.
+   * 
+   * Returns a streaming response that continues the conversation
+   * from where it was interrupted.
+   * 
+   * @param conversationId - The conversation to resume
+   * @param userContext - Optional current page context
+   * @param callbacks - Streaming callbacks
+   */
+  async resumeConversation(
+    conversationId: string,
+    userContext: Record<string, unknown> | undefined,
+    callbacks: StreamCallbacks
+  ): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}conversations/${conversationId}/resume/`,
+        {
+          method: 'POST',
+          headers: {
+            ...this.headers,
+            'Accept': 'text/event-stream',
+          },
+          body: JSON.stringify({ user_context: userContext }),
+        }
+      );
+
+      if (!response.ok) {
+        callbacks.onError?.(`Failed to resume conversation: ${response.status}`);
+        return;
+      }
+
+      if (!response.body) {
+        callbacks.onError?.('No response body for resume stream');
+        return;
+      }
+
+      // Process SSE stream (reuse existing streaming logic)
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data.trim()) {
+                try {
+                  const parsed = JSON.parse(data);
+                  this.handleResumeStreamEvent(parsed, callbacks);
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      callbacks.onComplete?.();
+    } catch (error) {
+      callbacks.onError?.(`Resume error: ${error}`);
+    }
+  }
+
+  /**
+   * Handle events from the resume stream.
+   */
+  private handleResumeStreamEvent(
+    event: JSONRPCResponse | JSONRPCNotification,
+    callbacks: StreamCallbacks
+  ): void {
+    // Handle notifications (progress events)
+    if ('method' in event && event.method === 'notifications/progress') {
+      const progress = (event.params as { progress?: Record<string, unknown> })?.progress;
+      if (!progress) return;
+
+      const kind = progress.kind as string;
+
+      if (kind === 'token') {
+        callbacks.onToken?.(progress.token as string);
+      } else if (kind === 'action_request') {
+        callbacks.onActionRequest?.({
+          action_name: progress.action_name as string,
+          parameters: progress.parameters as Record<string, unknown>,
+          action: progress.action as ActionData | undefined,
+          tool_call_id: progress.tool_call_id as string | undefined,
+        });
+      } else {
+        callbacks.onProgress?.({
+          kind,
+          id: progress.id as string | undefined,
+          label: progress.label as string | undefined,
+          status: progress.status as 'active' | 'done' | 'error' | undefined,
+          text: progress.text as string | undefined,
+        });
+      }
+      return;
+    }
+
+    // Handle final response
+    if ('result' in event) {
+      const result = event.result as ToolResult;
+      
+      if (result.structuredContent?.registered_actions) {
+        callbacks.onRegisteredActions?.(result.structuredContent.registered_actions);
+      }
+      
+      if (result.structuredContent?.sources) {
+        callbacks.onSources?.(result.structuredContent.sources);
+      }
+      
+      if (result.structuredContent?.actions) {
+        callbacks.onActions?.(result.structuredContent.actions);
+      }
+    }
+
+    // Handle errors
+    if ('error' in event && event.error) {
+      callbacks.onError?.(event.error.message);
+    }
+  }
+
+}
+
+/**
+ * Conversation status for session resumption.
+ */
+export interface ConversationStatus {
+  resumable: boolean;
+  message_id?: string;
+  elapsed_ms?: number;
+  user_message?: string;
+  partial_response?: string;
+  summary?: string;
+  accomplished?: Array<{ action: string; result_summary: string }>;
 }
 
 /**
