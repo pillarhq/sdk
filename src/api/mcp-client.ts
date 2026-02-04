@@ -171,9 +171,39 @@ export interface ImageUploadResponse {
 export class MCPClient {
   private config: ResolvedConfig;
   private requestId = 0;
+  private _externalUserId: string = '';
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+  }
+
+  /**
+   * Set the external user ID for authenticated users.
+   * Enables cross-device conversation history.
+   */
+  setExternalUserId(userId: string): void {
+    this._externalUserId = userId;
+  }
+
+  /**
+   * Get or create a persistent visitor ID.
+   * Stored in localStorage to persist across sessions.
+   */
+  private getVisitorId(): string {
+    if (typeof window === 'undefined') return '';
+    
+    const KEY = 'pillar_visitor_id';
+    try {
+      let id = localStorage.getItem(KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem(KEY, id);
+      }
+      return id;
+    } catch {
+      // localStorage might be unavailable (e.g., private browsing)
+      return '';
+    }
   }
 
   /**
@@ -197,6 +227,14 @@ export class MCPClient {
     }
   }
 
+  /**
+   * Get the current page URL for analytics tracking.
+   */
+  private getPageUrl(): string {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }
+
   private get baseUrl(): string {
     return `${this.config.apiBaseUrl}/mcp/`;
   }
@@ -205,12 +243,19 @@ export class MCPClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-customer-id': this.config.productKey,
+      'x-visitor-id': this.getVisitorId(),
+      'x-page-url': this.getPageUrl(),
     };
 
     // Add session ID for request correlation (critical for query actions)
     const sessionId = this.getSessionId();
     if (sessionId) {
       headers['Mcp-Session-Id'] = sessionId;
+    }
+
+    // Add external user ID header for authenticated users (enables cross-device history)
+    if (this._externalUserId) {
+      headers['x-external-user-id'] = this._externalUserId;
     }
 
     // Add browser language for multilingual AI responses

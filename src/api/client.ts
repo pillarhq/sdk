@@ -154,6 +154,7 @@ export class APIClient {
    */
   setExternalUserId(userId: string): void {
     this._externalUserId = userId;
+    this.mcpClient.setExternalUserId(userId);
   }
 
   /**
@@ -161,6 +162,7 @@ export class APIClient {
    */
   clearExternalUserId(): void {
     this._externalUserId = null;
+    this.mcpClient.setExternalUserId('');
   }
 
   // ============================================================================
