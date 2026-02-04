@@ -45,6 +45,7 @@ import { h, render } from "preact";
 import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
 import { DebugPanel } from "../components/DebugPanel";
 import { domReady } from "../utils/dom";
+import { buildSelectorFromRef } from "../utils/dom-scanner";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
   mergeServerConfig,
@@ -464,6 +465,514 @@ export class Pillar {
 
     // Emit event
     this._events.emit("textSelection:change", { enabled });
+  }
+
+  // ============================================================================
+  // DOM Scanning API
+  // ============================================================================
+
+  /**
+   * Enable or disable DOM scanning at runtime.
+   *
+   * @param enabled - Whether to enable DOM scanning
+   *
+   * @example
+   * // Enable DOM scanning
+   * pillar.setDOMScanningEnabled(true);
+   *
+   * // Disable DOM scanning
+   * pillar.setDOMScanningEnabled(false);
+   */
+  setDOMScanningEnabled(enabled: boolean): void {
+    if (!this._config) return;
+
+    this._config.domScanning.enabled = enabled;
+
+    // Emit event
+    this._events.emit("domScanning:change", { enabled });
+  }
+
+  /**
+   * Whether DOM scanning is currently enabled.
+   */
+  get isDOMScanningEnabled(): boolean {
+    return this._config?.domScanning.enabled ?? false;
+  }
+
+  // ============================================================================
+  // DOM Interaction Highlight
+  // ============================================================================
+
+  /** Currently highlighted element (for cleanup) */
+  private _highlightedElement: HTMLElement | null = null;
+  /** Timeout for auto-removing highlight */
+  private _highlightTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Timeout for fade-out transition completion */
+  private _fadeOutTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Original styles to restore after highlight */
+  private _originalStyles: {
+    outline: string;
+    outlineOffset: string;
+    transition: string;
+  } | null = null;
+
+  /**
+   * Highlight an element to show AI interaction.
+   * Scrolls into view if not visible and adds an outline highlight with fade transition.
+   *
+   * @param el - Element to highlight
+   */
+  private highlightElement(el: HTMLElement): void {
+    const config = this._config?.domScanning.interactionHighlight;
+    if (!config?.enabled) {
+      return;
+    }
+
+    // Clear any existing highlight immediately
+    this.clearHighlight(true);
+
+    // Scroll into view if enabled
+    if (config.scrollIntoView) {
+      // Check if element is in viewport
+      const rect = el.getBoundingClientRect();
+      const isInViewport = (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.bottom <= window.innerHeight &&
+        rect.right <= window.innerWidth
+      );
+
+      if (!isInViewport) {
+        el.scrollIntoView({
+          behavior: config.scrollBehavior,
+          block: 'center',
+          inline: 'nearest',
+        });
+      }
+    }
+
+    // Store original styles
+    this._originalStyles = {
+      outline: el.style.outline,
+      outlineOffset: el.style.outlineOffset,
+      transition: el.style.transition,
+    };
+    this._highlightedElement = el;
+
+    // Set up transition for smooth fade in/out
+    const existingTransition = el.style.transition;
+    const outlineTransition = 'outline-color 0.3s ease-in-out';
+    el.style.transition = existingTransition 
+      ? `${existingTransition}, ${outlineTransition}`
+      : outlineTransition;
+
+    // Start with transparent outline (for fade-in effect)
+    el.style.outline = `${config.outlineWidth}px solid transparent`;
+    el.style.outlineOffset = `${config.outlineOffset}px`;
+
+    // Trigger reflow to ensure the transparent state is applied
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+
+    // Fade in to the actual color
+    el.style.outline = `${config.outlineWidth}px solid ${config.outlineColor}`;
+
+    debug.log('[Pillar] Element highlighted with fade-in:', el.tagName);
+
+    // Auto-remove highlight after duration (if duration > 0)
+    if (config.duration > 0) {
+      this._highlightTimeout = setTimeout(() => {
+        this.clearHighlight();
+      }, config.duration);
+    }
+  }
+
+  /**
+   * Clear the current element highlight with optional fade-out.
+   * @param immediate - If true, skip fade-out transition
+   */
+  private clearHighlight(immediate = false): void {
+    if (this._highlightTimeout) {
+      clearTimeout(this._highlightTimeout);
+      this._highlightTimeout = null;
+    }
+
+    if (this._fadeOutTimeout) {
+      clearTimeout(this._fadeOutTimeout);
+      this._fadeOutTimeout = null;
+    }
+
+    if (this._highlightedElement && this._originalStyles) {
+      const el = this._highlightedElement;
+      const originalStyles = this._originalStyles;
+
+      if (immediate) {
+        // Restore original styles immediately
+        el.style.outline = originalStyles.outline;
+        el.style.outlineOffset = originalStyles.outlineOffset;
+        el.style.transition = originalStyles.transition;
+        debug.log('[Pillar] Highlight cleared immediately');
+      } else {
+        // Fade out to transparent first
+        el.style.outline = el.style.outline.replace(/[^,\s]+$/, 'transparent');
+        
+        // Wait for transition to complete, then restore original styles
+        this._fadeOutTimeout = setTimeout(() => {
+          el.style.outline = originalStyles.outline;
+          el.style.outlineOffset = originalStyles.outlineOffset;
+          el.style.transition = originalStyles.transition;
+          debug.log('[Pillar] Highlight fade-out complete');
+          this._fadeOutTimeout = null;
+        }, 300); // Match the transition duration
+      }
+
+      this._highlightedElement = null;
+      this._originalStyles = null;
+    }
+  }
+
+  // ============================================================================
+  // DOM Interaction Methods
+  // ============================================================================
+
+  /**
+   * Get a DOM element by its pillar selector.
+   *
+   * @param selector - CSS selector (typically from DOMNode.selector)
+   * @returns The matching element or null
+   */
+  getElement(selector: string): Element | null {
+    return document.querySelector(selector);
+  }
+
+  /**
+   * Click an element by its selector.
+   * Uses realistic mouse event simulation (mousedown → mouseup → click)
+   * for better compatibility with UI frameworks.
+   *
+   * @param selector - CSS selector for the element to click
+   * @returns true if the element was found and clicked, false otherwise
+   */
+  clickElement(selector: string): boolean {
+    debug.log('[Pillar] clickElement called with selector:', selector);
+    const el = this.getElement(selector);
+    debug.log('[Pillar] clickElement found element:', el);
+    if (el instanceof HTMLElement) {
+      debug.log('[Pillar] clickElement clicking element:', el.tagName, el.textContent?.slice(0, 50));
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      // Get element position for realistic event coordinates
+      const rect = el.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const eventOptions: MouseEventInit = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: centerX,
+        clientY: centerY,
+        button: 0,
+        buttons: 1,
+      };
+      
+      // Fire the full mouse event sequence for realistic simulation
+      el.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+      el.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+      el.dispatchEvent(new MouseEvent('click', eventOptions));
+      
+      debug.log('[Pillar] clickElement full mouse sequence executed');
+      return true;
+    }
+    debug.warn('[Pillar] clickElement element not found or not HTMLElement');
+    return false;
+  }
+
+  /**
+   * Type text into an input element.
+   * Uses realistic input simulation that works with React controlled inputs.
+   *
+   * @param selector - CSS selector for the input element
+   * @param text - Text to type into the element
+   * @returns true if the element was found and text was entered, false otherwise
+   */
+  typeInElement(selector: string, text: string): boolean {
+    debug.log('[Pillar] typeInElement called with selector:', selector, 'text:', text);
+    const el = this.getElement(selector);
+    
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      debug.log('[Pillar] typeInElement found input/textarea:', el.tagName, el.type);
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      // Focus the element first
+      el.focus();
+      
+      // Get the native value setter to bypass React's synthetic event system
+      // React overrides the value property, so we need to use the native setter
+      const prototype = el instanceof HTMLInputElement 
+        ? HTMLInputElement.prototype 
+        : HTMLTextAreaElement.prototype;
+      const nativeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+      
+      if (nativeValueSetter) {
+        // Use native setter to set the value (bypasses React)
+        nativeValueSetter.call(el, text);
+        debug.log('[Pillar] typeInElement set value via native setter');
+      } else {
+        // Fallback to direct assignment
+        el.value = text;
+        debug.log('[Pillar] typeInElement set value directly (fallback)');
+      }
+      
+      // Fire beforeinput event (some frameworks check this)
+      el.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      
+      // Fire input event with proper InputEvent type
+      // This is what React listens to for controlled inputs
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      
+      // Fire change event
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      debug.log('[Pillar] typeInElement complete - events fired');
+      return true;
+    }
+    
+    // Handle contenteditable elements
+    if (el instanceof HTMLElement && el.getAttribute('contenteditable') === 'true') {
+      debug.log('[Pillar] typeInElement found contenteditable element');
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      el.focus();
+      
+      // For contenteditable, we need to use execCommand or modify textContent
+      // and fire the appropriate events
+      el.textContent = text;
+      
+      el.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      
+      debug.log('[Pillar] typeInElement contenteditable complete');
+      return true;
+    }
+    
+    debug.warn('[Pillar] typeInElement element not found or not an input:', el);
+    return false;
+  }
+
+  /**
+   * Select an option in a select element.
+   * Uses realistic event simulation for React compatibility.
+   *
+   * @param selector - CSS selector for the select element
+   * @param value - Value of the option to select
+   * @returns true if the element was found and option was selected, false otherwise
+   */
+  selectOption(selector: string, value: string): boolean {
+    debug.log('[Pillar] selectOption called with selector:', selector, 'value:', value);
+    const el = this.getElement(selector);
+    
+    if (el instanceof HTMLSelectElement) {
+      debug.log('[Pillar] selectOption found select element');
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      // Focus the element first
+      el.focus();
+      
+      // Get native value setter to bypass React's synthetic events
+      const nativeValueSetter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype, 'value'
+      )?.set;
+      
+      if (nativeValueSetter) {
+        nativeValueSetter.call(el, value);
+        debug.log('[Pillar] selectOption set value via native setter');
+      } else {
+        el.value = value;
+        debug.log('[Pillar] selectOption set value directly (fallback)');
+      }
+      
+      // Fire input event (React listens to this)
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      // Fire change event
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      debug.log('[Pillar] selectOption complete');
+      return true;
+    }
+    
+    debug.warn('[Pillar] selectOption element not found or not a select:', el);
+    return false;
+  }
+
+  /**
+   * Focus an element by its selector.
+   * Fires both focus and focusin events for compatibility.
+   *
+   * @param selector - CSS selector for the element to focus
+   * @returns true if the element was found and focused, false otherwise
+   */
+  focusElement(selector: string): boolean {
+    debug.log('[Pillar] focusElement called with selector:', selector);
+    const el = this.getElement(selector);
+    
+    if (el instanceof HTMLElement) {
+      debug.log('[Pillar] focusElement found element:', el.tagName);
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      // Focus the element (this fires 'focus' event automatically)
+      el.focus();
+      
+      // Fire focusin event (bubbles, unlike focus)
+      el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      
+      debug.log('[Pillar] focusElement complete');
+      return true;
+    }
+    
+    debug.warn('[Pillar] focusElement element not found:', el);
+    return false;
+  }
+
+  /**
+   * Toggle a checkbox or radio element.
+   * Uses click simulation for realistic behavior and React compatibility.
+   *
+   * @param selector - CSS selector for the checkbox/radio element
+   * @returns true if the element was found and toggled, false otherwise
+   */
+  toggleElement(selector: string): boolean {
+    debug.log('[Pillar] toggleElement called with selector:', selector);
+    const el = this.getElement(selector);
+    
+    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+      debug.log('[Pillar] toggleElement found checkbox/radio:', el.type, 'current checked:', el.checked);
+      
+      // Highlight the element to show AI interaction
+      this.highlightElement(el);
+      
+      // Focus first
+      el.focus();
+      
+      // Get element position for realistic event coordinates
+      const rect = el.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const eventOptions: MouseEventInit = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: centerX,
+        clientY: centerY,
+        button: 0,
+        buttons: 1,
+      };
+      
+      // Use click simulation - clicking a checkbox naturally toggles it
+      // and fires all the right events (including change)
+      el.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+      el.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+      el.dispatchEvent(new MouseEvent('click', eventOptions));
+      
+      // For React controlled checkboxes, we may also need to fire input event
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      debug.log('[Pillar] toggleElement complete - new checked:', el.checked);
+      return true;
+    }
+    
+    debug.warn('[Pillar] toggleElement element not found or not checkbox/radio:', el);
+    return false;
+  }
+
+  /**
+   * Handle the interact_with_page action from the LLM.
+   * Routes to appropriate DOM interaction method based on operation.
+   *
+   * @param params - Interaction parameters from LLM
+   * @returns Result object with success status and optional error
+   *
+   * @example
+   * // Click a button
+   * pillar.handlePageInteraction({ operation: 'click', ref: 'pr-a1' });
+   *
+   * // Type in an input
+   * pillar.handlePageInteraction({ operation: 'type', ref: 'pr-b1', value: 'hello' });
+   */
+  handlePageInteraction(params: {
+    operation: 'click' | 'type' | 'select' | 'focus' | 'toggle';
+    ref: string;
+    value?: string;
+  }): { success: boolean; error?: string } {
+    debug.log('[Pillar] handlePageInteraction called with params:', params);
+    const selector = buildSelectorFromRef(params.ref);
+    debug.log('[Pillar] handlePageInteraction built selector:', selector);
+
+    let result: { success: boolean; error?: string };
+
+    switch (params.operation) {
+      case 'click':
+        result = { success: this.clickElement(selector) };
+        break;
+      case 'type':
+        if (!params.value) {
+          result = { success: false, error: 'value required for type operation' };
+          break;
+        }
+        result = { success: this.typeInElement(selector, params.value) };
+        break;
+      case 'select':
+        if (!params.value) {
+          result = { success: false, error: 'value required for select operation' };
+          break;
+        }
+        result = { success: this.selectOption(selector, params.value) };
+        break;
+      case 'focus':
+        result = { success: this.focusElement(selector) };
+        break;
+      case 'toggle':
+        result = { success: this.toggleElement(selector) };
+        break;
+      default:
+        result = { success: false, error: `Unknown operation: ${params.operation}` };
+    }
+
+    debug.log('[Pillar] handlePageInteraction result:', result);
+    return result;
   }
 
   /**

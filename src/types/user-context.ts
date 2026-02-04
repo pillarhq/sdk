@@ -4,6 +4,8 @@
  * that can be attached to chat messages.
  */
 
+// Note: No longer importing DOMNode/ScanStats - using compact text format instead
+
 // ============================================================================
 // Base Type
 // ============================================================================
@@ -47,6 +49,21 @@ export interface GenericContext extends BaseUserContext {
   [key: string]: unknown;
 }
 
+/** DOM snapshot context from page scanning */
+export interface DOMSnapshotContext extends BaseUserContext {
+  type: 'dom_snapshot';
+  /** URL of the scanned page */
+  url: string;
+  /** Page title */
+  title: string;
+  /** Compact text representation of the page for LLM context */
+  content: string;
+  /** Number of interactable elements found */
+  interactableCount: number;
+  /** Timestamp when scan was performed */
+  timestamp: number;
+}
+
 // ============================================================================
 // Union Type
 // ============================================================================
@@ -56,6 +73,7 @@ export type UserContextItem =
   | HighlightedTextContext
   | ProductContext
   | UserProfileContext
+  | DOMSnapshotContext
   | GenericContext;
 
 // ============================================================================
@@ -74,12 +92,22 @@ export function isHighlightedTextContext(
   return item.type === 'highlighted_text';
 }
 
+/** Type guard for DOM snapshot context */
+export function isDOMSnapshotContext(
+  item: UserContextItem
+): item is DOMSnapshotContext {
+  return item.type === 'dom_snapshot';
+}
+
 /** Get display label for a context item */
 export function getContextDisplayLabel(item: UserContextItem): string {
   if (isHighlightedTextContext(item)) {
     return item.text_content.length > 40
       ? item.text_content.substring(0, 40) + '...'
       : item.text_content;
+  }
+  if (isDOMSnapshotContext(item)) {
+    return `Page scan: ${item.interactableCount} elements`;
   }
   return 'Context';
 }

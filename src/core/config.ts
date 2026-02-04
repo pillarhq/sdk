@@ -121,6 +121,83 @@ export interface TextSelectionConfig {
   label?: string;
 }
 
+export interface InteractionHighlightConfig {
+  /**
+   * Whether to highlight elements when the AI interacts with them.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Outline color for highlighted elements (CSS color value).
+   * @default '#3b82f6' (blue-500)
+   */
+  outlineColor?: string;
+  /**
+   * Outline width in pixels.
+   * @default 2
+   */
+  outlineWidth?: number;
+  /**
+   * Outline offset in pixels (space between element and outline).
+   * @default 2
+   */
+  outlineOffset?: number;
+  /**
+   * Duration in milliseconds to show the highlight.
+   * Set to 0 for no auto-removal (highlight stays until next interaction).
+   * @default 2000
+   */
+  duration?: number;
+  /**
+   * Whether to scroll the element into view if not visible.
+   * @default true
+   */
+  scrollIntoView?: boolean;
+  /**
+   * Scroll behavior when scrolling element into view.
+   * @default 'smooth'
+   */
+  scrollBehavior?: ScrollBehavior;
+}
+
+export interface DOMScanningConfig {
+  /**
+   * Whether DOM scanning is enabled.
+   * When enabled, page structure is captured and sent with messages.
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Whether to include text content in the scan.
+   * @default true
+   */
+  includeText?: boolean;
+  /**
+   * Maximum depth to traverse the DOM tree.
+   * @default 20
+   */
+  maxDepth?: number;
+  /**
+   * Whether to only include visible elements.
+   * @default true
+   */
+  visibleOnly?: boolean;
+  /**
+   * CSS selector for elements to exclude from scanning.
+   * @example '.sidebar, .footer, [data-no-scan]'
+   */
+  excludeSelector?: string;
+  /**
+   * Maximum text length before truncation.
+   * @default 500
+   */
+  maxTextLength?: number;
+  /**
+   * Configuration for highlighting elements during AI interactions.
+   */
+  interactionHighlight?: InteractionHighlightConfig;
+}
+
 export interface EdgeTriggerConfig {
   /**
    * Whether to show the edge trigger sidebar tab.
@@ -236,6 +313,9 @@ export interface PillarConfig {
   // Text selection "Ask AI" popover
   textSelection?: TextSelectionConfig;
   
+  // DOM scanning for page context
+  domScanning?: DOMScanningConfig;
+  
   // Sidebar tabs configuration
   sidebarTabs?: SidebarTabConfig[];
   
@@ -297,6 +377,26 @@ export interface ResolvedThemeConfig {
   darkColors: ThemeColors;
 }
 
+export interface ResolvedInteractionHighlightConfig {
+  enabled: boolean;
+  outlineColor: string;
+  outlineWidth: number;
+  outlineOffset: number;
+  duration: number;
+  scrollIntoView: boolean;
+  scrollBehavior: ScrollBehavior;
+}
+
+export interface ResolvedDOMScanningConfig {
+  enabled: boolean;
+  includeText: boolean;
+  maxDepth: number;
+  visibleOnly: boolean;
+  excludeSelector?: string;
+  maxTextLength: number;
+  interactionHighlight: ResolvedInteractionHighlightConfig;
+}
+
 export interface ResolvedConfig {
   productKey: string;
   apiBaseUrl: string;
@@ -313,6 +413,7 @@ export interface ResolvedConfig {
   mobileTrigger: ResolvedMobileTriggerConfig;
   urlParams: Required<UrlParamsConfig>;
   textSelection: Required<TextSelectionConfig>;
+  domScanning: ResolvedDOMScanningConfig;
   sidebarTabs: SidebarTabConfig[];
   theme: ResolvedThemeConfig;
   customCSS?: string;
@@ -361,6 +462,23 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = 
   textSelection: {
     enabled: true,
     label: 'Ask AI',
+  },
+  
+  domScanning: {
+    enabled: false,
+    includeText: true,
+    maxDepth: 20,
+    visibleOnly: true,
+    maxTextLength: 500,
+    interactionHighlight: {
+      enabled: true,
+      outlineColor: '#3b82f6',
+      outlineWidth: 2,
+      outlineOffset: 2,
+      duration: 2000,
+      scrollIntoView: true,
+      scrollBehavior: 'smooth',
+    },
   },
   
   sidebarTabs: DEFAULT_SIDEBAR_TABS,
@@ -439,6 +557,15 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     textSelection: {
       ...DEFAULT_CONFIG.textSelection,
       ...config.textSelection,
+    },
+    
+    domScanning: {
+      ...DEFAULT_CONFIG.domScanning,
+      ...config.domScanning,
+      interactionHighlight: {
+        ...DEFAULT_CONFIG.domScanning.interactionHighlight,
+        ...config.domScanning?.interactionHighlight,
+      },
     },
     
     // Merge sidebar tabs: user tabs override defaults by id

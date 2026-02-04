@@ -20,85 +20,95 @@
  */
 
 // Core
-export { Pillar, type PillarState, type ChatContext } from './core/Pillar';
-export { EventEmitter, type PillarEvents, type TaskExecutePayload, type CardRenderer, type CardCallbacks } from './core/events';
+export {
+  EventEmitter,
+  type CardCallbacks,
+  type CardRenderer,
+  type PillarEvents,
+  type TaskExecutePayload,
+} from "./core/events";
+export { Pillar, type ChatContext, type PillarState } from "./core/Pillar";
 
 // Configuration
 export {
+  DEFAULT_SIDEBAR_TABS,
+  type DOMScanningConfig,
+  type EdgeTriggerConfig,
+  type InteractionHighlightConfig,
+  type MobileTriggerConfig,
+  type MobileTriggerIcon,
+  type MobileTriggerPosition,
+  type MobileTriggerSize,
+  type PanelConfig,
+  type PanelMode,
+  type PanelPosition,
   type PillarConfig,
   type ResolvedConfig,
-  type ResolvedPanelConfig,
+  type ResolvedDOMScanningConfig,
+  type ResolvedInteractionHighlightConfig,
   type ResolvedMobileTriggerConfig,
-  type PanelConfig,
-  type EdgeTriggerConfig,
-  type MobileTriggerConfig,
-  type MobileTriggerPosition,
-  type MobileTriggerIcon,
-  type MobileTriggerSize,
-  type UrlParamsConfig,
-  type TextSelectionConfig,
-  type PanelPosition,
-  type PanelMode,
-  type ThemeMode,
-  type ThemeColors,
-  type ThemeConfig,
+  type ResolvedPanelConfig,
   type ResolvedThemeConfig,
   type SidebarTabConfig,
-  DEFAULT_SIDEBAR_TABS,
-} from './core/config';
+  type TextSelectionConfig,
+  type ThemeColors,
+  type ThemeConfig,
+  type ThemeMode,
+  type UrlParamsConfig,
+} from "./core/config";
 
 // Context types
 export {
-  type Context,
-  type UserProfile,
-  type Suggestion,
   type AssistantContext,
-} from './core/context';
+  type Context,
+  type Suggestion,
+  type UserProfile,
+} from "./core/context";
 
 // Plan types (multi-step execution plans)
 export {
-  type PlanStatus,
-  type StepStatus,
   type ExecutionLocation,
   type ExecutionPlan,
   type ExecutionStep,
   type PlanEvents,
-} from './core/plan';
+  type PlanStatus,
+  type StepStatus,
+} from "./core/plan";
 
 // Actions (code-first action definitions)
 export {
-  setClientInfo,
-  getClientInfo,
-  getHandler,
-  getActionDefinition,
-  hasAction,
-  getActionNames,
-  getManifest,
   clearRegistry,
   getActionCount,
-  type ActionType,
+  getActionDefinition,
+  getActionNames,
+  getClientInfo,
+  getHandler,
+  getManifest,
+  hasAction,
+  setClientInfo,
   type ActionDataSchema,
+  type ActionDataType,
   type ActionDefinition,
   type ActionDefinitions,
   type ActionManifest,
   type ActionManifestEntry,
+  type ActionNames,
+  type ActionType,
+  // Type utilities for typed onTask
+  type ActionTypeDataMap,
   type ClientInfo,
+  type CopyTextData,
+  type ExternalLinkData,
+  type InlineUIData,
+  type NavigateActionData,
   type Platform,
   type SyncActionDefinition,
   type SyncActionDefinitions,
-  // Type utilities for typed onTask
-  type ActionTypeDataMap,
-  type NavigateActionData,
   type TriggerActionData,
-  type InlineUIData,
-  type ExternalLinkData,
-  type CopyTextData,
-  type ActionDataType,
-  type ActionNames,
-  type TypedTaskHandler,
   type TypedOnTask,
   type TypedPillarMethods,
-} from './actions';
+  type TypedTaskHandler,
+} from "./actions";
 
 // API
 export {
@@ -107,21 +117,54 @@ export {
   type ChatMessage,
   type ChatResponse,
   type ProgressEvent,
-} from './api/client';
+} from "./api/client";
 
 // MCP Client types (for image upload, action requests)
 export {
+  type ActionRequest,
   type ChatImage,
   type ImageUploadResponse,
-  type ActionRequest,
-} from './api/mcp-client';
+} from "./api/mcp-client";
+
+// DOM Scanner types
+export {
+  DEFAULT_SCAN_OPTIONS,
+  INTERACTABLE_ROLES,
+  INTERACTABLE_TAGS,
+  SKIP_TAGS,
+  type CompactScanResult,
+  type InteractionType,
+  type ScanOptions,
+} from "./types/dom-scanner";
+
+// DOM Scanner utilities
+export {
+  buildSelectorFromRef,
+  clearPillarRefs,
+  isInteractable,
+  scanPageDirect,
+} from "./utils/dom-scanner";
+
+// User context types (including DOM snapshot)
+export {
+  generateContextId,
+  getContextDisplayLabel,
+  isDOMSnapshotContext,
+  isHighlightedTextContext,
+  type DOMSnapshotContext,
+  type GenericContext,
+  type HighlightedTextContext,
+  type ProductContext,
+  type UserContextItem,
+  type UserProfileContext,
+} from "./types/user-context";
 
 // Auto-initialization for script tags
-import { Pillar } from './core/Pillar';
-import { debug } from './utils/debug';
+import { Pillar } from "./core/Pillar";
+import { debug } from "./utils/debug";
 
 // Check for auto-init configuration in script tag
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   // Make Pillar available globally for script tag usage
   (window as unknown as { Pillar: typeof Pillar }).Pillar = Pillar;
 
@@ -134,16 +177,18 @@ if (typeof window !== 'undefined') {
   };
 
   // Run auto-init when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', autoInit);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", autoInit);
   } else {
     // Script is being executed after DOM is ready (async/defer)
     // Try to find the script tag with our data attribute
-    const scripts = document.querySelectorAll('script[data-product-key]');
+    const scripts = document.querySelectorAll("script[data-product-key]");
     if (scripts.length > 0) {
       const script = scripts[scripts.length - 1] as HTMLScriptElement;
       if (script.dataset.productKey) {
-        Pillar.init({ productKey: script.dataset.productKey }).catch(debug.error);
+        Pillar.init({ productKey: script.dataset.productKey }).catch(
+          debug.error
+        );
       }
     }
   }

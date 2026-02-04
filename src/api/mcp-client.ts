@@ -433,7 +433,8 @@ export class MCPClient {
                     }
 
                     // Log all progress events for debugging (except tokens which are too verbose)
-                    if (progress.kind !== 'token') {
+                    if (progress.kind !== 'token' && progress.type !== 'token') {
+                      console.log(`[MCPClient] Progress event: kind=${progress.kind} type=${progress.type}`, progress);
                       debug.log(`[MCPClient] Progress event: ${progress.kind}`, progress);
                     }
 
@@ -452,17 +453,21 @@ export class MCPClient {
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
                       break;
-                    } else if (progress.kind === 'action_request') {
+                    } else if (progress.kind === 'action_request' || progress.type === 'action_request') {
                       // Unified action request - agent wants to execute any action
+                      // Note: backend sends "type" but we also check "kind" for consistency
+                      console.log('[MCPClient] *** RECEIVED action_request ***', progress.action_name, progress.parameters);
                       debug.log('[MCPClient] Received action_request:', progress.action_name, progress.parameters);
                       
                       // Validate required fields
                       if (!progress.action_name || typeof progress.action_name !== 'string' || progress.action_name.trim() === '') {
+                        console.error('[MCPClient] action_request INVALID - missing action_name:', progress);
                         debug.error('[MCPClient] Received action_request with missing or invalid action_name:', progress);
                         continue;
                       }
                       
                       if (callbacks.onActionRequest) {
+                        console.log('[MCPClient] *** CALLING onActionRequest handler ***');
                         const actionRequest: ActionRequest = {
                           action_name: progress.action_name,
                           parameters: progress.parameters || {},
@@ -471,9 +476,11 @@ export class MCPClient {
                         
                         // Execute async but don't await - let the stream continue
                         callbacks.onActionRequest(actionRequest).catch((error) => {
+                          console.error('[MCPClient] Action request handler FAILED:', error);
                           debug.error('[MCPClient] Action request handler failed:', error);
                         });
                       } else {
+                        console.warn('[MCPClient] action_request received but NO HANDLER registered');
                         debug.warn('[MCPClient] Received action_request but no handler registered');
                       }
                     } else {

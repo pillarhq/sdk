@@ -541,9 +541,10 @@ export const triggerInputFocus = () => {
 };
 
 // User context actions
-export const addUserContext = (item: Omit<UserContextItem, 'id'>) => {
-  const newItem = { ...item, id: generateContextId() } as UserContextItem;
-  userContext.value = [...userContext.value, newItem];
+// Use a generic type parameter to preserve the specific type of context being added
+export const addUserContext = <T extends Omit<UserContextItem, 'id'>>(item: T) => {
+  const newItem = { ...item, id: generateContextId() } as T & { id: string };
+  userContext.value = [...userContext.value, newItem as UserContextItem];
 };
 
 export const removeUserContext = (id: string) => {

@@ -2505,44 +2505,41 @@ export const PANEL_STYLES = `
 /* ============================================================================
    Reasoning Disclosure (collapsible thinking steps)
    Internal: _pillar-reasoning-disclosure | Public: pillar-reasoning-disclosure
+   Compact single-line design that expands to show steps
    ============================================================================ */
 
 ._pillar-reasoning-disclosure {
-  border-radius: var(--pillar-radius-md);
-  background: var(--pillar-bg-secondary);
-  border: 1px solid var(--pillar-border);
-  overflow: hidden;
+  /* No box styling - just a simple inline element */
 }
 
 ._pillar-reasoning-header {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px 10px;
+  gap: 4px;
+  padding: 2px 0;
   font-size: var(--pillar-font-size-sm);
-  font-weight: 500;
   font-family: var(--pillar-font-family);
   color: var(--pillar-text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background var(--pillar-transition-fast);
+  transition: color var(--pillar-transition-fast);
 }
 
 ._pillar-reasoning-header:hover {
-  background: var(--pillar-bg-tertiary);
+  color: var(--pillar-text);
 }
 
 ._pillar-reasoning-icon {
   font-size: 8px;
   transition: transform 0.2s ease;
   flex-shrink: 0;
+  opacity: 0.7;
 }
 
 ._pillar-reasoning-label {
-  flex: 1;
+  /* Inherits from header */
 }
 
 /* Animated content wrapper using CSS Grid for smooth height transition */
@@ -2550,7 +2547,6 @@ export const PANEL_STYLES = `
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.25s ease-out;
-  border-top: 1px solid var(--pillar-border);
 }
 
 ._pillar-reasoning-content-wrapper--expanded {
@@ -2563,15 +2559,18 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-reasoning-content {
-  padding: 0 10px 10px 10px;
+  padding-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--pillar-border-light);
+  margin-left: 3px;
 }
 
 ._pillar-reasoning-content ._pillar-progress-row {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 ._pillar-reasoning-content ._pillar-progress-row:first-child {
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 /* Chevron rotation when expanded */

@@ -465,7 +465,7 @@ export const PREACT_MARKDOWN_STYLES = `
 ._pillar-markdown {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--pillar-text-primary, #1a1a1a);
+  color: var(--pillar-text, #1a1a1a);
 }
 
 /* Headings */
@@ -531,7 +531,7 @@ export const PREACT_MARKDOWN_STYLES = `
 
 ._pillar-md-task-text--checked {
   text-decoration: line-through;
-  color: var(--pillar-text-tertiary, #9ca3af);
+  color: var(--pillar-text-placeholder, #9ca3af);
 }
 
 /* Blockquote */
@@ -539,7 +539,7 @@ export const PREACT_MARKDOWN_STYLES = `
   margin: 8px 0;
   padding: 8px 16px;
   border-left: 3px solid var(--pillar-border, #e5e7eb);
-  color: var(--pillar-text-secondary, #6b7280);
+  color: var(--pillar-text-muted, #6b7280);
   background: var(--pillar-bg-secondary, #f9fafb);
 }
 

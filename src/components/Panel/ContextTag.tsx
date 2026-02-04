@@ -4,7 +4,7 @@
  */
 
 import type { UserContextItem } from '../../types/user-context';
-import { isHighlightedTextContext, getContextDisplayLabel } from '../../types/user-context';
+import { isHighlightedTextContext, isDOMSnapshotContext, getContextDisplayLabel } from '../../types/user-context';
 
 // Close icon SVG
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
@@ -83,13 +83,16 @@ interface ContextTagListProps {
 }
 
 export function ContextTagList({ contexts, onRemove, readOnly = false }: ContextTagListProps) {
-  if (contexts.length === 0) {
+  // Filter out DOM snapshot contexts - they're sent to the backend but not shown in UI
+  const visibleContexts = contexts.filter((ctx) => !isDOMSnapshotContext(ctx));
+  
+  if (visibleContexts.length === 0) {
     return null;
   }
 
   return (
     <div class="_pillar-context-tag-list pillar-context-tag-list">
-      {contexts.map((ctx) => (
+      {visibleContexts.map((ctx) => (
         <ContextTag key={ctx.id} context={ctx} onRemove={onRemove} readOnly={readOnly} />
       ))}
     </div>

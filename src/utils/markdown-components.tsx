@@ -279,7 +279,7 @@ export const MARKDOWN_COMPONENT_STYLES = `
 
 ._pillar-collapsible-icon {
   font-size: 10px;
-  color: var(--pillar-text-tertiary, #9ca3af);
+  color: var(--pillar-text-muted, #9ca3af);
 }
 
 ._pillar-collapsible-title {
@@ -349,7 +349,7 @@ export const MARKDOWN_COMPONENT_STYLES = `
 
 ._pillar-task-item--completed ._pillar-task-text {
   text-decoration: line-through;
-  color: var(--pillar-text-tertiary, #9ca3af);
+  color: var(--pillar-text-placeholder, #9ca3af);
 }
 
 ._pillar-task-checkbox {
