@@ -65,16 +65,6 @@ export {
   type UserProfile,
 } from "./core/context";
 
-// Plan types (multi-step execution plans)
-export {
-  type ExecutionLocation,
-  type ExecutionPlan,
-  type ExecutionStep,
-  type PlanEvents,
-  type PlanStatus,
-  type StepStatus,
-} from "./core/plan";
-
 // Actions (code-first action definitions)
 export {
   clearRegistry,

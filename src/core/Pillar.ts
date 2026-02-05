@@ -38,7 +38,6 @@ import {
   setFullWidthBreakpoint,
   setMobileBreakpoint,
 } from "../store/panel";
-import { activePlan, resetPlanStore } from "../store/plan";
 import { resetRouter } from "../store/router";
 import {
   activeWorkflow,
@@ -78,8 +77,6 @@ import {
   type PillarEvents,
   type TaskExecutePayload,
 } from "./events";
-import type { ExecutionPlan } from "./plan";
-import { PlanExecutor } from "./plan-executor";
 import type { Workflow, WorkflowStep } from "./workflow";
 
 export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
@@ -104,7 +101,6 @@ export class Pillar {
   private _config: ResolvedConfig | null = null;
   private _events: EventEmitter;
   private _api: APIClient | null = null;
-  private _planExecutor: PlanExecutor | null = null;
   private _textSelectionManager: TextSelectionManager | null = null;
   private _panel: Panel | null = null;
   private _edgeTrigger: EdgeTrigger | null = null;
@@ -1614,9 +1610,6 @@ export class Pillar {
    * For wizard actions (modals, multi-step flows), call this when the user
    * finishes the flow.
    *
-   * If there's an active plan waiting on this action, the plan automatically
-   * advances to the next step.
-   *
    * @param actionName - The action identifier
    * @param success - Whether the action completed successfully (default: true)
    * @param data - Optional result data
@@ -1632,11 +1625,6 @@ export class Pillar {
   ): Promise<void> {
     // Emit the task:complete event for standalone action tracking
     this._events.emit("task:complete", { name: actionName, success, data });
-
-    // If there's an active plan with this action awaiting, advance it
-    if (this._planExecutor) {
-      await this._planExecutor.completeStepByAction(actionName, success, data);
-    }
   }
 
   /**
@@ -1928,113 +1916,6 @@ export class Pillar {
   }
 
   // ============================================================================
-  // Plan API - Server-generated multi-step execution plans
-  // ============================================================================
-
-  /**
-   * Get the active execution plan, if any.
-   */
-  get activePlan(): ExecutionPlan | null {
-    return activePlan.value;
-  }
-
-  /**
-   * Handle a plan received from the AI streaming response.
-   * Called when the ReAct agent creates a plan via the create_plan tool.
-   *
-   * @param plan - The execution plan from the server
-   */
-  handlePlanReceived(plan: ExecutionPlan): void {
-    this._planExecutor?.handlePlanReceived(plan);
-  }
-
-  /**
-   * Start a plan that was waiting for user confirmation.
-   * For plans with auto_execute=false, the user must explicitly start execution.
-   */
-  async startPlan(): Promise<void> {
-    await this._planExecutor?.startPlan();
-  }
-
-  /**
-   * Resume plan execution if it appears stuck.
-   *
-   * This is a fallback for cases where auto-execute failed or
-   * the plan got into an inconsistent state. It manually triggers
-   * execution of the next ready step.
-   */
-  async resumePlan(): Promise<void> {
-    debug.log("[Pillar] Manual plan resume triggered");
-    await this._planExecutor?.resumeExecution();
-  }
-
-  /**
-   * Confirm a plan step requiring confirmation.
-   *
-   * @param stepId - UUID of the step to confirm
-   * @param data - Optional modified data from user input
-   */
-  async confirmPlanStep(
-    stepId: string,
-    data?: Record<string, unknown>
-  ): Promise<void> {
-    await this._planExecutor?.confirmStep(stepId, data);
-  }
-
-  /**
-   * Confirm an inline_ui step with data from the inline card.
-   *
-   * This is called when the user interacts with an inline card (e.g., invite form)
-   * within a plan step and clicks confirm.
-   *
-   * @param stepId - UUID of the step to confirm
-   * @param data - Data from the inline card (e.g., email, form fields)
-   */
-  async confirmInlinePlanStep(
-    stepId: string,
-    data?: Record<string, unknown>
-  ): Promise<void> {
-    await this._planExecutor?.confirmInlineStep(stepId, data);
-  }
-
-  /**
-   * Skip a plan step.
-   *
-   * @param stepId - UUID of the step to skip
-   */
-  async skipPlanStep(stepId: string): Promise<void> {
-    await this._planExecutor?.skipStep(stepId);
-  }
-
-  /**
-   * Retry a failed step in the active plan.
-   *
-   * @param stepId - UUID of the step to retry
-   */
-  async retryPlanStep(stepId: string): Promise<void> {
-    await this._planExecutor?.retryStep(stepId);
-  }
-
-  /**
-   * Cancel the active plan.
-   */
-  async cancelPlan(): Promise<void> {
-    await this._planExecutor?.cancel();
-  }
-
-  /**
-   * Mark a plan step as done by step ID.
-   *
-   * Use this when the UI "Done" button is clicked for a wizard step.
-   * The step must be in 'awaiting_result' status.
-   *
-   * @param stepId - UUID of the step to mark as done
-   */
-  async markPlanStepDone(stepId: string): Promise<void> {
-    await this._planExecutor?.markStepDone(stepId);
-  }
-
-  // ============================================================================
   // Query Action API - Actions that return data to the agent
   // ============================================================================
 
@@ -2293,35 +2174,6 @@ export class Pillar {
       // Configure debug logger to forward logs to server (for debugging client-server issues)
       debug.configure(this._api.mcp, { forwardToServer: true });
 
-      // Initialize PlanExecutor for multi-step plans
-      this._planExecutor = new PlanExecutor(
-        this._api.mcp,
-        this._events,
-        this._config.productKey // Use productKey for plan persistence - unique across all sites
-      );
-
-      // Connect action results to plan step completion
-      // When an action with returns=true completes, sendActionResult emits 'action:result'.
-      // If there's an active plan step awaiting this result, complete it with the data.
-      this._events.on("action:result", ({ actionName, result }) => {
-        if (this._planExecutor) {
-          this._planExecutor.completeStepByAction(
-            actionName,
-            true,
-            result as Record<string, unknown>
-          );
-        }
-      });
-
-      // Connect task:complete to plan step completion
-      // When executeTask runs a handler (via onTask), it emits task:complete.
-      // If there's an active plan step awaiting this task, complete it with the data.
-      this._events.on("task:complete", ({ name, success, data }) => {
-        if (this._planExecutor) {
-          this._planExecutor.completeStepByAction(name, success, data);
-        }
-      });
-
       // Set up debug event capturing when debug mode is enabled
       if (this._config.debug) {
         this._setupDebugEventCapture();
@@ -2396,9 +2248,6 @@ export class Pillar {
           debug.warn('[Pillar] Background suggestions init failed:', err);
         });
       }
-
-      // Attempt to recover any active plan from localStorage
-      await this._planExecutor?.recoverPlan();
 
       // Attempt to recover any interrupted session from localStorage
       await this._recoverSession();
@@ -2515,29 +2364,6 @@ export class Pillar {
    * Logs all events to the debug log store for display in the debug panel.
    */
   private _setupDebugEventCapture(): void {
-    // Plan events
-    this._events.on('plan:start', (data) => {
-      debugLog.add({ event: 'plan:start', data, source: 'sdk', level: 'info' });
-    });
-    this._events.on('plan:step:active', (data) => {
-      debugLog.add({ event: 'plan:step:active', data: { stepIndex: data.step?.index, action: data.step?.action_name }, source: 'sdk', level: 'info' });
-    });
-    this._events.on('plan:step:complete', (data) => {
-      debugLog.add({ event: 'plan:step:complete', data: { stepIndex: data.step?.index, action: data.step?.action_name, success: data.success }, source: 'sdk', level: 'info' });
-    });
-    this._events.on('plan:step:failed', (data) => {
-      debugLog.add({ event: 'plan:step:failed', data: { stepIndex: data.step?.index, action: data.step?.action_name, error: data.error?.message }, source: 'sdk', level: 'error' });
-    });
-    this._events.on('plan:complete', (data) => {
-      debugLog.add({ event: 'plan:complete', data: { planId: data.id, goal: data.goal }, source: 'sdk', level: 'info' });
-    });
-    this._events.on('plan:error', (data) => {
-      debugLog.add({ event: 'plan:error', data: { planId: data.plan?.id, error: data.error?.message }, source: 'sdk', level: 'error' });
-    });
-    this._events.on('plan:cancel', (data) => {
-      debugLog.add({ event: 'plan:cancel', data: { planId: data.id }, source: 'sdk', level: 'warn' });
-    });
-
     // Task events
     this._events.on('task:execute', (data) => {
       debugLog.add({ event: 'task:execute', data: { name: data.name, taskType: data.taskType }, source: 'sdk', level: 'info' });
@@ -2678,7 +2504,6 @@ export class Pillar {
     resetChat();
     resetContext();
     resetWorkflow();
-    resetPlanStore();
 
     // Reset internal context state
     this._context = { ...DEFAULT_CONTEXT };
@@ -2693,7 +2518,6 @@ export class Pillar {
     this._edgeTrigger = null;
     this._mobileTrigger = null;
     this._api = null;
-    this._planExecutor = null;
     this._config = null;
     this._state = "uninitialized";
 

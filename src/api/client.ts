@@ -6,7 +6,6 @@
 import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { Context, Suggestion, UserProfile } from '../core/context';
-import type { ExecutionPlan } from '../core/plan';
 import type { Workflow } from '../core/workflow';
 import type { UserContextItem } from '../types/user-context';
 import { debug } from '../utils/debug';
@@ -371,7 +370,6 @@ export class APIClient {
     articleSlug?: string,
     existingConversationId?: string | null,
     onActions?: (actions: TaskButtonData[]) => void,
-    onPlan?: (plan: ExecutionPlan) => void,
     userContext?: UserContextItem[],
     images?: ChatImage[],
     onProgress?: (progress: ProgressEvent) => void,
@@ -400,9 +398,6 @@ export class APIClient {
           onActions: (a: ActionData[]) => {
             actions = a.map(actionToTaskButton);
             onActions?.(actions);
-          },
-          onPlan: (plan) => {
-            onPlan?.(plan);
           },
           onProgress: (p) => {
             onProgress?.(p as ProgressEvent);

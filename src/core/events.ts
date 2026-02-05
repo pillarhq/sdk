@@ -6,7 +6,6 @@ import type { CompactScanResult } from "../types/dom-scanner";
 import { debug } from "../utils/debug";
 import type { ResolvedThemeConfig } from "./config";
 import type { Context, UserProfile } from "./context";
-import type { ExecutionPlan, ExecutionStep } from "./plan";
 import type { Workflow, WorkflowStep } from "./workflow";
 
 export type EventCallback<T = unknown> = (data: T) => void;
@@ -186,32 +185,6 @@ export interface PillarEvents {
   "workflow:step:skip": { workflow: Workflow; step: WorkflowStep };
   "workflow:complete": Workflow;
   "workflow:cancel": Workflow;
-
-  // Plan events - for server-generated multi-step plans
-  "plan:start": ExecutionPlan;
-  "plan:step:active": { plan: ExecutionPlan; step: ExecutionStep };
-  "plan:step:confirm": { plan: ExecutionPlan; step: ExecutionStep };
-  "plan:step:complete": {
-    plan: ExecutionPlan;
-    step: ExecutionStep;
-    success: boolean;
-  };
-  "plan:step:skip": { plan: ExecutionPlan; step: ExecutionStep };
-  "plan:step:retry": {
-    plan: ExecutionPlan;
-    step: ExecutionStep;
-    retryCount: number;
-  };
-  "plan:step:failed": {
-    plan: ExecutionPlan;
-    step: ExecutionStep;
-    error: Error;
-    canRetry?: boolean;
-  };
-  "plan:updated": ExecutionPlan;
-  "plan:complete": ExecutionPlan;
-  "plan:cancel": ExecutionPlan;
-  "plan:error": { plan: ExecutionPlan; error: Error };
 
   // Theme events
   "theme:change": { theme: ResolvedThemeConfig };

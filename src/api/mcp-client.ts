@@ -3,17 +3,10 @@
  * 
  * Implements JSON-RPC 2.0 over HTTP with SSE streaming support
  * for communication with the MCP server.
- * 
- * @deprecated MCPClient is deprecated for chat operations.
- * Use AGUIClient for all chat streaming.
- * MCPClient is retained only for plan management operations.
- * 
- * TODO: Move plan management to AG-UI protocol and remove this client.
  */
 
 import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
-import type { ExecutionPlan } from '../core/plan';
 import type { UserContextItem } from '../types/user-context';
 import { debug, debugLog, type LogEntry } from '../utils/debug';
 import type { ArticleSummary } from './client';
@@ -64,7 +57,6 @@ export interface ToolResult {
   structuredContent?: {
     sources?: ArticleSummary[];
     actions?: ActionData[];
-    plan?: ExecutionPlan;
     /** Registered actions for dynamic action tools (persisted across turns) */
     registered_actions?: Record<string, unknown>[];
   };
@@ -90,21 +82,6 @@ export interface ActionData {
   data: Record<string, unknown>;
 }
 
-/** Response from plans/step-complete endpoint */
-export interface StepCompleteResponse {
-  success: boolean;
-  /** Action to take: proceed, retry, modify_step, or end_plan */
-  action: 'proceed' | 'modify_step' | 'retry' | 'end_plan';
-  /** Updated plan with new step statuses */
-  plan: ExecutionPlan;
-  /** Step ID to retry (when action='retry') */
-  retry_step_id?: string;
-  /** Optional message from agent */
-  message?: string;
-  /** Error code if failed */
-  error?: string;
-}
-
 /** Action request from agent (unified for all action execution) */
 export interface ActionRequest {
   /** Action name to execute */
@@ -125,8 +102,6 @@ export interface StreamCallbacks {
   onSources?: (sources: ArticleSummary[]) => void;
   /** Called when actions are available */
   onActions?: (actions: ActionData[]) => void;
-  /** Called when a plan is created (from plan.created event) */
-  onPlan?: (plan: ExecutionPlan) => void;
   /** Called when registered actions are received (for dynamic action tools) */
   onRegisteredActions?: (actions: Record<string, unknown>[]) => void;
   /** Called on error */
@@ -494,9 +469,6 @@ export class MCPClient {
                         progress.conversation_id,
                         progress.message_id
                       );
-                    } else if (progress.kind === 'plan_created' && progress.plan) {
-                      // Plan was created by the ReAct agent
-                      callbacks.onPlan?.(progress.plan as ExecutionPlan);
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
                       break;
@@ -575,11 +547,6 @@ export class MCPClient {
                   // Extract actions
                   if (finalResult.structuredContent?.actions) {
                     callbacks.onActions?.(finalResult.structuredContent.actions);
-                  }
-
-                  // Extract plan (from plan.created event)
-                  if (finalResult.structuredContent?.plan) {
-                    callbacks.onPlan?.(finalResult.structuredContent.plan);
                   }
 
                   // Extract registered actions (for dynamic action tools)
@@ -723,144 +690,6 @@ export class MCPClient {
     }
 
     return this.callToolStream('ask', args, callbacks, options?.signal);
-  }
-
-  // ============================================================================
-  // Plan Methods
-  // ============================================================================
-
-  /**
-   * Continue plan execution after receiving step result.
-   * 
-   * Called by the SDK after executing a step that has
-   * requires_result_feedback=true. The server analyzes the result
-   * and updates subsequent steps if needed.
-   * 
-   * @param planId - UUID of the plan
-   * @param stepId - UUID of the completed step
-   * @param result - Step execution result
-   * @returns Updated plan with all steps
-   */
-  async continuePlan(
-    planId: string,
-    stepId: string,
-    result: unknown
-  ): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/continue', {
-      plan_id: planId,
-      step_id: stepId,
-      result,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Cancel an in-progress plan.
-   * 
-   * Marks the plan as cancelled and skips any pending steps.
-   * 
-   * @param planId - UUID of the plan to cancel
-   * @returns Updated plan with cancelled status
-   */
-  async cancelPlan(planId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/cancel', {
-      plan_id: planId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Get current state of a plan.
-   * 
-   * Returns the plan and all its steps with current statuses.
-   * 
-   * @param planId - UUID of the plan
-   * @returns Plan with all steps
-   */
-  async getPlan(planId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/get', {
-      plan_id: planId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Start a plan that was waiting for user confirmation.
-   * 
-   * For plans with auto_execute=false, the user must explicitly
-   * start execution by calling this method.
-   * 
-   * @param planId - UUID of the plan to start
-   * @returns Updated plan with executing status
-   */
-  async startPlan(planId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/start', {
-      plan_id: planId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Retry a failed step.
-   * 
-   * Increments the retry count and resets the step to ready status.
-   * 
-   * @param planId - UUID of the plan
-   * @param stepId - UUID of the step to retry
-   * @returns Updated plan with step reset to ready
-   */
-  async retryStep(planId: string, stepId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/retry', {
-      plan_id: planId,
-      step_id: stepId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Skip a step and advance to the next one.
-   * 
-   * @param planId - UUID of the plan
-   * @param stepId - UUID of the step to skip
-   * @returns Updated plan with skipped step and next step ready
-   */
-  async skipStep(planId: string, stepId: string): Promise<{ plan: ExecutionPlan }> {
-    const response = await this.callTool('plans/skip', {
-      plan_id: planId,
-      step_id: stepId,
-    });
-    return response as unknown as { plan: ExecutionPlan };
-  }
-
-  /**
-   * Report step completion and get server decision on next action.
-   * 
-   * This is the core of step-by-step verification:
-   * - Called after every step execution (success or failure)
-   * - Server decides what to do next: proceed, retry, modify, or end
-   * 
-   * @param planId - UUID of the plan
-   * @param stepId - UUID of the completed step
-   * @param success - Whether the step executed successfully
-   * @param result - Result data from the step execution
-   * @param errorMessage - Error message if step failed
-   * @returns Decision with updated plan
-   */
-  async stepComplete(
-    planId: string,
-    stepId: string,
-    success: boolean,
-    result: unknown,
-    errorMessage?: string
-  ): Promise<StepCompleteResponse> {
-    const response = await this.callTool('plans/step-complete', {
-      plan_id: planId,
-      step_id: stepId,
-      success,
-      result: result || {},
-      error_message: errorMessage || '',
-    });
-    return response as unknown as StepCompleteResponse;
   }
 
   // ============================================================================

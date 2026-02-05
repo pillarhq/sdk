@@ -3,5 +3,4 @@
  */
 
 export { useDebouncedValue } from './useDebouncedValue';
-export { useInlineCard, type UseInlineCardOptions, type UseInlineCardResult } from './useInlineCard';
 export { usePillarInstance } from './usePillarInstance';

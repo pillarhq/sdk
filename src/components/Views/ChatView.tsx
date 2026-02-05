@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { ProgressEvent } from "../../api/client";
 import Pillar from "../../core/Pillar";
-import type { ExecutionPlan } from "../../core/plan";
 import {
   addAssistantMessage,
   addProgressEvent,
@@ -33,7 +32,6 @@ import {
   type ProgressEvent as StoreProgressEvent,
 } from "../../store/chat";
 import { clearActiveSession } from "../../store/session-persistence";
-import { hasActivePlan } from "../../store/plan";
 import type {
   DOMSnapshotContext,
   UserContextItem,
@@ -50,7 +48,6 @@ import {
   type TaskButtonData,
 } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
-import { PlanView } from "../Plan/PlanView";
 import { ProgressRow, ProgressStack, ReasoningDisclosure } from "../Progress";
 import { ResumePrompt } from "./ResumePrompt";
 
@@ -189,23 +186,6 @@ export function ChatView() {
   }, []);
 
   /**
-   * Handle plan received from AI streaming response.
-   * Passes the plan to PlanExecutor for orchestration.
-   */
-  const handlePlanReceived = useCallback((plan: ExecutionPlan) => {
-    debug.log("[Pillar] Plan received:", plan.id, plan.goal);
-    const pillar = Pillar.getInstance();
-    if (pillar) {
-      pillar.handlePlanReceived(plan);
-    }
-
-    // Update the assistant message so the thinking spinner goes away
-    // The plan UI will be displayed separately via PlanView component
-    const planMessage = `I'll help you with that. Here's my plan:`;
-    updateLastAssistantMessage(planMessage);
-  }, []);
-
-  /**
    * Handle actions received from the AI.
    * Auto-executes actions with autoRun=true, returns buttons for the rest.
    *
@@ -316,8 +296,6 @@ export function ChatView() {
           (actions) => {
             receivedActions = handleActionsReceived(actions);
           },
-          // Plan callback - handle multi-step plans
-          handlePlanReceived,
           // User context (highlighted text, etc.)
           userContext,
           // Images
@@ -451,25 +429,13 @@ export function ChatView() {
           finalActions = handleActionsReceived(response.actions);
         }
 
-        // Skip final message update if there's an active plan and no text response
-        // (plan already set the message via handlePlanReceived)
-        if (hasActivePlan.value && !response.message) {
-          // Still update messageId, actions, sources without overwriting content
-          updateLastAssistantMessage(
-            undefined, // Don't overwrite content
-            response.messageId,
-            finalActions,
-            response.sources
-          );
-        } else {
-          // Update with final response, message ID, actions, and sources
-          updateLastAssistantMessage(
-            response.message,
-            response.messageId,
-            finalActions,
-            response.sources
-          );
-        }
+        // Update with final response, message ID, actions, and sources
+        updateLastAssistantMessage(
+          response.message,
+          response.messageId,
+          finalActions,
+          response.sources
+        );
 
         // Store conversation ID for subsequent messages
         if (response.conversationId) {
@@ -717,10 +683,9 @@ export function ChatView() {
                     )}
                   {msg.content ? (
                     <>
-                      {/* Progress events as collapsible disclosure - hide when plan is active since plan shows steps */}
+                      {/* Progress events as collapsible disclosure */}
                       {msg.progressEvents &&
-                        msg.progressEvents.length > 0 &&
-                        !hasActivePlan.value && (
+                        msg.progressEvents.length > 0 && (
                           <ReasoningDisclosure events={msg.progressEvents} />
                         )}
                       {/* Main message content rendered as markdown */}
@@ -825,9 +790,6 @@ export function ChatView() {
             )}
           </div>
         ))}
-
-        {/* Active execution plan - rendered as a to-do list */}
-        {hasActivePlan.value && <PlanView />}
       </div>
 
       {/* Input area */}
