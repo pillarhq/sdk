@@ -17,6 +17,7 @@ import {
   conversationId,
   interruptedSession,
   isLoading,
+  isLoadingHistory,
   messages,
   pendingMessage,
   pendingUserContext,
@@ -32,10 +33,10 @@ import {
   type ProgressEvent as StoreProgressEvent,
 } from "../../store/chat";
 import {
+  resetCancellation,
   startPiloting,
   stopPiloting,
   wasCancelled,
-  resetCancellation,
   type PilotOperation,
 } from "../../store/pagePilot";
 import { clearActiveSession } from "../../store/session-persistence";
@@ -55,7 +56,7 @@ import {
   type TaskButtonData,
 } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
-import { ProgressRow, ProgressStack, ReasoningDisclosure } from "../Progress";
+import { ProgressStack, ReasoningDisclosure } from "../Progress";
 import { ResumePrompt } from "./ResumePrompt";
 
 const THUMBS_UP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
@@ -102,7 +103,7 @@ export function ChatView() {
     if (!session) return;
 
     const pillar = Pillar.getInstance();
-    const siteId = pillar?.config?.productKey ?? '';
+    const siteId = pillar?.config?.productKey ?? "";
 
     setIsResuming(true);
     setLoading(true);
@@ -129,7 +130,9 @@ export function ChatView() {
           },
           onError: (error) => {
             debug.error("[Pillar] Resume error:", error);
-            updateLastAssistantMessage("Sorry, failed to resume the conversation. Please try again.");
+            updateLastAssistantMessage(
+              "Sorry, failed to resume the conversation. Please try again."
+            );
           },
           onRegisteredActions: () => {
             // Handle registered actions if needed
@@ -142,7 +145,9 @@ export function ChatView() {
       clearActiveSession(siteId);
     } catch (error) {
       debug.error("[Pillar] Resume error:", error);
-      updateLastAssistantMessage("Sorry, failed to resume the conversation. Please try again.");
+      updateLastAssistantMessage(
+        "Sorry, failed to resume the conversation. Please try again."
+      );
     } finally {
       setIsResuming(false);
       setLoading(false);
@@ -153,8 +158,8 @@ export function ChatView() {
   // Handle discarding an interrupted session
   const handleDiscard = useCallback(() => {
     const pillar = Pillar.getInstance();
-    const siteId = pillar?.config?.productKey ?? '';
-    
+    const siteId = pillar?.config?.productKey ?? "";
+
     clearInterruptedSession();
     clearActiveSession(siteId);
   }, []);
@@ -315,14 +320,16 @@ export function ChatView() {
           // Conversation started callback - store ID early for optimistic UI
           (conversationIdFromServer) => {
             setConversationId(conversationIdFromServer);
-            
+
             // Save active session hint for recovery on page navigation
             const pillar = Pillar.getInstance();
-            const siteId = pillar?.config?.productKey ?? '';
+            const siteId = pillar?.config?.productKey ?? "";
             if (siteId && conversationIdFromServer) {
-              import("../../store/session-persistence").then(({ saveActiveSession }) => {
-                saveActiveSession(conversationIdFromServer, siteId);
-              });
+              import("../../store/session-persistence").then(
+                ({ saveActiveSession }) => {
+                  saveActiveSession(conversationIdFromServer, siteId);
+                }
+              );
             }
           },
           // Unified action request callback - execute action and send result back
@@ -341,18 +348,16 @@ export function ChatView() {
                 // Check for built-in SDK actions first
                 if (request.action_name === "interact_with_page") {
                   const params = request.parameters as {
-                    operation:
-                      | "click"
-                      | "type"
-                      | "select"
-                      | "focus"
-                      | "toggle";
+                    operation: "click" | "type" | "select" | "focus" | "toggle";
                     ref: string;
                     value?: string;
                   };
 
                   // Start piloting mode - shows banner
-                  startPiloting(params.operation as PilotOperation, request.tool_call_id);
+                  startPiloting(
+                    params.operation as PilotOperation,
+                    request.tool_call_id
+                  );
 
                   try {
                     // Check if cancelled before executing
@@ -362,11 +367,14 @@ export function ChatView() {
                         { success: false, error: "User cancelled action" },
                         request.tool_call_id
                       );
-                      debug.log("[Pillar] Page interaction cancelled by user before execution");
+                      debug.log(
+                        "[Pillar] Page interaction cancelled by user before execution"
+                      );
                       return;
                     }
 
-                    const interactionResult = pillar.handlePageInteraction(params);
+                    const interactionResult =
+                      pillar.handlePageInteraction(params);
 
                     // Check if cancelled after executing
                     if (wasCancelled()) {
@@ -375,18 +383,25 @@ export function ChatView() {
                         { success: false, error: "User cancelled action" },
                         request.tool_call_id
                       );
-                      debug.log("[Pillar] Page interaction cancelled by user after execution");
+                      debug.log(
+                        "[Pillar] Page interaction cancelled by user after execution"
+                      );
                       return;
                     }
 
                     // If action succeeded and DOM scanning is enabled, rescan after a brief delay
                     let updatedDomSnapshot: string | null = null;
-                    if (interactionResult.success && pillar?.isDOMScanningEnabled) {
+                    if (
+                      interactionResult.success &&
+                      pillar?.isDOMScanningEnabled
+                    ) {
                       // Wait for DOM to settle (animations, async updates)
-                      await new Promise(resolve => setTimeout(resolve, 150));
+                      await new Promise((resolve) => setTimeout(resolve, 150));
                       const scanResult = scanPageDirect();
                       updatedDomSnapshot = scanResult.content;
-                      debug.log("[Pillar] DOM rescanned after page interaction");
+                      debug.log(
+                        "[Pillar] DOM rescanned after page interaction"
+                      );
                     }
 
                     await api.mcp.sendActionResult(
@@ -500,10 +515,10 @@ export function ChatView() {
       } finally {
         setLoading(false);
         clearProgressStatus();
-        
+
         // Clear session hint on successful completion
         const pillar = Pillar.getInstance();
-        const siteId = pillar?.config?.productKey ?? '';
+        const siteId = pillar?.config?.productKey ?? "";
         if (siteId) {
           clearActiveSession(siteId);
         }
@@ -656,38 +671,85 @@ export function ChatView() {
         ref={messagesRef}
       >
         {/* Resume prompt for interrupted sessions (only show for non-seamless disconnects) */}
-        {interruptedSession.value && interruptedSession.value.elapsedMs >= 15000 && (
-          <ResumePrompt
-            session={interruptedSession.value}
-            onResume={handleResume}
-            onDiscard={handleDiscard}
-            isResuming={isResuming}
-          />
-        )}
-        
-        {/* Seamless resume indicator */}
-        {isResuming && interruptedSession.value && interruptedSession.value.elapsedMs < 15000 && (
-          <ResumePrompt
-            session={interruptedSession.value}
-            onResume={handleResume}
-            onDiscard={handleDiscard}
-            isResuming={true}
-          />
-        )}
+        {interruptedSession.value &&
+          interruptedSession.value.elapsedMs >= 15000 && (
+            <ResumePrompt
+              session={interruptedSession.value}
+              onResume={handleResume}
+              onDiscard={handleDiscard}
+              isResuming={isResuming}
+            />
+          )}
 
-        {messages.value.length === 0 && !interruptedSession.value && (
-          <div class="_pillar-chat-view-welcome pillar-chat-view-welcome">
-            <div class="_pillar-chat-view-welcome-icon pillar-chat-view-welcome-icon">
-              💬
+        {/* Seamless resume indicator */}
+        {isResuming &&
+          interruptedSession.value &&
+          interruptedSession.value.elapsedMs < 15000 && (
+            <ResumePrompt
+              session={interruptedSession.value}
+              onResume={handleResume}
+              onDiscard={handleDiscard}
+              isResuming={true}
+            />
+          )}
+
+        {/* Loading skeleton for history */}
+        {isLoadingHistory.value && (
+          <div class="_pillar-chat-history-loading pillar-chat-history-loading">
+            <div class="_pillar-chat-history-loading-message _pillar-chat-history-loading-message--user pillar-chat-history-loading-message--user">
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 70%"
+              />
             </div>
-            <div class="_pillar-chat-view-welcome-title pillar-chat-view-welcome-title">
-              Ask a question
+            <div class="_pillar-chat-history-loading-message _pillar-chat-history-loading-message--assistant pillar-chat-history-loading-message--assistant">
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 90%"
+              />
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 85%"
+              />
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 60%"
+              />
             </div>
-            <div class="_pillar-chat-view-welcome-text pillar-chat-view-welcome-text">
-              Ask me anything about how to use this product.
+            <div class="_pillar-chat-history-loading-message _pillar-chat-history-loading-message--user pillar-chat-history-loading-message--user">
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 55%"
+              />
+            </div>
+            <div class="_pillar-chat-history-loading-message _pillar-chat-history-loading-message--assistant pillar-chat-history-loading-message--assistant">
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 95%"
+              />
+              <div
+                class="_pillar-chat-history-loading-bar pillar-chat-history-loading-bar"
+                style="width: 80%"
+              />
             </div>
           </div>
         )}
+
+        {messages.value.length === 0 &&
+          !interruptedSession.value &&
+          !isLoadingHistory.value && (
+            <div class="_pillar-chat-view-welcome pillar-chat-view-welcome">
+              <div class="_pillar-chat-view-welcome-icon pillar-chat-view-welcome-icon">
+                💬
+              </div>
+              <div class="_pillar-chat-view-welcome-title pillar-chat-view-welcome-title">
+                Ask a question
+              </div>
+              <div class="_pillar-chat-view-welcome-text pillar-chat-view-welcome-text">
+                Ask me anything about how to use this product.
+              </div>
+            </div>
+          )}
 
         {messages.value.map((msg, index) => (
           <div
@@ -735,10 +797,9 @@ export function ChatView() {
                   {msg.content ? (
                     <>
                       {/* Progress events as collapsible disclosure */}
-                      {msg.progressEvents &&
-                        msg.progressEvents.length > 0 && (
-                          <ReasoningDisclosure events={msg.progressEvents} />
-                        )}
+                      {msg.progressEvents && msg.progressEvents.length > 0 && (
+                        <ReasoningDisclosure events={msg.progressEvents} />
+                      )}
                       {/* Main message content rendered as markdown */}
                       <div class="_pillar-message-assistant pillar-message-assistant">
                         <PreactMarkdown content={msg.content} />
@@ -847,7 +908,7 @@ export function ChatView() {
       <div class="_pillar-chat-view-input-area pillar-chat-view-input-area">
         <UnifiedChatInput
           placeholder="Ask a question..."
-          disabled={isLoading.value}
+          disabled={isLoading.value || isLoadingHistory.value}
           onSubmit={handleInputSubmit}
         />
       </div>

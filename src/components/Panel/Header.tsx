@@ -4,7 +4,12 @@
  */
 
 import { getApiClient } from "../../core/Pillar";
-import { hasMessages, loadConversation } from "../../store/chat";
+import {
+  hasMessages,
+  loadConversation,
+  startLoadingHistory,
+  stopLoadingHistory,
+} from "../../store/chat";
 import { closePanel } from "../../store/panel";
 import {
   canGoBack,
@@ -54,16 +59,22 @@ export function Header({ currentView, hideNavigation = false }: HeaderProps) {
     const apiClient = getApiClient();
     if (!apiClient) return;
 
+    // Start loading state and navigate immediately for instant feedback
+    startLoadingHistory();
+    navigate("chat");
+
     try {
       const conversation = await apiClient.getConversation(conversationId);
       if (conversation && conversation.messages.length > 0) {
-        // Load the conversation into chat store
+        // Load the conversation into chat store (clears loading state)
         loadConversation(conversation.id, conversation.messages);
-        // Navigate to chat view
-        navigate("chat");
+      } else {
+        // No messages found, clear loading state
+        stopLoadingHistory();
       }
     } catch (error) {
       debug.error("[Pillar] Failed to load conversation:", error);
+      stopLoadingHistory();
     }
   };
 

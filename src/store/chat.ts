@@ -3,19 +3,19 @@
  * Signal-based state for chat messages and interaction
  */
 
-import { computed, signal } from '@preact/signals';
-import type { ArticleSummary, ChatMessage } from '../api/client';
-import type { ChatImage } from '../api/mcp-client';
-import type { TaskButtonData } from '../components/Panel/TaskButton';
-import type { UserContextItem } from '../types/user-context';
-import { generateContextId } from '../types/user-context';
+import { computed, signal } from "@preact/signals";
+import type { ArticleSummary, ChatMessage } from "../api/client";
+import type { ChatImage } from "../api/mcp-client";
+import type { TaskButtonData } from "../components/Panel/TaskButton";
+import type { UserContextItem } from "../types/user-context";
+import { generateContextId } from "../types/user-context";
 
 // Re-export ChatImage for convenience
-export type { ChatImage } from '../api/mcp-client';
+export type { ChatImage } from "../api/mcp-client";
 
 // Action completion status for tracking auto-run action results
 export interface ActionStatus {
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   completedAt?: number;
   errorMessage?: string;
 }
@@ -23,7 +23,7 @@ export interface ActionStatus {
 // Extended chat message with server-assigned ID for feedback
 export interface StoredChatMessage extends ChatMessage {
   id?: string; // Server-assigned message ID (for assistant messages)
-  feedback?: 'up' | 'down' | null; // User feedback on this message
+  feedback?: "up" | "down" | null; // User feedback on this message
   actions?: TaskButtonData[]; // Actions associated with this message
   sources?: ArticleSummary[]; // Sources associated with this message
   actionStatus?: Record<string, ActionStatus>; // Track action completion status per action
@@ -48,6 +48,9 @@ export const historyInvalidationCounter = signal<number>(0);
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
 
+// Whether chat is loading a conversation from history
+export const isLoadingHistory = signal(false);
+
 // Session resumption - tracks if there's an interrupted session to resume
 export interface InterruptedSession {
   conversationId: string;
@@ -61,7 +64,7 @@ export const interruptedSession = signal<InterruptedSession | null>(null);
 
 // Current progress status during loading (e.g., "Searching...", "Generating answer...")
 export interface ProgressStatus {
-  kind: string | null;  // Event type identifier (server-defined)
+  kind: string | null; // Event type identifier (server-defined)
   message?: string;
 }
 
@@ -73,27 +76,27 @@ export const progressStatus = signal<ProgressStatus>({ kind: null });
 export interface ProgressChild {
   id: string;
   label: string;
-  url?: string;              // For clickable items like sources
+  url?: string; // For clickable items like sources
 }
 
 /**
  * Progress event for tracking AI response generation steps.
  * Uses a generic design where the server controls display text via `label`.
- * 
+ *
  * The new schema uses `id` and `status` fields. Legacy fields are kept
  * for backwards compatibility with older backend versions.
  */
 export interface ProgressEvent {
-  kind: string;              // Event type: "thinking", "search", "tool_call", "plan", "generating"
-  id?: string;               // Unique ID for streaming updates (new schema)
-  label?: string;            // Display label from server (e.g., "Thinking...", "Searching...")
-  status?: 'active' | 'done' | 'error';  // Event status for UI rendering
-  text?: string;             // Accumulated streaming text (delta mode - appended by store)
-  children?: ProgressChild[];  // Sub-items (e.g., sources, plan steps)
-  metadata?: Record<string, unknown>;  // Event-specific data
+  kind: string; // Event type: "thinking", "search", "tool_call", "plan", "generating"
+  id?: string; // Unique ID for streaming updates (new schema)
+  label?: string; // Display label from server (e.g., "Thinking...", "Searching...")
+  status?: "active" | "done" | "error"; // Event status for UI rendering
+  text?: string; // Accumulated streaming text (delta mode - appended by store)
+  children?: ProgressChild[]; // Sub-items (e.g., sources, plan steps)
+  metadata?: Record<string, unknown>; // Event-specific data
   // Legacy fields for backwards compatibility
-  progress_id?: string;      // Deprecated: use id
-  message?: string;          // Deprecated: use label
+  progress_id?: string; // Deprecated: use id
+  message?: string; // Deprecated: use label
 }
 
 /**
@@ -106,18 +109,18 @@ export const progressEvents = signal<ProgressEvent[]>([]);
 /**
  * Add a progress event to the last assistant message.
  * Events are stored directly on the message as they arrive.
- * 
+ *
  * If the event has an id (or legacy progress_id) that matches an existing event,
  * the existing event is updated:
  * - Text is appended (delta mode for streaming)
  * - Status transitions are handled (active → done/error)
  * - Other fields are merged
- * 
+ *
  * This prevents multiple rows from appearing for the same event.
  */
 export const addProgressEventToLastMessage = (event: ProgressEvent) => {
   const msgs = messages.value;
-  if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
+  if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
     const lastMsg = msgs[msgs.length - 1];
     const existingEvents = lastMsg.progressEvents || [];
 
@@ -143,9 +146,10 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
           progress_id: event.progress_id || existing.progress_id,
           // Append text for streaming events (delta mode)
           // Text is appended when both existing and new have text
-          text: existing.text && event.text
-            ? existing.text + event.text
-            : event.text ?? existing.text,
+          text:
+            existing.text && event.text
+              ? existing.text + event.text
+              : (event.text ?? existing.text),
           // Merge children arrays if both exist
           children: event.children || existing.children,
           // Merge metadata
@@ -193,7 +197,7 @@ export const currentSources = signal<ArticleSummary[]>([]);
 export const currentActions = signal<TaskButtonData[]>([]);
 
 // Pre-filled text for chat input (from text selection)
-export const prefillText = signal<string>('');
+export const prefillText = signal<string>("");
 
 // Pending message to be sent after navigation to chat view
 export const pendingMessage = signal<string | null>(null);
@@ -215,7 +219,7 @@ export const pendingUserContext = signal<UserContextItem[]>([]);
 // Image Upload State
 // ============================================================================
 
-export type ImageUploadStatus = 'uploading' | 'ready' | 'error';
+export type ImageUploadStatus = "uploading" | "ready" | "error";
 
 export interface PendingImage {
   id: string;
@@ -231,16 +235,16 @@ export const pendingImages = signal<PendingImage[]>([]);
 
 // Whether any images are currently uploading
 export const isUploadingImages = computed(() =>
-  pendingImages.value.some((img) => img.status === 'uploading')
+  pendingImages.value.some((img) => img.status === "uploading")
 );
 
 // Get ready images for sending
 export const getReadyImages = (): ChatImage[] => {
   return pendingImages.value
-    .filter((img) => img.status === 'ready' && img.url)
+    .filter((img) => img.status === "ready" && img.url)
     .map((img) => ({
       url: img.url!,
-      detail: 'low' as const,
+      detail: "low" as const,
     }));
 };
 
@@ -286,19 +290,23 @@ export const addUserMessage = (
   userContext?: UserContextItem[],
   images?: ChatImage[]
 ) => {
-  messages.value = [...messages.value, { 
-    role: 'user', 
-    content,
-    userContext: userContext && userContext.length > 0 ? userContext : undefined,
-    images: images && images.length > 0 ? images : undefined
-  }];
+  messages.value = [
+    ...messages.value,
+    {
+      role: "user",
+      content,
+      userContext:
+        userContext && userContext.length > 0 ? userContext : undefined,
+      images: images && images.length > 0 ? images : undefined,
+    },
+  ];
 };
 
 export const addAssistantMessage = (content: string, messageId?: string) => {
   messages.value = [
     ...messages.value,
     {
-      role: 'assistant',
+      role: "assistant",
       content,
       id: messageId,
       progressEvents: [], // Initialize empty array for progress events
@@ -313,12 +321,12 @@ export const updateLastAssistantMessage = (
   sources?: ArticleSummary[]
 ) => {
   const msgs = messages.value;
-  if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
+  if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
     const existingMsg = msgs[msgs.length - 1];
     messages.value = [
       ...msgs.slice(0, -1),
       {
-        role: 'assistant',
+        role: "assistant",
         // If content is undefined, preserve existing content (for plan scenarios)
         content: content !== undefined ? content : existingMsg.content,
         id: messageId ?? existingMsg.id,
@@ -338,7 +346,7 @@ export const setActionPending = (messageIndex: number, actionName: string) => {
     const msg = msgs[messageIndex];
     const newStatus: Record<string, ActionStatus> = {
       ...(msg.actionStatus || {}),
-      [actionName]: { status: 'pending' },
+      [actionName]: { status: "pending" },
     };
     messages.value = [
       ...msgs.slice(0, messageIndex),
@@ -362,7 +370,7 @@ export const setActionComplete = (
       const newStatus: Record<string, ActionStatus> = {
         ...msg.actionStatus,
         [actionName]: {
-          status: success ? 'success' : 'failed',
+          status: success ? "success" : "failed",
           completedAt: Date.now(),
           errorMessage: errorMessage,
         },
@@ -391,7 +399,10 @@ export const updateMessageContent = (messageIndex: number, content: string) => {
 };
 
 // Update content of the most recent message with a pending action
-export const updateActionMessageContent = (actionName: string, content: string) => {
+export const updateActionMessageContent = (
+  actionName: string,
+  content: string
+) => {
   const msgs = messages.value;
   for (let i = msgs.length - 1; i >= 0; i--) {
     const msg = msgs[i];
@@ -441,7 +452,10 @@ export const clearRegisteredActions = () => {
   registeredActions.value = [];
 };
 
-export const setMessageFeedback = (messageId: string, feedback: 'up' | 'down') => {
+export const setMessageFeedback = (
+  messageId: string,
+  feedback: "up" | "down"
+) => {
   messages.value = messages.value.map((msg) =>
     msg.id === messageId ? { ...msg, feedback } : msg
   );
@@ -488,9 +502,10 @@ export const addProgressEvent = (event: ProgressEvent) => {
         // Preserve the id (use new if provided, otherwise keep existing)
         id: event.id || existing.id,
         progress_id: event.progress_id || existing.progress_id,
-        text: event.kind === 'thinking' && existing.text && event.text
-          ? existing.text + event.text
-          : event.text ?? existing.text,
+        text:
+          event.kind === "thinking" && existing.text && event.text
+            ? existing.text + event.text
+            : (event.text ?? existing.text),
       };
       progressEvents.value = [
         ...progressEvents.value.slice(0, existingIndex),
@@ -533,7 +548,7 @@ export const setPrefillText = (text: string) => {
 };
 
 export const clearPrefillText = () => {
-  prefillText.value = '';
+  prefillText.value = "";
 };
 
 export const setPendingMessage = (message: string) => {
@@ -556,7 +571,9 @@ export const triggerInputFocus = () => {
 
 // User context actions
 // Use a generic type parameter to preserve the specific type of context being added
-export const addUserContext = <T extends Omit<UserContextItem, 'id'>>(item: T) => {
+export const addUserContext = <T extends Omit<UserContextItem, "id">>(
+  item: T
+) => {
   const newItem = { ...item, id: generateContextId() } as T & { id: string };
   userContext.value = [...userContext.value, newItem as UserContextItem];
 };
@@ -580,14 +597,14 @@ export const clearPendingUserContext = () => {
 export const resetChat = () => {
   messages.value = [];
   conversationId.value = null;
-  registeredActions.value = [];  // Clear registered actions for new conversation
+  registeredActions.value = []; // Clear registered actions for new conversation
   isLoading.value = false;
   progressStatus.value = { kind: null };
   progressEvents.value = [];
   isExpanded.value = false;
   currentSources.value = [];
   currentActions.value = [];
-  prefillText.value = '';
+  prefillText.value = "";
   pendingMessage.value = null;
   submitPendingTrigger.value = 0;
   userContext.value = [];
@@ -596,30 +613,51 @@ export const resetChat = () => {
 };
 
 /**
+ * Start loading a conversation from history.
+ * Shows loading state immediately for better UX.
+ */
+export const startLoadingHistory = () => {
+  // Reset to a clean state
+  resetChat();
+  // Set loading state
+  isLoadingHistory.value = true;
+};
+
+/**
  * Load a conversation from history.
  * Populates the chat with messages from a previous conversation.
  */
 export const loadConversation = (
   id: string,
-  historyMessages: Array<{ role: 'user' | 'assistant'; content: string; id?: string }>
+  historyMessages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    id?: string;
+  }>
 ) => {
-  // Reset to a clean state first
-  resetChat();
-  
   // Set the conversation ID
   conversationId.value = id;
-  
+
   // Load messages (map to StoredChatMessage format)
   messages.value = historyMessages.map((msg) => ({
     role: msg.role,
     content: msg.content,
     id: msg.id,
   }));
-  
+
   // Expand chat to show messages
   isExpanded.value = true;
-  
+
+  // Clear loading state
+  isLoadingHistory.value = false;
+
   // Increment history invalidation counter
   historyInvalidationCounter.value += 1;
 };
 
+/**
+ * Stop loading history (on error or cancellation).
+ */
+export const stopLoadingHistory = () => {
+  isLoadingHistory.value = false;
+};
