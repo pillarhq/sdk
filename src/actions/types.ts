@@ -183,6 +183,19 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   returns?: boolean;
 
   /**
+   * Concrete examples of valid parameter objects for the AI to reference.
+   *
+   * Each example should have a `description` explaining the scenario
+   * and a `parameters` object matching the `dataSchema`.
+   * Useful for complex schemas where the AI benefits from seeing
+   * what a correct call looks like.
+   */
+  parameterExamples?: Array<{
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+
+  /**
    * Handler function executed when the action is triggered.
    *
    * This runs in the client - the server only stores metadata.
@@ -216,6 +229,10 @@ export interface ActionManifestEntry {
   data_schema?: ActionDataSchema;
   default_data?: Record<string, unknown>;
   required_context?: Record<string, unknown>;
+  parameter_examples?: Array<{
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
 }
 
 /**
@@ -248,6 +265,12 @@ export interface ActionManifest {
    * Action definitions (without handlers).
    */
   actions: ActionManifestEntry[];
+
+  /**
+   * Custom agent guidance synced alongside actions.
+   * Injected into the AI agent's prompt as product_guidance.
+   */
+  agentGuidance?: string;
 }
 
 /**
@@ -314,6 +337,16 @@ export interface SyncActionDefinition<TData = Record<string, unknown>> {
    * If true, the handler's return value is sent back to the agent.
    */
   returns?: boolean;
+
+  /**
+   * Concrete examples of valid parameter objects for the AI to reference.
+   * Each example should have a `description` and a `parameters` object
+   * matching the `dataSchema`.
+   */
+  parameterExamples?: Array<{
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
 }
 
 /**

@@ -65,6 +65,7 @@ interface SyncActionDefinition {
   autoRun?: boolean;
   autoComplete?: boolean;
   returns?: boolean;
+  parameterExamples?: Record<string, unknown>[];
 }
 
 type SyncActionDefinitions = Record<string, SyncActionDefinition>;
@@ -82,6 +83,7 @@ interface ActionManifestEntry {
   data_schema?: ActionDataSchema;
   default_data?: Record<string, unknown>;
   required_context?: Record<string, unknown>;
+  parameter_examples?: Record<string, unknown>[];
 }
 
 interface ActionManifest {
@@ -339,6 +341,7 @@ function buildManifest(
     if (definition.dataSchema) entry.data_schema = definition.dataSchema;
     if (definition.defaultData) entry.default_data = definition.defaultData;
     if (definition.requiredContext) entry.required_context = definition.requiredContext;
+    if (definition.parameterExamples?.length) entry.parameter_examples = definition.parameterExamples;
 
     entries.push(entry);
   }

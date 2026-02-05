@@ -2,7 +2,7 @@
  * Suggestions Store
  * Signal-based state for page-aware suggested questions
  * 
- * The backend generates a pool of 15-20 diverse suggestions.
+ * The backend generates a small set of suggested questions.
  * This store sorts them client-side based on page relevance
  * for instant page-aware suggestions without additional LLM calls.
  */
@@ -14,7 +14,7 @@ import type { SuggestedQuestion } from '../api/client';
 // State Signals
 // ============================================================================
 
-/** Base suggestion pool from backend (15-20 suggestions) */
+/** Base suggestion pool from backend */
 export const suggestionPool = signal<SuggestedQuestion[]>([]);
 
 /** Currently displayed suggestions (sorted by page relevance) */
@@ -57,7 +57,7 @@ export function sortByPageRelevance(
   pool: SuggestedQuestion[],
   pathname: string,
   title: string,
-  limit: number = 6
+  limit: number = 3
 ): SuggestedQuestion[] {
   if (pool.length === 0) return [];
 
@@ -166,7 +166,7 @@ export function setSuggestionsError(error: string | null): void {
 export function sortForCurrentPage(
   pathname: string,
   title: string,
-  limit: number = 6
+  limit: number = 3
 ): SuggestedQuestion[] {
   const sorted = sortByPageRelevance(suggestionPool.value, pathname, title, limit);
   setSuggestions(sorted, pathname);

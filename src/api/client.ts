@@ -373,7 +373,7 @@ export class APIClient {
     userContext?: UserContextItem[],
     images?: ChatImage[],
     onProgress?: (progress: ProgressEvent) => void,
-    onConversationStarted?: (conversationId: string, messageId?: string) => void,
+    onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void,
     onActionRequest?: (request: ActionRequest) => Promise<void>
   ): Promise<ChatResponse> {
     // Use MCP client for chat via the 'ask' tool
@@ -402,8 +402,8 @@ export class APIClient {
           onProgress: (p) => {
             onProgress?.(p as ProgressEvent);
           },
-          onConversationStarted: (convId, msgId) => {
-            onConversationStarted?.(convId, msgId);
+          onConversationStarted: (convId, assistantMsgId) => {
+            onConversationStarted?.(convId, assistantMsgId);
           },
           onActionRequest: async (request) => {
             if (onActionRequest) {
@@ -426,6 +426,8 @@ export class APIClient {
           history,
           // Pass registered actions from previous turns for dynamic action tools
           registeredActions: getRegisteredActions(),
+          // Always pass conversation ID (generated client-side for new conversations)
+          conversationId: existingConversationId || undefined,
         }
       );
 
@@ -697,6 +699,7 @@ export class APIClient {
             product: ctx,
             user_profile: userProfile,
           },
+          // Always pass conversation ID (generated client-side for new conversations)
           ...(existingConversationId && { conversation_id: existingConversationId }),
         },
         {

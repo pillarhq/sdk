@@ -214,8 +214,7 @@ export interface SuggestionsConfig {
   debounceMs?: number;
   /**
    * Maximum number of suggestions to display.
-   * The backend returns a larger pool which is sorted and trimmed to this limit.
-   * @default 6
+   * @default 3
    */
   displayLimit?: number;
 }
@@ -516,7 +515,7 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = 
   suggestions: {
     enabled: true,
     debounceMs: 100,
-    displayLimit: 6,
+    displayLimit: 3,
   },
   
   sidebarTabs: DEFAULT_SIDEBAR_TABS,

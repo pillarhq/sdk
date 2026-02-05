@@ -48,11 +48,9 @@ import { generateContextId } from "../../types/user-context";
 import { debug } from "../../utils/debug";
 import { scanPageDirect } from "../../utils/dom-scanner";
 import { PreactMarkdown } from "../../utils/preact-markdown";
-import { createConfirmActionCard } from "../Cards/ConfirmActionCard";
 import { useAPI } from "../context";
 import { ContextTagList } from "../Panel/ContextTag";
 import {
-  createTaskButtonGroup,
   type TaskButtonData,
 } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
@@ -293,6 +291,11 @@ export function ChatView() {
         let receivedActions: TaskButtonData[] = [];
         const history = messages.value.slice(0, -1); // Exclude the empty assistant message
 
+        // Generate conversation_id client-side if new conversation
+        if (!conversationId.value) {
+          setConversationId(crypto.randomUUID());
+        }
+
         // No article context in standalone chat view
         const response = await api.chat(
           message,
@@ -303,7 +306,7 @@ export function ChatView() {
             updateLastAssistantMessage(fullResponse);
           },
           undefined, // No article slug
-          conversationId.value, // Pass existing conversation ID if available
+          conversationId.value, // Always set - generated client-side for new conversations
           // Actions callback - handle auto-run actions
           (actions) => {
             receivedActions = handleActionsReceived(actions);
@@ -317,17 +320,16 @@ export function ChatView() {
             // Add to progress events array for display (now markdown-based)
             addProgressEvent(progress as StoreProgressEvent);
           },
-          // Conversation started callback - store ID early for optimistic UI
-          (conversationIdFromServer) => {
-            setConversationId(conversationIdFromServer);
-
-            // Save active session hint for recovery on page navigation
+          // Conversation started callback - save active session for recovery on page navigation
+          // (conversation ID already set client-side via crypto.randomUUID above)
+          () => {
             const pillar = Pillar.getInstance();
             const siteId = pillar?.config?.productKey ?? "";
-            if (siteId && conversationIdFromServer) {
+            const convId = conversationId.value;
+            if (siteId && convId) {
               import("../../store/session-persistence").then(
                 ({ saveActiveSession }) => {
-                  saveActiveSession(conversationIdFromServer, siteId);
+                  saveActiveSession(convId, siteId);
                 }
               );
             }
@@ -606,62 +608,7 @@ export function ChatView() {
   // Sources are displayed but not clickable (article views have been removed)
   // TODO: Consider linking sources to external URLs if available
 
-  // Create refs map for action containers per message
-  const actionContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-
-  // Effect to render action buttons when messages change
-  // All actions render as buttons initially; inline_ui buttons toggle their card on click
-  useEffect(() => {
-    const pillar = Pillar.getInstance();
-
-    messages.value.forEach((msg, index) => {
-      if (msg.role === "assistant" && msg.actions && msg.actions.length > 0) {
-        const container = actionContainerRefs.current.get(index);
-        if (container && container.children.length === 0) {
-          // Separate inline_ui cards from regular buttons
-          const confirmActions = msg.actions.filter(
-            (a) => a.taskType === "inline_ui"
-          );
-          const buttonActions = msg.actions.filter(
-            (a) => a.taskType !== "inline_ui"
-          );
-
-          // Render confirm action cards first
-          confirmActions.forEach((action) => {
-            const card = createConfirmActionCard(
-              action,
-              // onConfirm callback
-              (data) => {
-                if (pillar) {
-                  // Emit task execution event
-                  pillar.executeTask({
-                    id: action.id,
-                    name: action.name,
-                    taskType: action.taskType,
-                    data: data || action.data || {},
-                  });
-                }
-              },
-              // onCancel callback
-              () => {
-                debug.log("[Pillar] Confirm action cancelled:", action.name);
-              }
-            );
-            container.appendChild(card);
-          });
-
-          // Then render regular buttons
-          if (buttonActions.length > 0) {
-            const buttonGroup = createTaskButtonGroup(buttonActions);
-            container.appendChild(buttonGroup);
-          }
-          // Render all actions as buttons (inline_ui handling is in TaskButton)
-          const buttonGroup = createTaskButtonGroup(msg.actions);
-          container.appendChild(buttonGroup);
-        }
-      }
-    });
-  }, [messages.value]);
+  // Action button rendering removed - suggested actions are not yet functional
 
   return (
     <div class="_pillar-chat-view pillar-chat-view">
@@ -884,20 +831,7 @@ export function ChatView() {
                   </div>
                 )}
 
-                {/* Action buttons for this message */}
-                {msg.actions && msg.actions.length > 0 && (
-                  <div class="_pillar-chat-actions pillar-chat-actions">
-                    <div class="_pillar-chat-actions-title pillar-chat-actions-title">
-                      Suggested actions
-                    </div>
-                    <div
-                      ref={(el) => {
-                        if (el) actionContainerRefs.current.set(index, el);
-                      }}
-                      class="_pillar-chat-actions-buttons pillar-chat-actions-buttons"
-                    />
-                  </div>
-                )}
+                {/* Action buttons removed - suggested actions are not yet functional */}
               </div>
             )}
           </div>

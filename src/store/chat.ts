@@ -35,7 +35,7 @@ export interface StoredChatMessage extends ChatMessage {
 // Chat messages history
 export const messages = signal<StoredChatMessage[]>([]);
 
-// Current conversation ID (server-assigned, persists across messages in a conversation)
+// Current conversation ID (client-generated, persists across messages in a conversation)
 export const conversationId = signal<string | null>(null);
 
 // Registered actions for dynamic action tools (persisted across conversation turns)

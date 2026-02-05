@@ -86,7 +86,7 @@ export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
  * Chat context for escalation to human support.
  */
 export interface ChatContext {
-  /** Server-assigned conversation ID, or null if not yet assigned */
+  /** Client-generated conversation ID, or null if not yet started */
   conversationId: string | null;
   /** Messages in the conversation */
   messages: Array<{

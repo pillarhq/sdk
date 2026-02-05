@@ -106,8 +106,8 @@ export interface StreamCallbacks {
   onRegisteredActions?: (actions: Record<string, unknown>[]) => void;
   /** Called on error */
   onError?: (error: string) => void;
-  /** Called when conversation_started event is received (early conversation_id) */
-  onConversationStarted?: (conversationId: string, messageId?: string) => void;
+  /** Called when conversation_started event is received (confirms conversation tracking) */
+  onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void;
   /** Called when stream is complete */
   onComplete?: (conversationId?: string, queryLogId?: string) => void;
   /** Called for progress updates (search, query, generating, thinking, etc.) */
@@ -464,10 +464,10 @@ export class MCPClient {
                       collectedText.push(progress.token);
                       callbacks.onToken?.(progress.token);
                     } else if (progress.kind === 'conversation_started') {
-                      // Conversation started - early conversation_id from pre-generated UUID
+                      // Conversation started - confirms tracking, returns assistant_message_id
                       callbacks.onConversationStarted?.(
                         progress.conversation_id,
-                        progress.message_id
+                        progress.assistant_message_id
                       );
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
@@ -662,11 +662,17 @@ export class MCPClient {
       /** Registered actions from previous turns (for dynamic action tools) */
       registeredActions?: Record<string, unknown>[];
       signal?: AbortSignal;
+      /** Conversation ID - generated client-side, always provided */
+      conversationId?: string;
     }
   ): Promise<ToolResult> {
     const args: Record<string, unknown> = {
       query,
     };
+
+    if (options?.conversationId) {
+      args.conversation_id = options.conversationId;
+    }
 
     if (options?.articleSlug) {
       args.article_slug = options.articleSlug;
