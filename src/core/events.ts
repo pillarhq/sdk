@@ -223,6 +223,12 @@ export interface PillarEvents {
   "dom:scanned": CompactScanResult;
   "domScanning:change": { enabled: boolean };
 
+  // Suggestions events - for page-aware suggestion sorting
+  "suggestions:updated": {
+    suggestions: Array<{ id: string; text: string }>;
+    route: string;
+  };
+
   // Sidebar tab click events - for triggering custom actions on non-assistant tabs
   // Customers use this to integrate their own support systems (Intercom, Zendesk, etc.)
   "sidebar:click": { tabId: string; label: string };

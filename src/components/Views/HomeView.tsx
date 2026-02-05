@@ -1,48 +1,27 @@
 /**
  * Home View Component
  * Default panel view with suggested questions and chat input
+ * 
+ * Uses the suggestions store for page-aware suggestions that are sorted
+ * client-side based on the current page context (URL, title).
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useSignal, useComputed } from '@preact/signals';
 import type { SuggestedQuestion } from '../../api/client';
 import { setPendingMessage } from '../../store/chat';
-import { debug } from '../../utils/debug';
+import {
+  suggestions,
+  suggestionsLoading,
+} from '../../store/suggestions';
 import { navigateToChat } from '../../store/router';
-import { useAPI } from '../context';
 import { UnifiedChatInput } from '../Panel/UnifiedChatInput';
 import { QuestionChip, QuestionChipSkeleton } from '../shared';
 
 export function HomeView() {
-  const api = useAPI();
-  const [questions, setQuestions] = useState<SuggestedQuestion[] | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadQuestions = async () => {
-      try {
-        const data = await api.getSuggestedQuestions();
-        if (mounted) {
-          setQuestions(data);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (mounted) {
-          debug.error('[Pillar] Failed to load suggested questions:', err);
-          // On error, just show empty state - not critical
-          setQuestions([]);
-          setLoading(false);
-        }
-      }
-    };
-
-    loadQuestions();
-
-    return () => {
-      mounted = false;
-    };
-  }, [api]);
+  // Subscribe to suggestions store signals
+  // These are automatically sorted for the current page by Pillar core
+  const currentSuggestions = useComputed(() => suggestions.value);
+  const isLoading = useComputed(() => suggestionsLoading.value);
 
   const handleQuestionClick = (question: SuggestedQuestion) => {
     // Set the question as a pending message and navigate to chat
@@ -62,16 +41,16 @@ export function HomeView() {
 
       {/* Suggested Questions */}
       <div class="_pillar-home-view-questions pillar-home-view-questions">
-        {loading ? (
+        {isLoading.value ? (
           // Loading skeleton
           <>
             <QuestionChipSkeleton />
             <QuestionChipSkeleton />
             <QuestionChipSkeleton />
           </>
-        ) : questions && questions.length > 0 ? (
-          // Show questions
-          questions.map((question) => (
+        ) : currentSuggestions.value && currentSuggestions.value.length > 0 ? (
+          // Show questions sorted for current page
+          currentSuggestions.value.map((question) => (
             <QuestionChip
               key={question.id}
               text={question.text}

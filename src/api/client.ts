@@ -34,6 +34,8 @@ export interface ChatMessage {
 export interface SuggestedQuestion {
   id: string;
   text: string;
+  /** If true, this is an admin-configured suggestion that should rank first */
+  manual?: boolean;
 }
 
 export interface ChatResponse {

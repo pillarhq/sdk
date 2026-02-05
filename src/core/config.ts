@@ -198,6 +198,28 @@ export interface DOMScanningConfig {
   interactionHighlight?: InteractionHighlightConfig;
 }
 
+export interface SuggestionsConfig {
+  /**
+   * Enable page-aware suggestion sorting.
+   * When enabled, suggestions are re-sorted based on the current page context
+   * whenever the user navigates to a new route.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Debounce time for route change detection (ms).
+   * Prevents excessive sorting on rapid navigation.
+   * @default 100
+   */
+  debounceMs?: number;
+  /**
+   * Maximum number of suggestions to display.
+   * The backend returns a larger pool which is sorted and trimmed to this limit.
+   * @default 6
+   */
+  displayLimit?: number;
+}
+
 export interface EdgeTriggerConfig {
   /**
    * Whether to show the edge trigger sidebar tab.
@@ -316,6 +338,9 @@ export interface PillarConfig {
   // DOM scanning for page context
   domScanning?: DOMScanningConfig;
   
+  // Page-aware suggestions
+  suggestions?: SuggestionsConfig;
+  
   // Sidebar tabs configuration
   sidebarTabs?: SidebarTabConfig[];
   
@@ -397,6 +422,12 @@ export interface ResolvedDOMScanningConfig {
   interactionHighlight: ResolvedInteractionHighlightConfig;
 }
 
+export interface ResolvedSuggestionsConfig {
+  enabled: boolean;
+  debounceMs: number;
+  displayLimit: number;
+}
+
 export interface ResolvedConfig {
   productKey: string;
   apiBaseUrl: string;
@@ -414,6 +445,7 @@ export interface ResolvedConfig {
   urlParams: Required<UrlParamsConfig>;
   textSelection: Required<TextSelectionConfig>;
   domScanning: ResolvedDOMScanningConfig;
+  suggestions: ResolvedSuggestionsConfig;
   sidebarTabs: SidebarTabConfig[];
   theme: ResolvedThemeConfig;
   customCSS?: string;
@@ -479,6 +511,12 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = 
       scrollIntoView: true,
       scrollBehavior: 'smooth',
     },
+  },
+  
+  suggestions: {
+    enabled: true,
+    debounceMs: 100,
+    displayLimit: 6,
   },
   
   sidebarTabs: DEFAULT_SIDEBAR_TABS,
@@ -566,6 +604,11 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
         ...DEFAULT_CONFIG.domScanning.interactionHighlight,
         ...config.domScanning?.interactionHighlight,
       },
+    },
+    
+    suggestions: {
+      ...DEFAULT_CONFIG.suggestions,
+      ...config.suggestions,
     },
     
     // Merge sidebar tabs: user tabs override defaults by id

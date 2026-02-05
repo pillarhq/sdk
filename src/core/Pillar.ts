@@ -4,7 +4,7 @@
  */
 
 import { getActionDefinition, hasAction, setClientInfo } from "../actions";
-import { APIClient } from "../api/client";
+import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
 import { Panel } from "../components/Panel/Panel";
@@ -15,6 +15,14 @@ import {
   historyInvalidationCounter,
   resetChat,
 } from "../store/chat";
+import {
+  resetSuggestions,
+  setSuggestionPool,
+  setSuggestions,
+  setSuggestionsError,
+  setSuggestionsLoading,
+  sortByPageRelevance,
+} from "../store/suggestions";
 import {
   resetContext,
   clearErrorState as storeClearErrorState,
@@ -43,6 +51,7 @@ import {
 } from "../store/workflow";
 import { h, render } from "preact";
 import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
+import { RouteObserver, type RouteInfo } from "../utils/route-observer";
 import { DebugPanel } from "../components/DebugPanel";
 import { domReady } from "../utils/dom";
 import { buildSelectorFromRef } from "../utils/dom-scanner";
@@ -127,6 +136,12 @@ export class Pillar {
 
   // Debug panel container
   private _debugPanelContainer: HTMLElement | null = null;
+
+  // Route observer for SPA navigation detection (page-aware suggestions)
+  private _routeObserver: RouteObserver | null = null;
+  
+  // Suggestion pool fetched from backend (cached for client-side sorting)
+  private _suggestionPool: SuggestedQuestion[] = [];
 
   constructor() {
     this._events = new EventEmitter();
@@ -2374,6 +2389,14 @@ export class Pillar {
         this._mountDebugPanel();
       }
 
+      // Initialize page-aware suggestions if enabled (non-blocking)
+      // Fetch starts immediately but doesn't block SDK ready state
+      if (this._config.suggestions.enabled) {
+        this._initSuggestions().catch((err) => {
+          debug.warn('[Pillar] Background suggestions init failed:', err);
+        });
+      }
+
       // Attempt to recover any active plan from localStorage
       await this._planExecutor?.recoverPlan();
 
@@ -2539,10 +2562,94 @@ export class Pillar {
     debug.log('[Pillar] Debug event capture enabled');
   }
 
+  // ============================================================================
+  // Page-Aware Suggestions
+  // ============================================================================
+
+  /**
+   * Initialize page-aware suggestions.
+   * Fetches the suggestion pool from the backend and starts route observation.
+   */
+  private async _initSuggestions(): Promise<void> {
+    if (!this._api || !this._config) return;
+
+    debug.log('[Pillar] Initializing page-aware suggestions');
+    setSuggestionsLoading(true);
+
+    try {
+      // Fetch the full suggestion pool from backend
+      const pool = await this._api.getSuggestedQuestions();
+      
+      debug.log(`[Pillar] Fetched ${pool.length} suggestions for pool`);
+      this._suggestionPool = pool;
+      setSuggestionPool(pool);
+
+      // Initialize route observer
+      this._routeObserver = new RouteObserver({
+        debounceMs: this._config.suggestions.debounceMs,
+      });
+
+      // Register route change handler
+      this._routeObserver.onRouteChange((route) => {
+        this._handleRouteChange(route);
+      });
+
+      // Start observing route changes
+      this._routeObserver.start();
+
+      // Sort suggestions for the current page immediately
+      const currentRoute = this._routeObserver.getCurrentRoute();
+      this._handleRouteChange(currentRoute);
+
+      setSuggestionsLoading(false);
+    } catch (error) {
+      debug.error('[Pillar] Failed to initialize suggestions:', error);
+      setSuggestionsError(error instanceof Error ? error.message : String(error));
+      setSuggestionsLoading(false);
+    }
+  }
+
+  /**
+   * Handle route change by re-sorting suggestions for the new page context.
+   */
+  private _handleRouteChange(route: RouteInfo): void {
+    if (!this._config) return;
+
+    const { pathname, title } = route;
+    const limit = this._config.suggestions.displayLimit;
+
+    debug.log(`[Pillar] Route changed to: ${pathname}, sorting suggestions`);
+
+    // Sort the pool for the current page context
+    const sorted = sortByPageRelevance(
+      this._suggestionPool,
+      pathname,
+      title,
+      limit
+    );
+
+    // Update the displayed suggestions
+    setSuggestions(sorted, pathname);
+
+    // Emit event for external listeners
+    this._events.emit('suggestions:updated', {
+      suggestions: sorted.map((s) => ({ id: s.id, text: s.text })),
+      route: pathname,
+    });
+
+    debug.log(`[Pillar] Sorted ${sorted.length} suggestions for page`);
+  }
+
   /**
    * Internal cleanup
    */
   private _destroy(): void {
+    // Stop route observer
+    this._routeObserver?.stop();
+    this._routeObserver = null;
+    this._suggestionPool = [];
+    resetSuggestions();
+
     this._textSelectionManager?.destroy();
     this._panel?.destroy();
     this._edgeTrigger?.destroy();
