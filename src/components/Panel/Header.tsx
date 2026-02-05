@@ -3,37 +3,36 @@
  * Navigation header with back, home, history, and close buttons
  */
 
-import { h } from 'preact';
-import { canGoBack, isAtHome, goBack, goHome, navigate, type ViewType } from '../../store/router';
-import { closePanel } from '../../store/panel';
-import { hasMessages, loadConversation } from '../../store/chat';
-import { getApiClient } from '../../core/Pillar';
-import { debug } from '../../utils/debug';
-import { HistoryDropdown } from './HistoryDropdown';
+import { getApiClient } from "../../core/Pillar";
+import { hasMessages, loadConversation } from "../../store/chat";
+import { closePanel } from "../../store/panel";
+import {
+  canGoBack,
+  goBack,
+  goHome,
+  isAtHome,
+  navigate,
+  type ViewType,
+} from "../../store/router";
+import { debug } from "../../utils/debug";
+import { HistoryDropdown } from "./HistoryDropdown";
 
 const BACK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>`;
 const HOME_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>`;
 const CLOSE_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>`;
 const NEW_CHAT_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>`;
 
-const VIEW_TITLES: Record<ViewType, string> = {
-  home: 'Assistant',
-  chat: 'Assistant',
-};
-
 interface HeaderProps {
   currentView: ViewType;
-  customTitle?: string;
   /** Hide back and home navigation buttons */
   hideNavigation?: boolean;
 }
 
-export function Header({ currentView, customTitle, hideNavigation = false }: HeaderProps) {
+export function Header({ currentView, hideNavigation = false }: HeaderProps) {
   const showBack = !hideNavigation && canGoBack.value;
   const showHome = !hideNavigation && !isAtHome.value;
   // Show new chat button in chat view when there are messages
-  const showNewChat = currentView === 'chat' && hasMessages.value;
-  const title = customTitle || VIEW_TITLES[currentView];
+  const showNewChat = currentView === "chat" && hasMessages.value;
 
   const handleBack = () => {
     goBack();
@@ -61,10 +60,10 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
         // Load the conversation into chat store
         loadConversation(conversation.id, conversation.messages);
         // Navigate to chat view
-        navigate('chat');
+        navigate("chat");
       }
     } catch (error) {
-      debug.error('[Pillar] Failed to load conversation:', error);
+      debug.error("[Pillar] Failed to load conversation:", error);
     }
   };
 
@@ -89,7 +88,6 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
             dangerouslySetInnerHTML={{ __html: HOME_ICON }}
           />
         )}
-        <span class="_pillar-header-title pillar-header-title">{title}</span>
       </div>
       <div class="_pillar-header-right pillar-header-right">
         {showNewChat && (
@@ -114,4 +112,3 @@ export function Header({ currentView, customTitle, hideNavigation = false }: Hea
     </header>
   );
 }
-

@@ -1,32 +1,43 @@
 /**
  * Panel CSS Styles
  * Complete styling for the help panel (injected into Shadow DOM)
- * 
+ *
  * Class naming convention:
  * - Internal classes (_pillar-*): Apply all default styles
  * - Public classes (pillar-*): Empty by default, for user overrides
- * 
+ *
  * Each element renders both classes, e.g.: class="_pillar-header pillar-header"
  */
 
-import type { ResolvedThemeConfig, ThemeColors } from '../../core/config';
+import type { ResolvedThemeConfig, ThemeColors } from "../../core/config";
 
 /**
  * Generate CSS variable overrides from theme colors
  */
-export function generateThemeVariables(colors: ThemeColors, prefix = ''): string {
+export function generateThemeVariables(
+  colors: ThemeColors,
+  prefix = ""
+): string {
   const lines: string[] = [];
-  
-  if (colors.primary) lines.push(`--pillar-primary${prefix}: ${colors.primary};`);
-  if (colors.primaryHover) lines.push(`--pillar-primary-hover${prefix}: ${colors.primaryHover};`);
-  if (colors.background) lines.push(`--pillar-bg${prefix}: ${colors.background};`);
-  if (colors.backgroundSecondary) lines.push(`--pillar-bg-secondary${prefix}: ${colors.backgroundSecondary};`);
+
+  if (colors.primary)
+    lines.push(`--pillar-primary${prefix}: ${colors.primary};`);
+  if (colors.primaryHover)
+    lines.push(`--pillar-primary-hover${prefix}: ${colors.primaryHover};`);
+  if (colors.background)
+    lines.push(`--pillar-bg${prefix}: ${colors.background};`);
+  if (colors.backgroundSecondary)
+    lines.push(
+      `--pillar-bg-secondary${prefix}: ${colors.backgroundSecondary};`
+    );
   if (colors.text) lines.push(`--pillar-text${prefix}: ${colors.text};`);
-  if (colors.textMuted) lines.push(`--pillar-text-muted${prefix}: ${colors.textMuted};`);
+  if (colors.textMuted)
+    lines.push(`--pillar-text-muted${prefix}: ${colors.textMuted};`);
   if (colors.border) lines.push(`--pillar-border${prefix}: ${colors.border};`);
-  if (colors.borderLight) lines.push(`--pillar-border-light${prefix}: ${colors.borderLight};`);
-  
-  return lines.join('\n    ');
+  if (colors.borderLight)
+    lines.push(`--pillar-border-light${prefix}: ${colors.borderLight};`);
+
+  return lines.join("\n    ");
 }
 
 /**
@@ -35,9 +46,9 @@ export function generateThemeVariables(colors: ThemeColors, prefix = ''): string
 export function generateThemeCSS(theme: ResolvedThemeConfig): string {
   const lightOverrides = generateThemeVariables(theme.colors);
   const darkOverrides = generateThemeVariables(theme.darkColors);
-  
-  let css = '';
-  
+
+  let css = "";
+
   // Light mode overrides
   if (lightOverrides) {
     css += `
@@ -46,7 +57,7 @@ export function generateThemeCSS(theme: ResolvedThemeConfig): string {
 }
 `;
   }
-  
+
   // Dark mode overrides - apply when in dark mode (either manual or auto)
   if (darkOverrides) {
     css += `
@@ -60,7 +71,7 @@ export function generateThemeCSS(theme: ResolvedThemeConfig): string {
 }
 `;
   }
-  
+
   return css;
 }
 
@@ -303,7 +314,8 @@ export const PANEL_STYLES = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--pillar-spacing-lg) var(--pillar-spacing-xl);
+  height: 32px;
+  padding: 0 var(--pillar-spacing-md);
   border-bottom: 1px solid var(--pillar-border);
   flex-shrink: 0;
   background: var(--pillar-bg);
@@ -356,7 +368,6 @@ export const PANEL_STYLES = `
 
 ._pillar-icon-btn:hover {
   color: var(--pillar-text);
-  background: var(--pillar-bg-tertiary);
 }
 
 ._pillar-icon-btn svg {

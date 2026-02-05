@@ -31,14 +31,6 @@ export function HomeView() {
 
   return (
     <div class="_pillar-home-view pillar-home-view">
-      {/* Header */}
-      <div class="_pillar-home-view-header pillar-home-view-header">
-        <div class="_pillar-home-view-icon">💬</div>
-        <h2 class="_pillar-home-view-title pillar-home-view-title">
-          How can I help?
-        </h2>
-      </div>
-
       {/* Suggested Questions */}
       <div class="_pillar-home-view-questions pillar-home-view-questions">
         {isLoading.value ? (

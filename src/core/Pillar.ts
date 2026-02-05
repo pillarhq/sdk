@@ -9,6 +9,7 @@ import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
 import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
+import { PagePilotManager } from "../components/PagePilot/PagePilotManager";
 import {
   conversationId as chatConversationId,
   messages as chatMessages,
@@ -102,6 +103,7 @@ export class Pillar {
   private _events: EventEmitter;
   private _api: APIClient | null = null;
   private _textSelectionManager: TextSelectionManager | null = null;
+  private _pagePilotManager: PagePilotManager | null = null;
   private _panel: Panel | null = null;
   private _edgeTrigger: EdgeTrigger | null = null;
   private _mobileTrigger: MobileTrigger | null = null;
@@ -542,24 +544,13 @@ export class Pillar {
     // Clear any existing highlight immediately
     this.clearHighlight(true);
 
-    // Scroll into view if enabled
+    // Always scroll element to center of screen for better visibility during agent interactions
     if (config.scrollIntoView) {
-      // Check if element is in viewport
-      const rect = el.getBoundingClientRect();
-      const isInViewport = (
-        rect.top >= 0 &&
-        rect.left >= 0 &&
-        rect.bottom <= window.innerHeight &&
-        rect.right <= window.innerWidth
-      );
-
-      if (!isInViewport) {
-        el.scrollIntoView({
-          behavior: config.scrollBehavior,
-          block: 'center',
-          inline: 'nearest',
-        });
-      }
+      el.scrollIntoView({
+        behavior: config.scrollBehavior,
+        block: 'center',
+        inline: 'nearest',
+      });
     }
 
     // Store original styles
@@ -2230,6 +2221,11 @@ export class Pillar {
         this._textSelectionManager.init();
       }
 
+      // Initialize page pilot manager for "Page being piloted by Agent" banner
+      // This is always initialized as it's needed for interact_with_page actions
+      this._pagePilotManager = new PagePilotManager();
+      this._pagePilotManager.init();
+
       this._state = "ready";
       this._events.emit("ready");
       this._config.onReady?.();
@@ -2477,6 +2473,7 @@ export class Pillar {
     resetSuggestions();
 
     this._textSelectionManager?.destroy();
+    this._pagePilotManager?.destroy();
     this._panel?.destroy();
     this._edgeTrigger?.destroy();
     this._mobileTrigger?.destroy();
@@ -2514,6 +2511,7 @@ export class Pillar {
     this._anyTaskHandler = null;
 
     this._textSelectionManager = null;
+    this._pagePilotManager = null;
     this._panel = null;
     this._edgeTrigger = null;
     this._mobileTrigger = null;

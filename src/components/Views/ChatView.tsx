@@ -31,6 +31,13 @@ import {
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
 } from "../../store/chat";
+import {
+  startPiloting,
+  stopPiloting,
+  wasCancelled,
+  resetCancellation,
+  type PilotOperation,
+} from "../../store/pagePilot";
 import { clearActiveSession } from "../../store/session-persistence";
 import type {
   DOMSnapshotContext,
@@ -333,32 +340,76 @@ export function ChatView() {
               try {
                 // Check for built-in SDK actions first
                 if (request.action_name === "interact_with_page") {
-                  const interactionResult = pillar.handlePageInteraction(
-                    request.parameters as {
-                      operation:
-                        | "click"
-                        | "type"
-                        | "select"
-                        | "focus"
-                        | "toggle";
-                      ref: string;
-                      value?: string;
+                  const params = request.parameters as {
+                    operation:
+                      | "click"
+                      | "type"
+                      | "select"
+                      | "focus"
+                      | "toggle";
+                    ref: string;
+                    value?: string;
+                  };
+
+                  // Start piloting mode - shows banner
+                  startPiloting(params.operation as PilotOperation, request.tool_call_id);
+
+                  try {
+                    // Check if cancelled before executing
+                    if (wasCancelled()) {
+                      await api.mcp.sendActionResult(
+                        request.action_name,
+                        { success: false, error: "User cancelled action" },
+                        request.tool_call_id
+                      );
+                      debug.log("[Pillar] Page interaction cancelled by user before execution");
+                      return;
                     }
-                  );
 
-                  await api.mcp.sendActionResult(
-                    request.action_name,
-                    interactionResult,
-                    request.tool_call_id
-                  );
+                    const interactionResult = pillar.handlePageInteraction(params);
 
-                  const elapsed = Math.round(
-                    performance.now() - requestStartTime
-                  );
-                  debug.log(
-                    `[Pillar] Page interaction "${request.parameters?.operation}" completed in ${elapsed}ms:`,
-                    interactionResult
-                  );
+                    // Check if cancelled after executing
+                    if (wasCancelled()) {
+                      await api.mcp.sendActionResult(
+                        request.action_name,
+                        { success: false, error: "User cancelled action" },
+                        request.tool_call_id
+                      );
+                      debug.log("[Pillar] Page interaction cancelled by user after execution");
+                      return;
+                    }
+
+                    // If action succeeded and DOM scanning is enabled, rescan after a brief delay
+                    let updatedDomSnapshot: string | null = null;
+                    if (interactionResult.success && pillar?.isDOMScanningEnabled) {
+                      // Wait for DOM to settle (animations, async updates)
+                      await new Promise(resolve => setTimeout(resolve, 150));
+                      const scanResult = scanPageDirect();
+                      updatedDomSnapshot = scanResult.content;
+                      debug.log("[Pillar] DOM rescanned after page interaction");
+                    }
+
+                    await api.mcp.sendActionResult(
+                      request.action_name,
+                      {
+                        ...interactionResult,
+                        dom_snapshot: updatedDomSnapshot,
+                      },
+                      request.tool_call_id
+                    );
+
+                    const elapsed = Math.round(
+                      performance.now() - requestStartTime
+                    );
+                    debug.log(
+                      `[Pillar] Page interaction "${params.operation}" completed in ${elapsed}ms:`,
+                      interactionResult
+                    );
+                  } finally {
+                    // Stop piloting mode - hides banner
+                    stopPiloting();
+                    resetCancellation();
+                  }
                   return;
                 }
 
