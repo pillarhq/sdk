@@ -32,6 +32,7 @@ import {
   setActiveRequestId,
   updateActionMessageContent,
   removeLastEmptyAssistantMessage,
+  addOptimisticConversation,
   updateLastAssistantMessage,
   userContext,
   type ChatImage,
@@ -325,7 +326,8 @@ export function ChatView() {
         const history = messages.value.slice(0, -1); // Exclude the empty assistant message
 
         // Generate conversation_id client-side if new conversation
-        if (!conversationId.value) {
+        const isNewConversation = !conversationId.value;
+        if (isNewConversation) {
           setConversationId(crypto.randomUUID());
         }
 
@@ -545,6 +547,11 @@ export function ChatView() {
         // Store conversation ID for subsequent messages
         if (response.conversationId) {
           setConversationId(response.conversationId);
+        }
+
+        // Optimistically add to history so dropdown shows it immediately
+        if (isNewConversation && conversationId.value) {
+          addOptimisticConversation(conversationId.value, message);
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") {

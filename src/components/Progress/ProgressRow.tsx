@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ProgressEvent, ProgressChild } from '../../store/chat';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { PreactMarkdown } from '../../utils/preact-markdown';
 
 export interface ProgressRowProps {
   progress: ProgressEvent;
@@ -79,8 +80,10 @@ export function ProgressRow({
   const [isManuallyToggled, setIsManuallyToggled] = useState(false);
   const [manualExpandState, setManualExpandState] = useState(false);
   
-  // Determine actual expanded state
-  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : effectiveIsActive);
+  // Determine actual expanded state.
+  // Last row stays expanded even after completing — it only collapses
+  // when the next event arrives and pushes it out of last position.
+  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : (effectiveIsActive || isLast));
 
   // Ref for text preview container (auto-scroll)
   const textPreviewRef = useRef<HTMLDivElement>(null);
@@ -280,7 +283,7 @@ export function ProgressRow({
                   class="_pillar-progress-text-preview pillar-progress-text-preview"
                   onScroll={handleTextPreviewScroll}
                 >
-                  {debouncedText}
+                  <PreactMarkdown content={debouncedText || ''} />
                 </div>
               </div>
             )}

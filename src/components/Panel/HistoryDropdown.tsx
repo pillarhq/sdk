@@ -6,7 +6,7 @@
 import { h, Fragment } from 'preact';
 import { useState, useRef, useEffect, useMemo } from 'preact/hooks';
 import { getApiClient } from '../../core/Pillar';
-import { historyInvalidationCounter } from '../../store/chat';
+import { historyInvalidationCounter, optimisticConversations } from '../../store/chat';
 import { debug } from '../../utils/debug';
 import type { ConversationSummary } from '../../api/client';
 
@@ -127,6 +127,20 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
     };
   }, [isOpen]);
 
+  /**
+   * Merge optimistic (client-side) conversations with server results.
+   * Optimistic entries appear first; duplicates by ID are removed.
+   */
+  const mergeWithOptimistic = (serverList: ConversationSummary[]): ConversationSummary[] => {
+    const optimistic = optimisticConversations.value;
+    if (optimistic.length === 0) return serverList;
+
+    const serverIds = new Set(serverList.map((c) => c.id));
+    // Prepend optimistic entries that the server doesn't know about yet
+    const newOptimistic = optimistic.filter((c) => !serverIds.has(c.id));
+    return [...newOptimistic, ...serverList];
+  };
+
   const fetchConversations = async () => {
     if (hasFetched) return;
     
@@ -135,10 +149,14 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
       const apiClient = getApiClient();
       if (apiClient) {
         const result = await apiClient.listConversations(20);
-        setConversations(result);
+        setConversations(mergeWithOptimistic(result));
       }
     } catch (error) {
       debug.error('[Pillar] Failed to fetch conversations:', error);
+      // Even on error, show optimistic conversations if any
+      if (optimisticConversations.value.length > 0) {
+        setConversations(optimisticConversations.value);
+      }
     } finally {
       setIsLoading(false);
       setHasFetched(true);

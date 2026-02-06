@@ -4,7 +4,7 @@
  */
 
 import { computed, signal } from "@preact/signals";
-import type { ArticleSummary, ChatMessage } from "../api/client";
+import type { ArticleSummary, ChatMessage, ConversationSummary } from "../api/client";
 import type { ChatImage } from "../api/mcp-client";
 import type { TaskButtonData } from "../components/Panel/TaskButton";
 import type { UserContextItem } from "../types/user-context";
@@ -44,6 +44,9 @@ export const registeredActions = signal<Record<string, unknown>[]>([]);
 
 // Incremented when conversation history should be invalidated (e.g., new conversation created)
 export const historyInvalidationCounter = signal<number>(0);
+
+// Optimistically-added conversations (appear in history before server confirms)
+export const optimisticConversations = signal<ConversationSummary[]>([]);
 
 /** localStorage key for persisting the current conversation ID */
 const CONVERSATION_ID_STORAGE_KEY = "pillar:conversation_id";
@@ -240,20 +243,61 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
           ...existingEvents.slice(existingIndex + 1),
         ];
       } else {
-        // New event with id — add start time for thinking events
+        // New event with id — finalize any active thinking events first,
+        // then add the new event. This stops the timer on "Thinking..." rows
+        // when a new row (e.g., tool_call) appears below them.
+        const now = Date.now();
+        const finalizedEvents = existingEvents.map((e) => {
+          const isActiveThinking =
+            (e.kind === "thinking" || e.kind === "step_start") &&
+            e.status === "active";
+          if (!isActiveThinking) return e;
+          const st = (e.metadata as Record<string, unknown>)?._startTime as
+            | number
+            | undefined;
+          const dur = st
+            ? { _durationSeconds: Math.round((now - st) / 1000) }
+            : {};
+          return {
+            ...e,
+            status: "done" as const,
+            metadata: { ...e.metadata, ...dur },
+          };
+        });
+
+        // Add start time for thinking events
         const isNewThinking = (event.kind === "thinking" || event.kind === "step_start") && event.status === "active";
         const newEvent = isNewThinking
-          ? { ...event, metadata: { ...event.metadata, _startTime: Date.now() } }
+          ? { ...event, metadata: { ...event.metadata, _startTime: now } }
           : event;
-        updatedEvents = [...existingEvents, newEvent];
+        updatedEvents = [...finalizedEvents, newEvent];
       }
     } else {
-      // No id - just append (but still add start time for new thinking events)
+      // No id - finalize active thinking events, then append
+      const now = Date.now();
+      const finalizedEvents = existingEvents.map((e) => {
+        const isActiveThinking =
+          (e.kind === "thinking" || e.kind === "step_start") &&
+          e.status === "active";
+        if (!isActiveThinking) return e;
+        const st = (e.metadata as Record<string, unknown>)?._startTime as
+          | number
+          | undefined;
+        const dur = st
+          ? { _durationSeconds: Math.round((now - st) / 1000) }
+          : {};
+        return {
+          ...e,
+          status: "done" as const,
+          metadata: { ...e.metadata, ...dur },
+        };
+      });
+
       const isNewThinking = (event.kind === "thinking" || event.kind === "step_start") && event.status === "active";
       const newEvent = isNewThinking
-        ? { ...event, metadata: { ...event.metadata, _startTime: Date.now() } }
+        ? { ...event, metadata: { ...event.metadata, _startTime: now } }
         : event;
-      updatedEvents = [...existingEvents, newEvent];
+      updatedEvents = [...finalizedEvents, newEvent];
     }
 
     messages.value = [
@@ -807,6 +851,29 @@ export const loadConversation = (
  */
 export const stopLoadingHistory = () => {
   isLoadingHistory.value = false;
+};
+
+/**
+ * Optimistically add a new conversation to the history list.
+ * The conversation appears immediately in the dropdown without
+ * waiting for the server to confirm via listConversations.
+ */
+export const addOptimisticConversation = (id: string, title: string) => {
+  const now = new Date().toISOString();
+  const entry: ConversationSummary = {
+    id,
+    title,
+    startedAt: now,
+    lastMessageAt: now,
+    messageCount: 1,
+  };
+  // Prepend so it shows at the top (most recent)
+  optimisticConversations.value = [
+    entry,
+    ...optimisticConversations.value.filter((c) => c.id !== id),
+  ];
+  // Also invalidate so the next dropdown open merges fresh server data
+  historyInvalidationCounter.value += 1;
 };
 
 /**

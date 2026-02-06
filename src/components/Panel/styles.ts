@@ -2383,7 +2383,7 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-progress-content-wrapper--expanded ._pillar-progress-content-container {
-  max-height: 100px;
+  max-height: 180px;
   overflow-y: auto;
 }
 
@@ -2478,7 +2478,7 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-progress-text-preview {
-  max-height: 80px;
+  max-height: 180px;
   overflow-y: auto;
   font-size: 11px;
   color: var(--pillar-text-muted);
@@ -2488,6 +2488,16 @@ export const PANEL_STYLES = `
   word-break: break-word;
   scrollbar-width: thin;
   scrollbar-color: var(--pillar-scrollbar-thumb) transparent;
+}
+
+/* All content inside progress text preview should stay muted and small.
+   Markdown headers, paragraphs, etc. must not look like answer text. */
+._pillar-progress-text-preview * {
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: normal !important;
+  line-height: inherit !important;
+  margin: 0 !important;
 }
 
 /* Top gradient - fades out older text at the top */

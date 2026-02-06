@@ -163,6 +163,10 @@ const DEBUG_PANEL_STYLES = `
 .pillar-debug-btn:hover {
   background-color: #333;
 }
+.pillar-debug-btn.copied {
+  border-color: #10b981;
+  color: #10b981;
+}
 .pillar-debug-content {
   overflow: hidden;
   display: flex;
@@ -316,7 +320,11 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const [isResizing, setIsResizing] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
+  const [copyFeedback, setCopyFeedback] = useState<'copy' | 'copyAll' | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Store the original body padding-bottom so we can restore it on unmount
+  const originalPaddingRef = useRef<string>('');
 
   // Inject styles on mount
   useEffect(() => {
@@ -327,6 +335,9 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
       style.textContent = DEBUG_PANEL_STYLES;
       document.head.appendChild(style);
     }
+
+    // Capture original body padding-bottom
+    originalPaddingRef.current = document.body.style.paddingBottom || '';
 
     const pillar = Pillar.getInstance();
     if (!pillar) return;
@@ -339,7 +350,34 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
       setEntries([...newEntries]);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      // Restore original body padding on unmount
+      document.body.style.paddingBottom = originalPaddingRef.current;
+    };
+  }, []);
+
+  // Push page content up by adjusting body padding to match panel height.
+  // Uses ResizeObserver so it fires after layout on every size change
+  // (expand/collapse, drag-resize, content changes).
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+
+    const updatePadding = () => {
+      document.body.style.paddingBottom = `${el.offsetHeight}px`;
+    };
+
+    const observer = new ResizeObserver(updatePadding);
+    observer.observe(el);
+
+    // Also set it immediately for the initial render
+    updatePadding();
+
+    return () => {
+      observer.disconnect();
+    };
   }, []);
 
   // Auto-scroll to bottom when new entries arrive
@@ -423,6 +461,52 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * Format entries as readable text with a header
+   */
+  const formatEntriesAsText = (entriesToFormat: DebugEntry[], label: string): string => {
+    const header = [
+      '=== Pillar SDK — Client Logs ===',
+      `Output: ${label}`,
+      `Exported: ${new Date().toISOString()}`,
+      `Entries: ${entriesToFormat.length}`,
+      '',
+    ].join('\n');
+
+    const lines = entriesToFormat.map(entry => {
+      const time = formatTime(entry.timestamp);
+      const source = getSourceLabel(entry.source).toUpperCase().padEnd(8);
+      const level = entry.level === 'error' ? ' [ERROR]' : entry.level === 'warn' ? ' [WARN]' : '';
+      const data = entry.data != null
+        ? ` ${typeof entry.data === 'object' ? JSON.stringify(entry.data) : String(entry.data)}`
+        : '';
+      return `${time} [${source}]${level} ${entry.event}${data}`;
+    });
+
+    return header + lines.join('\n');
+  };
+
+  const handleCopy = () => {
+    const activeSourceLabels = ALL_SOURCES
+      .filter(s => activeSources.has(s))
+      .map(getSourceLabel)
+      .join(', ');
+    const label = filter
+      ? `${activeSourceLabels} (filtered: "${filter}")`
+      : activeSourceLabels;
+    const text = formatEntriesAsText(filteredEntries, label);
+    navigator.clipboard.writeText(text);
+    setCopyFeedback('copy');
+    setTimeout(() => setCopyFeedback(null), 1500);
+  };
+
+  const handleCopyAll = () => {
+    const text = formatEntriesAsText(entries, 'All Sources');
+    navigator.clipboard.writeText(text);
+    setCopyFeedback('copyAll');
+    setTimeout(() => setCopyFeedback(null), 1500);
+  };
+
   const toggleSource = (source: DebugSource) => {
     setActiveSources(prev => {
       const next = new Set(prev);
@@ -456,7 +540,7 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
   };
 
   return (
-    <div class="pillar-debug-panel">
+    <div class="pillar-debug-panel" ref={panelRef}>
       {/* Resize Handle */}
       {isExpanded && (
         <div
@@ -472,6 +556,24 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
         <span class="pillar-debug-header-count">{entries.length}</span>
         {isExpanded && (
           <div class="pillar-debug-header-actions">
+            <button
+              class={`pillar-debug-btn ${copyFeedback === 'copy' ? 'copied' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopy();
+              }}
+            >
+              {copyFeedback === 'copy' ? 'Copied!' : 'Copy'}
+            </button>
+            <button
+              class={`pillar-debug-btn ${copyFeedback === 'copyAll' ? 'copied' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyAll();
+              }}
+            >
+              {copyFeedback === 'copyAll' ? 'Copied!' : 'Copy All'}
+            </button>
             <button
               class="pillar-debug-btn"
               onClick={(e) => {
