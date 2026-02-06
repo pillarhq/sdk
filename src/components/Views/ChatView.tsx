@@ -59,7 +59,7 @@ import {
   type TaskButtonData,
 } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
-import { ProgressStack, ReasoningDisclosure } from "../Progress";
+import { ProgressStack } from "../Progress";
 import { QuestionChip, QuestionChipSkeleton } from "../shared";
 import { ResumePrompt } from "./ResumePrompt";
 import {
@@ -815,12 +815,10 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Progress events: expandable stack before content arrives,
-                      collapsible disclosure once content is present */}
+                  {/* Progress events — rendered consistently regardless of content.
+                      Events use their actual status (active/done) for expand/collapse. */}
                   {msg.progressEvents && msg.progressEvents.length > 0 && (
-                    msg.content
-                      ? <ReasoningDisclosure events={msg.progressEvents} />
-                      : <ProgressStack events={msg.progressEvents} />
+                    <ProgressStack events={msg.progressEvents} />
                   )}
 
                   {/* Message content or loading spinner */}

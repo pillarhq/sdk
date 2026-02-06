@@ -1,8 +1,13 @@
 /**
  * ProgressStack Component
  *
- * Renders a stack of progress events during AI response generation.
- * Each event is displayed as a row with status icon, label, and optional streaming text.
+ * Renders a stack of progress events for an assistant message.
+ * Used both during active streaming and after completion.
+ *
+ * Each event's expand/collapse state is driven by its actual `status` field
+ * from the server (active = expanded, done/error = collapsed). This ensures
+ * events transition naturally as the server sends status updates, rather than
+ * being forced collapsed when response content arrives.
  */
 
 import type { ProgressEvent } from '../../store/chat';
@@ -14,7 +19,8 @@ export interface ProgressStackProps {
 
 /**
  * Renders an array of progress events as stacked rows.
- * Used during active streaming to show the AI's progress.
+ * Events are permanent — once yielded by the server, they remain in the
+ * thread until a new conversation is started.
  */
 export function ProgressStack({ events }: ProgressStackProps) {
   if (!events || events.length === 0) return null;
