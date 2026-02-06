@@ -173,7 +173,9 @@ export class Pillar {
   /**
    * Create or get the shared root container for all Pillar UI elements.
    * Uses isolation: isolate to create a new stacking context.
-   * Z-index changes based on hover mode (999 in hover mode, -1 in push mode).
+   * Z-index varies by panel mode:
+   *   - Push mode: 1000 (above typical navbars but not extreme)
+   *   - Hover/overlay mode: 9999 (floats above host app content)
    */
   private _createRootContainer(): HTMLElement {
     // Check if container already exists
@@ -187,8 +189,8 @@ export class Pillar {
     // Create new container
     container = document.createElement("div");
     container.id = "pillar-root";
-    // Use z-index higher than typical app navbars (Grafana uses 1000-1060)
-    const initialZIndex = "100001";
+    // Set initial z-index based on current mode
+    const initialZIndex = isHoverMode.value ? "9999" : "1000";
     container.style.cssText = `isolation: isolate; z-index: ${initialZIndex}; position: relative;`;
     document.body.appendChild(container);
 
@@ -200,15 +202,16 @@ export class Pillar {
 
   /**
    * Subscribe to hover mode changes and update root container z-index.
+   * Push mode uses a moderate z-index (1000) so the panel sits alongside content
+   * without dominating the stacking order. Hover/overlay mode uses a high z-index
+   * (9999) so the panel floats above the host app.
    */
   private _subscribeToHoverModeForRoot(container: HTMLElement): void {
     // Clean up existing subscription if any
     this._unsubscribeHoverMode?.();
 
     this._unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
-      // Both modes need high z-index so edge trigger is visible above app navbars
-      // (Grafana uses z-index 1000-1060 for navbar/modals)
-      container.style.zIndex = "100001";
+      container.style.zIndex = inHoverMode ? "9999" : "1000";
     });
   }
 

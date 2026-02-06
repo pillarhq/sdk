@@ -521,7 +521,10 @@ export class Panel {
   }
 
   private createBackdrop(): void {
-    // Backdrop is outside shadow DOM for proper stacking
+    // Backdrop is inside the root container (but outside shadow DOM) so it
+    // participates in the same stacking context. The root container uses
+    // isolation: isolate, and position: fixed still covers the full viewport
+    // since isolation does NOT change the containing block for fixed children.
     this.backdrop = document.createElement('div');
     this.backdrop.className = '_pillar-backdrop pillar-backdrop';
     this.backdrop.style.cssText = `
@@ -539,7 +542,8 @@ export class Panel {
       closePanel();
     });
 
-    document.body.appendChild(this.backdrop);
+    const mountTarget = this.rootContainer || document.body;
+    mountTarget.appendChild(this.backdrop);
   }
 
   private createPanel(): void {
