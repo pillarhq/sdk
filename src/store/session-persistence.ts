@@ -55,7 +55,7 @@ export function saveActiveSession(conversationId: string, siteId: string): void 
     const key = getStorageKey(siteId);
     localStorage.setItem(key, JSON.stringify(data));
 
-    debug.log(`[SessionPersistence] Saved session ${conversationId.slice(0, 8)}... to localStorage`);
+    debug.log(`[SessionPersistence] Saved session ${conversationId.slice(0, 8)}... to localStorage (key="${key}")`);
   } catch (error) {
     debug.warn('[SessionPersistence] Failed to save session:', error);
   }
@@ -68,13 +68,19 @@ export function saveActiveSession(conversationId: string, siteId: string): void 
  * @returns The saved session data or null if not found/invalid
  */
 export function loadActiveSession(siteId: string): StoredSessionData | null {
-  if (!siteId) return null;
+  if (!siteId) {
+    debug.warn('[SessionPersistence] loadActiveSession called with empty siteId');
+    return null;
+  }
 
   try {
     const key = getStorageKey(siteId);
     const stored = localStorage.getItem(key);
 
-    if (!stored) return null;
+    if (!stored) {
+      debug.log(`[SessionPersistence] No session found at key "${key}"`);
+      return null;
+    }
 
     const data: StoredSessionData = JSON.parse(stored);
 

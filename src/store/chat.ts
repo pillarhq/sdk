@@ -574,6 +574,43 @@ export const clearProgressStatus = () => {
   progressStatus.value = { kind: null };
 };
 
+/**
+ * Mark all active progress events on the last assistant message as "done".
+ * Called when the user cancels/stops streaming so thinking timers stop.
+ */
+export const finalizeActiveProgressEvents = () => {
+  const msgs = messages.value;
+  if (msgs.length === 0) return;
+  const lastMsg = msgs[msgs.length - 1];
+  if (lastMsg.role !== "assistant" || !lastMsg.progressEvents) return;
+
+  const hasActive = lastMsg.progressEvents.some(
+    (e) => e.status === "active"
+  );
+  if (!hasActive) return;
+
+  const now = Date.now();
+  const updatedEvents = lastMsg.progressEvents.map((e) => {
+    if (e.status !== "active") return e;
+    const startTime = (e.metadata as Record<string, unknown>)?._startTime as
+      | number
+      | undefined;
+    const durationMeta = startTime
+      ? { _durationSeconds: Math.round((now - startTime) / 1000) }
+      : {};
+    return {
+      ...e,
+      status: "done" as const,
+      metadata: { ...e.metadata, ...durationMeta },
+    };
+  });
+
+  messages.value = [
+    ...msgs.slice(0, -1),
+    { ...lastMsg, progressEvents: updatedEvents },
+  ];
+};
+
 export const addProgressEvent = (event: ProgressEvent) => {
   // Update global (deprecated, for progressStatus backwards compat)
   // Use same deduplication logic as per-message storage
@@ -622,6 +659,24 @@ export const setInterruptedSession = (session: InterruptedSession | null) => {
 
 export const clearInterruptedSession = () => {
   interruptedSession.value = null;
+};
+
+/**
+ * Remove the last assistant message if it has no content AND no progress events.
+ * Used after Stop / AbortError to clean up the empty placeholder
+ * that was added before streaming started.
+ *
+ * If the model was thinking (progress events exist), the message is kept
+ * so the user can still see the thinking text that was streamed.
+ */
+export const removeLastEmptyAssistantMessage = () => {
+  const msgs = messages.value;
+  if (msgs.length === 0) return;
+  const last = msgs[msgs.length - 1];
+  const hasProgressEvents = last.progressEvents && last.progressEvents.length > 0;
+  if (last.role === "assistant" && !last.content?.trim() && !hasProgressEvents) {
+    messages.value = msgs.slice(0, -1);
+  }
 };
 
 export const expandChat = () => {

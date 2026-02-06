@@ -2233,7 +2233,7 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-unified-stop-btn:hover {
-  background: var(--pillar-text-primary);
+  background: var(--pillar-text);
 }
 
 ._pillar-unified-stop-btn svg {
@@ -2291,7 +2291,6 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-progress-message {
-  flex: 1;
   color: var(--pillar-text-muted);
   font-size: 12px;
   font-style: italic;
@@ -2443,7 +2442,7 @@ export const PANEL_STYLES = `
 }
 
 /* Chevron indicator for progress rows - rotates based on expanded state */
-/* Positioned on right side, hidden by default, shown on hover */
+/* Positioned inline next to label, hidden by default, shown on hover */
 ._pillar-progress-chevron {
   display: inline-flex;
   align-items: center;
@@ -2454,7 +2453,6 @@ export const PANEL_STYLES = `
   font-size: 10px;
   color: var(--pillar-text-muted);
   transition: transform 0.2s ease, opacity 0.15s ease;
-  margin-left: auto;
   opacity: 0;
 }
 

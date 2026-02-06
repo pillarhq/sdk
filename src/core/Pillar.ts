@@ -2317,9 +2317,13 @@ export class Pillar {
    * Checks if there's a saved session hint and validates with the server.
    */
   private async _recoverSession(): Promise<void> {
-    if (!this._config || !this._api) return;
+    if (!this._config || !this._api) {
+      debug.warn('[Pillar] _recoverSession skipped: config or api not available');
+      return;
+    }
 
     const siteId = this._config.productKey;
+    debug.log('[Pillar] Checking for saved session hint with siteId:', siteId);
     
     // Import session persistence functions
     const { loadActiveSession, clearActiveSession } = await import('../store/session-persistence');
@@ -2327,7 +2331,10 @@ export class Pillar {
     
     // Check for saved session hint
     const savedSession = loadActiveSession(siteId);
-    if (!savedSession) return;
+    if (!savedSession) {
+      debug.log('[Pillar] No saved session found for siteId:', siteId);
+      return;
+    }
 
     debug.log('[Pillar] Found saved session hint, checking with server...');
 
@@ -2368,11 +2375,15 @@ export class Pillar {
    * Restore the last conversation from localStorage on page refresh.
    * Runs at the very end of init so it is not clobbered by ready handlers,
    * host-app identify() calls, or other init steps.
+   *
+   * If the restored conversation has a trailing empty assistant message
+   * (indicating the response was interrupted mid-stream), this method will
+   * strip it and attempt to set up the resume flow so the user can reconnect.
    */
   private async _restoreConversation(): Promise<void> {
     if (!this._api) return;
 
-    const { getStoredConversationId, messages, loadConversation, isLoadingHistory } = await import('../store/chat');
+    const { getStoredConversationId, messages, loadConversation, isLoadingHistory, interruptedSession, setInterruptedSession } = await import('../store/chat');
     const { navigate, currentView } = await import('../store/router');
 
     const storedId = getStoredConversationId();
@@ -2389,7 +2400,45 @@ export class Pillar {
 
       const conversation = await this._api.getConversation(storedId);
       if (conversation && conversation.messages.length > 0) {
-        loadConversation(conversation.id, conversation.messages);
+        let messagesToLoad = conversation.messages;
+
+        // Check if the last message is an empty assistant message (interrupted response).
+        // Strip it so the UI doesn't show a stale "Processing..." spinner.
+        const lastMsg = messagesToLoad[messagesToLoad.length - 1];
+        const hasStaleAssistantMsg = lastMsg.role === 'assistant' && !lastMsg.content?.trim();
+
+        if (hasStaleAssistantMsg) {
+          debug.log('[Pillar] Stripped trailing empty assistant message from restored conversation');
+          messagesToLoad = messagesToLoad.slice(0, -1);
+        }
+
+        if (messagesToLoad.length > 0) {
+          loadConversation(conversation.id, messagesToLoad);
+        } else {
+          isLoadingHistory.value = false;
+        }
+
+        // If we stripped an empty assistant message and _recoverSession didn't
+        // already set up the interrupted session, try the status endpoint as
+        // a fallback so the resume prompt can still appear.
+        if (hasStaleAssistantMsg && !interruptedSession.value && this._api.mcp) {
+          debug.log('[Pillar] Checking conversation status as fallback for resume...');
+          try {
+            const status = await this._api.mcp.getConversationStatus(storedId);
+            if (status && status.resumable) {
+              debug.log('[Pillar] Fallback: session is resumable, setting up resume state');
+              setInterruptedSession({
+                conversationId: storedId,
+                userMessage: status.user_message ?? '',
+                partialResponse: status.partial_response ?? '',
+                summary: status.summary ?? '',
+                elapsedMs: status.elapsed_ms ?? 0,
+              });
+            }
+          } catch (err) {
+            debug.warn('[Pillar] Fallback resume check failed:', err);
+          }
+        }
       } else {
         isLoadingHistory.value = false;
       }

@@ -14,6 +14,7 @@ import {
   clearPendingMessage,
   clearPendingUserContext,
   clearProgressStatus,
+  finalizeActiveProgressEvents,
   conversationId,
   interruptedSession,
   isLoading,
@@ -30,6 +31,7 @@ import {
   activeRequestId,
   setActiveRequestId,
   updateActionMessageContent,
+  removeLastEmptyAssistantMessage,
   updateLastAssistantMessage,
   userContext,
   type ChatImage,
@@ -546,7 +548,8 @@ export function ChatView() {
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          // User cancelled -- partial response is already displayed
+          // User cancelled -- clean up empty placeholder if no tokens arrived
+          removeLastEmptyAssistantMessage();
           debug.log("[Pillar] Chat cancelled by user");
           return;
         }
@@ -587,6 +590,12 @@ export function ChatView() {
     // 3. Keep partial response, clear loading state
     setLoading(false);
     clearProgressStatus();
+
+    // 4. Remove empty assistant placeholder if no tokens arrived yet
+    removeLastEmptyAssistantMessage();
+
+    // 5. Finalize active progress events so thinking timers stop
+    finalizeActiveProgressEvents();
   }, [api]);
 
   // Handle feedback submission
@@ -806,43 +815,34 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Live streaming progress - show ProgressStack during loading */}
-                  {!msg.content &&
-                    isLoading.value &&
-                    index === messages.value.length - 1 &&
-                    msg.progressEvents &&
-                    msg.progressEvents.length > 0 && (
-                      <ProgressStack events={msg.progressEvents} />
-                    )}
-                  {/* Progress events after loading complete but no content yet */}
-                  {!msg.content &&
-                    !isLoading.value &&
-                    msg.progressEvents &&
-                    msg.progressEvents.length > 0 && (
-                      <ProgressStack events={msg.progressEvents} />
-                    )}
+                  {/* Progress events: expandable stack before content arrives,
+                      collapsible disclosure once content is present */}
+                  {msg.progressEvents && msg.progressEvents.length > 0 && (
+                    msg.content
+                      ? <ReasoningDisclosure events={msg.progressEvents} />
+                      : <ProgressStack events={msg.progressEvents} />
+                  )}
+
+                  {/* Message content or loading spinner */}
                   {msg.content ? (
-                    <>
-                      {/* Progress events as collapsible disclosure */}
-                      {msg.progressEvents && msg.progressEvents.length > 0 && (
-                        <ReasoningDisclosure events={msg.progressEvents} />
-                      )}
-                      {/* Main message content rendered as markdown */}
-                      <div class="_pillar-message-assistant pillar-message-assistant">
-                        <PreactMarkdown content={msg.content} />
-                      </div>
-                    </>
+                    <div class="_pillar-message-assistant pillar-message-assistant">
+                      <PreactMarkdown content={msg.content} />
+                    </div>
                   ) : (
-                    /* Only show simple loading if no progress events yet */
-                    (!msg.progressEvents ||
-                      msg.progressEvents.length === 0) && (
-                      <div class="_pillar-progress-indicator pillar-progress-indicator">
-                        <div class="_pillar-loading-spinner pillar-loading-spinner" />
-                        <span class="_pillar-progress-message pillar-progress-message">
-                          Processing...
-                        </span>
-                      </div>
-                    )
+                    /* Show spinner only for the active message with no events yet.
+                       Not-last messages show nothing (avoids stale "Processing..."
+                       on restored conversations with incomplete assistant messages). */
+                    isLoading.value &&
+                      index === messages.value.length - 1 &&
+                      (!msg.progressEvents ||
+                        msg.progressEvents.length === 0) && (
+                        <div class="_pillar-progress-indicator pillar-progress-indicator">
+                          <div class="_pillar-loading-spinner pillar-loading-spinner" />
+                          <span class="_pillar-progress-message pillar-progress-message">
+                            Processing...
+                          </span>
+                        </div>
+                      )
                   )}
                   {/* Action status indicator */}
                   {msg.actionStatus &&
