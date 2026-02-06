@@ -909,12 +909,12 @@ export class MCPClient {
    * from where it was interrupted.
    * 
    * @param conversationId - The conversation to resume
-   * @param userContext - Optional current page context
+   * @param userContext - Optional current page context (highlighted text, DOM snapshot, etc.)
    * @param callbacks - Streaming callbacks
    */
   async resumeConversation(
     conversationId: string,
-    userContext: Record<string, unknown> | undefined,
+    userContext: UserContextItem[] | undefined,
     callbacks: StreamCallbacks
   ): Promise<void> {
     try {

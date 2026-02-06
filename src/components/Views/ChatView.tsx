@@ -29,6 +29,7 @@ import {
   submitPendingTrigger,
   updateActionMessageContent,
   updateLastAssistantMessage,
+  userContext,
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
 } from "../../store/chat";
@@ -102,6 +103,24 @@ export function ChatView() {
 
     const pillar = Pillar.getInstance();
     const siteId = pillar?.config?.productKey ?? "";
+    const isDOMScanningEnabled = pillar?.isDOMScanningEnabled ?? false;
+
+    // Gather user context (same logic as handleInputSubmit)
+    let resumeContext: UserContextItem[] = [...userContext.value];
+
+    if (isDOMScanningEnabled) {
+      const scanResult = scanPageDirect();
+      const domContext: DOMSnapshotContext = {
+        id: generateContextId(),
+        type: "dom_snapshot",
+        url: scanResult.url,
+        title: scanResult.title,
+        content: scanResult.content,
+        interactableCount: scanResult.interactableCount,
+        timestamp: scanResult.timestamp,
+      };
+      resumeContext = [...resumeContext, domContext];
+    }
 
     setIsResuming(true);
     setLoading(true);
@@ -114,7 +133,7 @@ export function ChatView() {
 
       await api.mcp.resumeConversation(
         session.conversationId,
-        undefined, // TODO: add user context
+        resumeContext.length > 0 ? resumeContext : undefined,
         {
           onToken: (token) => {
             fullResponse += token;
