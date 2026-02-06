@@ -1097,10 +1097,9 @@ export const PANEL_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 40px var(--pillar-spacing-xl);
+  justify-content: flex-start;
+  padding: var(--pillar-spacing-xl);
   text-align: center;
-  flex: 1;
 }
 
 ._pillar-chat-view-welcome-icon {
@@ -1195,6 +1194,7 @@ export const PANEL_STYLES = `
   background: var(--pillar-primary);
   color: #ffffff;
   white-space: pre-wrap;
+  text-align: left;
   word-wrap: break-word;
 }
 
