@@ -19,6 +19,7 @@ export class PagePilotManager {
   private stylesInjected = false;
   private unsubscribe: (() => void) | null = null;
   private themeObserver: MutationObserver | null = null;
+  private primaryColor: string | undefined;
 
   /**
    * Detect the current theme from the document
@@ -65,8 +66,10 @@ export class PagePilotManager {
 
   /**
    * Initialize the page pilot manager
+   * @param primaryColor - Optional primary color from theme config to override the default
    */
-  init(): void {
+  init(primaryColor?: string): void {
+    this.primaryColor = primaryColor;
     // Inject styles into the document (not shadow DOM)
     if (!this.stylesInjected) {
       injectStyles(document, PAGE_PILOT_STYLES, STYLES_ID);
@@ -77,6 +80,11 @@ export class PagePilotManager {
     this.container = document.createElement('div');
     this.container.id = CONTAINER_ID;
     document.body.appendChild(this.container);
+
+    // Apply theme primary color override if provided
+    if (this.primaryColor) {
+      this.container.style.setProperty('--pillar-primary', this.primaryColor);
+    }
 
     // Apply initial theme and set up observer
     this.applyTheme();
@@ -91,6 +99,16 @@ export class PagePilotManager {
 
     // Initial render
     this.render();
+  }
+
+  /**
+   * Update the primary color used by the banner
+   */
+  setPrimaryColor(color: string): void {
+    this.primaryColor = color;
+    if (this.container) {
+      this.container.style.setProperty('--pillar-primary', color);
+    }
   }
 
   /**

@@ -459,6 +459,11 @@ export class Pillar {
     // Update panel theme
     this._panel?.setTheme(this._config.theme);
 
+    // Update page pilot banner primary color
+    if (this._config.theme.colors.primary) {
+      this._pagePilotManager?.setPrimaryColor(this._config.theme.colors.primary);
+    }
+
     // Emit event
     this._events.emit("theme:change", { theme: this._config.theme });
   }
@@ -2270,7 +2275,7 @@ export class Pillar {
       // Initialize page pilot manager for "Page being piloted by Agent" banner
       // This is always initialized as it's needed for interact_with_page actions
       this._pagePilotManager = new PagePilotManager();
-      this._pagePilotManager.init();
+      this._pagePilotManager.init(this._config.theme.colors.primary);
 
       this._state = "ready";
       this._events.emit("ready");
