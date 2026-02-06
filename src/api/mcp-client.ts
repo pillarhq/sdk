@@ -94,6 +94,28 @@ export interface ActionRequest {
   tool_call_id?: string;
 }
 
+/** Token usage data from the agentic loop (sent after each LLM iteration) */
+export interface TokenUsage {
+  /** Input tokens for this iteration */
+  prompt_tokens: number;
+  /** Output tokens for this iteration */
+  completion_tokens: number;
+  /** Cumulative prompt tokens across all iterations */
+  total_prompt_tokens: number;
+  /** Cumulative completion tokens across all iterations */
+  total_completion_tokens: number;
+  /** Current total tokens in context */
+  total_used: number;
+  /** Maximum context window for the model */
+  context_window: number;
+  /** Current context occupancy percentage (0-100) */
+  occupancy_pct: number;
+  /** Name of the model in use */
+  model_name: string;
+  /** Current iteration number (0-indexed) */
+  iteration: number;
+}
+
 /** Streaming callbacks for tool calls */
 export interface StreamCallbacks {
   /** Called for each text token */
@@ -127,6 +149,8 @@ export interface StreamCallbacks {
   onRequestId?: (requestId: number) => void;
   /** Called when agent requests action execution (unified handler) */
   onActionRequest?: (request: ActionRequest) => Promise<void>;
+  /** Called when token usage is updated (after each LLM iteration) */
+  onTokenUsage?: (usage: TokenUsage) => void;
 }
 
 /** Image for chat requests (from upload-image endpoint) */
@@ -475,6 +499,19 @@ export class MCPClient {
                         progress.conversation_id,
                         progress.assistant_message_id
                       );
+                    } else if (progress.kind === 'token_usage') {
+                      // Token usage update — context gauge data
+                      callbacks.onTokenUsage?.({
+                        prompt_tokens: progress.prompt_tokens,
+                        completion_tokens: progress.completion_tokens,
+                        total_prompt_tokens: progress.total_prompt_tokens,
+                        total_completion_tokens: progress.total_completion_tokens,
+                        total_used: progress.total_used,
+                        context_window: progress.context_window,
+                        occupancy_pct: progress.occupancy_pct,
+                        model_name: progress.model_name,
+                        iteration: progress.iteration,
+                      });
                     } else if (progress.kind === 'cancelled') {
                       // Stream was cancelled
                       break;
@@ -1036,6 +1073,18 @@ export class MCPClient {
 
       if (kind === 'token') {
         callbacks.onToken?.(progress.token as string);
+      } else if (kind === 'token_usage') {
+        callbacks.onTokenUsage?.({
+          prompt_tokens: progress.prompt_tokens as number,
+          completion_tokens: progress.completion_tokens as number,
+          total_prompt_tokens: progress.total_prompt_tokens as number,
+          total_completion_tokens: progress.total_completion_tokens as number,
+          total_used: progress.total_used as number,
+          context_window: progress.context_window as number,
+          occupancy_pct: progress.occupancy_pct as number,
+          model_name: progress.model_name as string,
+          iteration: progress.iteration as number,
+        });
       } else if (kind === 'action_request') {
         callbacks.onActionRequest?.({
           action_name: progress.action_name as string,

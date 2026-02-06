@@ -97,6 +97,39 @@ export interface InterruptedSession {
 
 export const interruptedSession = signal<InterruptedSession | null>(null);
 
+// Token usage tracking for context gauge (Cursor-style)
+export interface TokenUsageState {
+  /** Input tokens for the latest iteration */
+  promptTokens: number;
+  /** Output tokens for the latest iteration */
+  completionTokens: number;
+  /** Cumulative prompt tokens across all iterations */
+  totalPromptTokens: number;
+  /** Cumulative completion tokens across all iterations */
+  totalCompletionTokens: number;
+  /** Current total tokens in context */
+  totalUsed: number;
+  /** Maximum context window for the model */
+  contextWindow: number;
+  /** Current context occupancy percentage (0-100) */
+  occupancyPct: number;
+  /** Name of the model in use */
+  modelName: string;
+  /** Current iteration number (0-indexed) */
+  iteration: number;
+}
+
+/** Current token usage for the active streaming response */
+export const tokenUsage = signal<TokenUsageState | null>(null);
+
+export const updateTokenUsage = (usage: TokenUsageState) => {
+  tokenUsage.value = usage;
+};
+
+export const clearTokenUsage = () => {
+  tokenUsage.value = null;
+};
+
 // Current progress status during loading (e.g., "Searching...", "Generating answer...")
 export interface ProgressStatus {
   kind: string | null; // Event type identifier (server-defined)
@@ -658,6 +691,7 @@ export const resetChat = () => {
   isLoading.value = false;
   progressStatus.value = { kind: null };
   progressEvents.value = [];
+  tokenUsage.value = null;
   isExpanded.value = false;
   currentSources.value = [];
   currentActions.value = [];

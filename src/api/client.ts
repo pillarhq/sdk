@@ -383,8 +383,8 @@ export class APIClient {
     let sources: ArticleSummary[] = [];
     let actions: TaskButtonData[] = [];
     
-    // Import store functions for registered actions (dynamic action tools)
-    const { getRegisteredActions, setRegisteredActions } = await import('../store/chat');
+    // Import store functions for registered actions and token usage tracking
+    const { getRegisteredActions, setRegisteredActions, updateTokenUsage } = await import('../store/chat');
 
     try {
       const result = await this.mcpClient.ask(
@@ -419,6 +419,19 @@ export class APIClient {
           },
           onRequestId: (id) => {
             onRequestId?.(id);
+          },
+          onTokenUsage: (usage) => {
+            updateTokenUsage({
+              promptTokens: usage.prompt_tokens,
+              completionTokens: usage.completion_tokens,
+              totalPromptTokens: usage.total_prompt_tokens,
+              totalCompletionTokens: usage.total_completion_tokens,
+              totalUsed: usage.total_used,
+              contextWindow: usage.context_window,
+              occupancyPct: usage.occupancy_pct,
+              modelName: usage.model_name,
+              iteration: usage.iteration,
+            });
           },
           onError: (error) => {
             debug.error('[Pillar API] MCP chat error:', error);

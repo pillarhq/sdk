@@ -109,11 +109,12 @@ export {
   type ProgressEvent,
 } from "./api/client";
 
-// MCP Client types (for image upload, action requests)
+// MCP Client types (for image upload, action requests, token usage)
 export {
   type ActionRequest,
   type ChatImage,
   type ImageUploadResponse,
+  type TokenUsage,
 } from "./api/mcp-client";
 
 // DOM Scanner types
