@@ -3,23 +3,15 @@
  * Navigation header with back, home, history, and close buttons
  */
 
-import { getApiClient } from "../../core/Pillar";
-import {
-  hasMessages,
-  loadConversation,
-  startLoadingHistory,
-  stopLoadingHistory,
-} from "../../store/chat";
+import { hasMessages, selectConversationById } from "../../store/chat";
 import { closePanel } from "../../store/panel";
 import {
   canGoBack,
   goBack,
   goHome,
   isAtHome,
-  navigate,
   type ViewType,
 } from "../../store/router";
-import { debug } from "../../utils/debug";
 import { HistoryDropdown } from "./HistoryDropdown";
 
 const BACK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>`;
@@ -55,28 +47,7 @@ export function Header({ currentView, hideNavigation = false }: HeaderProps) {
     closePanel();
   };
 
-  const handleSelectConversation = async (conversationId: string) => {
-    const apiClient = getApiClient();
-    if (!apiClient) return;
-
-    // Start loading state and navigate immediately for instant feedback
-    startLoadingHistory();
-    navigate("chat");
-
-    try {
-      const conversation = await apiClient.getConversation(conversationId);
-      if (conversation && conversation.messages.length > 0) {
-        // Load the conversation into chat store (clears loading state)
-        loadConversation(conversation.id, conversation.messages);
-      } else {
-        // No messages found, clear loading state
-        stopLoadingHistory();
-      }
-    } catch (error) {
-      debug.error("[Pillar] Failed to load conversation:", error);
-      stopLoadingHistory();
-    }
-  };
+  const handleSelectConversation = selectConversationById;
 
   return (
     <header class="_pillar-header pillar-header">

@@ -8,7 +8,12 @@ import type { APIClient } from '../../api/client';
 import type { ResolvedConfig } from '../../core/config';
 import type { EventEmitter } from '../../core/events';
 import { debug } from '../../utils/debug';
-import { resetChat, setPendingMessage, triggerInputFocus, triggerSubmitPending } from '../../store/chat';
+import {
+  resetChat,
+  setPendingMessage,
+  triggerInputFocus,
+  triggerSubmitPending,
+} from '../../store/chat';
 import {
   closePanel,
   destroyViewportListener,
@@ -266,8 +271,9 @@ export class Panel {
           // Hide backdrop in push mode
           this.backdrop?.classList.remove('_pillar-backdrop--visible', 'pillar-backdrop--visible');
         } else {
-          // In hover/overlay mode, remove push padding
+          // In hover/overlay mode, remove push padding and prevent body scroll
           this.removePushModeStyles();
+          document.body.style.overflow = 'hidden';
           // Show backdrop if enabled for hover mode
           if (showBackdrop) {
             this.backdrop?.classList.add('_pillar-backdrop--visible', 'pillar-backdrop--visible');
@@ -279,10 +285,14 @@ export class Panel {
       } else {
         // Panel is closed
         this.removePushModeStyles();
+        document.body.style.overflow = '';
         this.backdrop?.classList.remove('_pillar-backdrop--visible', 'pillar-backdrop--visible');
         this.panelElement?.classList.remove('_pillar-panel--open', 'pillar-panel--open');
       }
     };
+
+    // Apply initial UI state (important when panel starts open from localStorage)
+    updatePanelUI();
 
     // Subscribe to isOpen signal changes
     const unsubscribeOpen = isOpen.subscribe((currentValue) => {
@@ -293,14 +303,6 @@ export class Panel {
       updatePanelUI();
 
       if (!currentValue) {
-        // Reset panel state after animation
-        setTimeout(() => {
-          if (!isOpen.value) {
-            resetRouter();
-            resetChat();
-          }
-        }, 300);
-
         // Emit close event
         this.events.emit('panel:close');
       }

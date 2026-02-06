@@ -45,6 +45,34 @@ export const registeredActions = signal<Record<string, unknown>[]>([]);
 // Incremented when conversation history should be invalidated (e.g., new conversation created)
 export const historyInvalidationCounter = signal<number>(0);
 
+/** localStorage key for persisting the current conversation ID */
+const CONVERSATION_ID_STORAGE_KEY = "pillar:conversation_id";
+
+function persistConversationIdToStorage(id: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (id === null) {
+      localStorage.removeItem(CONVERSATION_ID_STORAGE_KEY);
+    } else {
+      localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+    }
+  } catch {
+    // Silently fail - localStorage may be unavailable
+  }
+}
+
+/**
+ * Read the persisted conversation ID from localStorage (e.g. for restore on refresh).
+ */
+export function getStoredConversationId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(CONVERSATION_ID_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
 
@@ -419,6 +447,7 @@ export const updateActionMessageContent = (
 
 export const setConversationId = (id: string) => {
   conversationId.value = id;
+  persistConversationIdToStorage(id);
 };
 
 /**
@@ -428,6 +457,7 @@ export const setThreadId = setConversationId;
 
 export const clearConversationId = () => {
   conversationId.value = null;
+  persistConversationIdToStorage(null);
 };
 
 /**
@@ -597,6 +627,7 @@ export const clearPendingUserContext = () => {
 export const resetChat = () => {
   messages.value = [];
   conversationId.value = null;
+  persistConversationIdToStorage(null);
   registeredActions.value = []; // Clear registered actions for new conversation
   isLoading.value = false;
   progressStatus.value = { kind: null };
@@ -637,6 +668,7 @@ export const loadConversation = (
 ) => {
   // Set the conversation ID
   conversationId.value = id;
+  persistConversationIdToStorage(id);
 
   // Load messages (map to StoredChatMessage format)
   messages.value = historyMessages.map((msg) => ({
@@ -660,4 +692,32 @@ export const loadConversation = (
  */
 export const stopLoadingHistory = () => {
   isLoadingHistory.value = false;
+};
+
+/**
+ * Select and load a conversation by ID (fetch from API, navigate to chat, load messages).
+ * Use from history dropdown or anywhere else in the SDK that needs to open a past conversation.
+ */
+export const selectConversationById = async (conversationId: string): Promise<void> => {
+  const { getApiClient } = await import("../core/Pillar");
+  const { navigate } = await import("./router");
+  const { debug } = await import("../utils/debug");
+
+  const apiClient = getApiClient();
+  if (!apiClient) return;
+
+  startLoadingHistory();
+  navigate("chat");
+
+  try {
+    const conversation = await apiClient.getConversation(conversationId);
+    if (conversation && conversation.messages.length > 0) {
+      loadConversation(conversation.id, conversation.messages);
+    } else {
+      stopLoadingHistory();
+    }
+  } catch (error) {
+    debug.error("[Pillar] Failed to load conversation:", error);
+    stopLoadingHistory();
+  }
 };

@@ -6,8 +6,44 @@
 import { signal, computed } from '@preact/signals';
 import type { PanelPosition, PanelMode } from '../core/config';
 
-// Panel visibility state
-export const isOpen = signal(false);
+// ============================================================================
+// Panel Open State Persistence
+// ============================================================================
+
+const PANEL_OPEN_STORAGE_KEY = 'pillar:panel_open';
+
+/**
+ * Load panel open state from localStorage.
+ * Returns false if not set or on error.
+ */
+function loadPanelOpenState(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const stored = localStorage.getItem(PANEL_OPEN_STORAGE_KEY);
+    return stored === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Save panel open state to localStorage.
+ */
+function savePanelOpenState(open: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PANEL_OPEN_STORAGE_KEY, String(open));
+  } catch {
+    // Silently fail - localStorage may be unavailable
+  }
+}
+
+// ============================================================================
+// Panel State Signals
+// ============================================================================
+
+// Panel visibility state (initialized from localStorage for persistence across refreshes)
+export const isOpen = signal(loadPanelOpenState());
 
 // Active tab (which tab is currently selected)
 export const activeTab = signal<string>('assistant');
@@ -91,6 +127,7 @@ export const panelClass = computed(() => {
 // Actions
 export const openPanel = () => {
   isOpen.value = true;
+  savePanelOpenState(true);
   // Only prevent body scroll in overlay/hover mode
   if (effectiveMode.value === 'overlay') {
     document.body.style.overflow = 'hidden';
@@ -99,6 +136,7 @@ export const openPanel = () => {
 
 export const closePanel = () => {
   isOpen.value = false;
+  savePanelOpenState(false);
   // Restore body scroll
   if (effectiveMode.value === 'overlay') {
     document.body.style.overflow = '';
@@ -181,6 +219,7 @@ export const destroyViewportListener = () => {
 // Reset panel state
 export const resetPanel = () => {
   isOpen.value = false;
+  savePanelOpenState(false);
   activeTab.value = 'assistant';
   // Always clear overflow on reset
   document.body.style.overflow = '';

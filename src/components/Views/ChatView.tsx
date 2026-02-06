@@ -56,7 +56,12 @@ import {
 } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
 import { ProgressStack, ReasoningDisclosure } from "../Progress";
+import { QuestionChip, QuestionChipSkeleton } from "../shared";
 import { ResumePrompt } from "./ResumePrompt";
+import {
+  suggestions,
+  suggestionsLoading,
+} from "../../store/suggestions";
 
 const THUMBS_UP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
 
@@ -705,15 +710,35 @@ export function ChatView() {
           !interruptedSession.value &&
           !isLoadingHistory.value && (
             <div class="_pillar-chat-view-welcome pillar-chat-view-welcome">
-              <div class="_pillar-chat-view-welcome-icon pillar-chat-view-welcome-icon">
-                💬
-              </div>
-              <div class="_pillar-chat-view-welcome-title pillar-chat-view-welcome-title">
-                Ask a question
-              </div>
-              <div class="_pillar-chat-view-welcome-text pillar-chat-view-welcome-text">
-                Ask me anything about how to use this product.
-              </div>
+              {suggestionsLoading.value ? (
+                <div class="_pillar-home-view-questions pillar-home-view-questions">
+                  <QuestionChipSkeleton />
+                  <QuestionChipSkeleton />
+                  <QuestionChipSkeleton />
+                </div>
+              ) : suggestions.value && suggestions.value.length > 0 ? (
+                <div class="_pillar-home-view-questions pillar-home-view-questions">
+                  {suggestions.value.map((question) => (
+                    <QuestionChip
+                      key={question.id}
+                      text={question.text}
+                      onClick={() => handleInputSubmit(question.text, [], [])}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div class="_pillar-chat-view-welcome-icon pillar-chat-view-welcome-icon">
+                    💬
+                  </div>
+                  <div class="_pillar-chat-view-welcome-title pillar-chat-view-welcome-title">
+                    Ask a question
+                  </div>
+                  <div class="_pillar-chat-view-welcome-text pillar-chat-view-welcome-text">
+                    Ask me anything about how to use this product.
+                  </div>
+                </>
+              )}
             </div>
           )}
 

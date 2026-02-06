@@ -1152,7 +1152,7 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-chat-history-loading-message--user ._pillar-chat-history-loading-bar {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.3) 25%, rgba(37, 99, 235, 0.5) 50%, rgba(37, 99, 235, 0.3) 75%);
+  background: linear-gradient(90deg, var(--pillar-bg-secondary) 25%, var(--pillar-border) 50%, var(--pillar-bg-secondary) 75%);
   background-size: 200% 100%;
   animation: pillar-shimmer 1.5s infinite;
 }
@@ -1405,8 +1405,7 @@ export const PANEL_STYLES = `
 
 ._pillar-chat-view-input-area {
   flex-shrink: 0;
-  padding: var(--pillar-spacing-md) var(--pillar-spacing-lg);
-  border-top: 1px solid var(--pillar-border);
+  padding: 0 var(--pillar-spacing-xl) var(--pillar-spacing-xl);
   background: var(--pillar-bg);
 }
 

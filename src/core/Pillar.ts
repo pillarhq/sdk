@@ -116,7 +116,32 @@ export class Pillar {
   private _userProfile: UserProfile = { ...DEFAULT_USER_PROFILE };
 
   // User identity (for cross-device conversation history)
+  // Persisted to localStorage so identity survives page refreshes
   private _externalUserId: string | null = null;
+
+  private static EXTERNAL_USER_ID_STORAGE_KEY = "pillar:external_user_id";
+
+  private _persistExternalUserId(userId: string | null): void {
+    if (typeof window === "undefined") return;
+    try {
+      if (userId === null) {
+        localStorage.removeItem(Pillar.EXTERNAL_USER_ID_STORAGE_KEY);
+      } else {
+        localStorage.setItem(Pillar.EXTERNAL_USER_ID_STORAGE_KEY, userId);
+      }
+    } catch {
+      // Silently fail - localStorage may be unavailable
+    }
+  }
+
+  private _getStoredExternalUserId(): string | null {
+    if (typeof window === "undefined") return null;
+    try {
+      return localStorage.getItem(Pillar.EXTERNAL_USER_ID_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
 
   // Task handlers
   private _taskHandlers: Map<string, (data: Record<string, unknown>) => void> =
@@ -1064,12 +1089,21 @@ export class Pillar {
       return;
     }
 
+    // If already identified as this user (e.g. restored from localStorage on refresh),
+    // skip redundant re-identification to avoid resetting the active conversation.
+    // Use String() coercion so numeric IDs match their localStorage string form.
+    if (this._externalUserId !== null && String(this._externalUserId) === String(userId)) {
+      debug.log("[Pillar] Already identified as this user, skipping");
+      return;
+    }
+
     try {
       // Call backend to merge anonymous visitor with authenticated user
       await this._api.identify(userId, profile);
 
-      // Store the external user ID for future requests
+      // Store the external user ID for future requests (memory + localStorage)
       this._externalUserId = userId;
+      this._persistExternalUserId(userId);
 
       // Update user profile with the user ID
       this._userProfile = {
@@ -1119,8 +1153,9 @@ export class Pillar {
    * ```
    */
   logout(options?: { preserveConversation?: boolean }): void {
-    // Clear the external user ID
+    // Clear the external user ID (memory + localStorage)
     this._externalUserId = null;
+    this._persistExternalUserId(null);
 
     // Reset user profile
     this._userProfile = { ...DEFAULT_USER_PROFILE };
@@ -2162,6 +2197,14 @@ export class Pillar {
       // Initialize API client with the final merged config
       this._api = new APIClient(this._config);
 
+      // Restore external user ID from localStorage (survives page refreshes)
+      const storedUserId = this._getStoredExternalUserId();
+      if (storedUserId) {
+        this._externalUserId = storedUserId;
+        this._api.setExternalUserId(storedUserId);
+        debug.log("[Pillar] Restored external user ID from localStorage");
+      }
+
       // Configure debug logger to forward logs to server (for debugging client-server issues)
       debug.configure(this._api.mcp, { forwardToServer: true });
 
@@ -2252,6 +2295,10 @@ export class Pillar {
       if (this._config.urlParams.enabled) {
         await this._handleUrlParams();
       }
+
+      // Restore last conversation from localStorage (runs last so it's not
+      // clobbered by other init steps, ready handlers, or host app code).
+      await this._restoreConversation();
     } catch (error) {
       this._state = "error";
       const err = error instanceof Error ? error : new Error(String(error));
@@ -2311,6 +2358,41 @@ export class Pillar {
     } catch (error) {
       debug.warn('[Pillar] Failed to check session status:', error);
       clearActiveSession(siteId);
+    }
+  }
+
+  /**
+   * Restore the last conversation from localStorage on page refresh.
+   * Runs at the very end of init so it is not clobbered by ready handlers,
+   * host-app identify() calls, or other init steps.
+   */
+  private async _restoreConversation(): Promise<void> {
+    if (!this._api) return;
+
+    const { getStoredConversationId, messages, loadConversation, isLoadingHistory } = await import('../store/chat');
+    const { navigate, currentView } = await import('../store/router');
+
+    const storedId = getStoredConversationId();
+    if (!storedId || messages.value.length > 0) return;
+
+    debug.log('[Pillar] Restoring conversation from localStorage:', storedId);
+
+    try {
+      // Navigate to chat and show loading state
+      isLoadingHistory.value = true;
+      if (currentView.value.type !== 'chat') {
+        navigate('chat');
+      }
+
+      const conversation = await this._api.getConversation(storedId);
+      if (conversation && conversation.messages.length > 0) {
+        loadConversation(conversation.id, conversation.messages);
+      } else {
+        isLoadingHistory.value = false;
+      }
+    } catch (error) {
+      debug.warn('[Pillar] Failed to restore conversation:', error);
+      isLoadingHistory.value = false;
     }
   }
 
