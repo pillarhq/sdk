@@ -76,6 +76,13 @@ export function getStoredConversationId(): string | null {
 // Whether chat is currently loading a response
 export const isLoading = signal(false);
 
+// Active JSON-RPC request ID for the current streaming request (for cancellation support)
+export const activeRequestId = signal<number | null>(null);
+
+export const setActiveRequestId = (id: number | null) => {
+  activeRequestId.value = id;
+};
+
 // Whether chat is loading a conversation from history
 export const isLoadingHistory = signal(false);
 
@@ -166,6 +173,17 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
       if (existingIndex >= 0) {
         // Update existing event
         const existing = existingEvents[existingIndex];
+        
+        // Calculate duration when a thinking event transitions from active to done/error
+        const isThinking = existing.kind === "thinking" || existing.kind === "step_start";
+        const wasActive = existing.status === "active";
+        const isNowDone = event.status === "done" || event.status === "error";
+        const startTime = (existing.metadata as Record<string, unknown>)?._startTime as number | undefined;
+        
+        const durationMeta = isThinking && wasActive && isNowDone && startTime
+          ? { _durationSeconds: Math.round((Date.now() - startTime) / 1000) }
+          : {};
+        
         const updatedEvent: ProgressEvent = {
           ...existing,
           ...event,
@@ -180,8 +198,8 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
               : (event.text ?? existing.text),
           // Merge children arrays if both exist
           children: event.children || existing.children,
-          // Merge metadata
-          metadata: { ...existing.metadata, ...event.metadata },
+          // Merge metadata (with timing)
+          metadata: { ...existing.metadata, ...event.metadata, ...durationMeta },
         };
         updatedEvents = [
           ...existingEvents.slice(0, existingIndex),
@@ -189,12 +207,20 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
           ...existingEvents.slice(existingIndex + 1),
         ];
       } else {
-        // New event with id
-        updatedEvents = [...existingEvents, event];
+        // New event with id — add start time for thinking events
+        const isNewThinking = (event.kind === "thinking" || event.kind === "step_start") && event.status === "active";
+        const newEvent = isNewThinking
+          ? { ...event, metadata: { ...event.metadata, _startTime: Date.now() } }
+          : event;
+        updatedEvents = [...existingEvents, newEvent];
       }
     } else {
-      // No id - just append
-      updatedEvents = [...existingEvents, event];
+      // No id - just append (but still add start time for new thinking events)
+      const isNewThinking = (event.kind === "thinking" || event.kind === "step_start") && event.status === "active";
+      const newEvent = isNewThinking
+        ? { ...event, metadata: { ...event.metadata, _startTime: Date.now() } }
+        : event;
+      updatedEvents = [...existingEvents, newEvent];
     }
 
     messages.value = [

@@ -2216,6 +2216,33 @@ export const PANEL_STYLES = `
 .pillar-unified-input-row {}
 .pillar-unified-send-btn {}
 
+._pillar-unified-stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #ffffff;
+  background: var(--pillar-text-secondary);
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-unified-stop-btn:hover {
+  background: var(--pillar-text-primary);
+}
+
+._pillar-unified-stop-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pillar-unified-stop-btn {}
+
 /* ============================================================================
    Progress Row (for search, query, generating events)
    Internal: _pillar-progress-row | Public: pillar-progress-row
@@ -2339,7 +2366,6 @@ export const PANEL_STYLES = `
 
 ._pillar-progress-content-wrapper {
   position: relative;
-  padding-left: 16px;
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.2s ease-out;
@@ -2417,6 +2443,7 @@ export const PANEL_STYLES = `
 }
 
 /* Chevron indicator for progress rows - rotates based on expanded state */
+/* Positioned on right side, hidden by default, shown on hover */
 ._pillar-progress-chevron {
   display: inline-flex;
   align-items: center;
@@ -2426,7 +2453,13 @@ export const PANEL_STYLES = `
   flex-shrink: 0;
   font-size: 10px;
   color: var(--pillar-text-muted);
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.15s ease;
+  margin-left: auto;
+  opacity: 0;
+}
+
+._pillar-progress-row:hover ._pillar-progress-chevron {
+  opacity: 1;
 }
 
 ._pillar-progress-error-icon {
@@ -2444,7 +2477,6 @@ export const PANEL_STYLES = `
 ._pillar-progress-text-preview-wrapper {
   position: relative;
   margin-top: 4px;
-  padding-left: 20px;
 }
 
 ._pillar-progress-text-preview {
@@ -2464,7 +2496,7 @@ export const PANEL_STYLES = `
 ._pillar-progress-text-gradient {
   position: absolute;
   top: 0;
-  left: 20px;
+  left: 0;
   right: 0;
   height: 20px;
   background: linear-gradient(to bottom, var(--pillar-bg), transparent);
@@ -2610,10 +2642,7 @@ export const PANEL_STYLES = `
 }
 
 ._pillar-reasoning-content {
-  padding-top: 8px;
-  padding-left: 12px;
-  border-left: 2px solid var(--pillar-border-light);
-  margin-left: 3px;
+  /* Removed indentation - content is now inline */
 }
 
 ._pillar-reasoning-content ._pillar-progress-row {

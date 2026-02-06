@@ -123,6 +123,8 @@ export interface StreamCallbacks {
     progress_id?: string;      // Deprecated: use id
     message?: string;          // Deprecated: use label
   }) => void;
+  /** Called immediately with the request ID (for cancellation support) */
+  onRequestId?: (requestId: number) => void;
   /** Called when agent requests action execution (unified handler) */
   onActionRequest?: (request: ActionRequest) => Promise<void>;
 }
@@ -328,6 +330,10 @@ export class MCPClient {
   ): Promise<ToolResult> {
     const startTime = performance.now();
     const requestId = this.nextId();
+
+    // Notify caller of request ID for cancellation support
+    callbacks.onRequestId?.(requestId);
+
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
       id: requestId,
@@ -696,6 +702,41 @@ export class MCPClient {
     }
 
     return this.callToolStream('ask', args, callbacks, options?.signal);
+  }
+
+  // ============================================================================
+  // Stream Cancellation
+  // ============================================================================
+
+  /**
+   * Cancel an active streaming request.
+   *
+   * Sends a notifications/cancel JSON-RPC request to the backend, which
+   * signals the StreamRegistry to stop the LLM stream and cease billing.
+   *
+   * @param requestId - The JSON-RPC request ID of the stream to cancel
+   */
+  async cancelStream(requestId: number | string): Promise<void> {
+    const request: JSONRPCRequest = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'notifications/cancel',
+      params: { request_id: requestId },
+    };
+
+    debug.log(`[MCPClient] Cancelling stream request_id=${requestId}`);
+
+    try {
+      await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(request),
+        keepalive: true,
+      });
+    } catch (error) {
+      // Best-effort -- don't throw if cancel request fails
+      debug.warn('[MCPClient] Failed to send cancel request:', error);
+    }
   }
 
   // ============================================================================

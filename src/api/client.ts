@@ -374,7 +374,9 @@ export class APIClient {
     images?: ChatImage[],
     onProgress?: (progress: ProgressEvent) => void,
     onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void,
-    onActionRequest?: (request: ActionRequest) => Promise<void>
+    onActionRequest?: (request: ActionRequest) => Promise<void>,
+    signal?: AbortSignal,
+    onRequestId?: (requestId: number) => void
   ): Promise<ChatResponse> {
     // Use MCP client for chat via the 'ask' tool
     let fullMessage = '';
@@ -415,6 +417,9 @@ export class APIClient {
             setRegisteredActions(registeredActions);
             debug.log('[Pillar API] Stored', registeredActions.length, 'registered actions for dynamic tool calling');
           },
+          onRequestId: (id) => {
+            onRequestId?.(id);
+          },
           onError: (error) => {
             debug.error('[Pillar API] MCP chat error:', error);
           },
@@ -428,6 +433,7 @@ export class APIClient {
           registeredActions: getRegisteredActions(),
           // Always pass conversation ID (generated client-side for new conversations)
           conversationId: existingConversationId || undefined,
+          signal,
         }
       );
 

@@ -27,6 +27,8 @@ import {
   setLoading,
   setMessageFeedback,
   submitPendingTrigger,
+  activeRequestId,
+  setActiveRequestId,
   updateActionMessageContent,
   updateLastAssistantMessage,
   userContext,
@@ -99,6 +101,7 @@ function getCompletionText(actionName: string, success: boolean): string {
 export function ChatView() {
   const api = useAPI();
   const messagesRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
   // Handle resuming an interrupted session
@@ -307,6 +310,10 @@ export function ChatView() {
       // Show loading state
       setLoading(true);
 
+      // Create AbortController for cancellation support
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       // Add placeholder assistant message
       addAssistantMessage("");
 
@@ -512,7 +519,11 @@ export function ChatView() {
                 request.tool_call_id
               );
             }
-          }
+          },
+          // AbortSignal for cancellation
+          controller.signal,
+          // Store request ID for server-side cancellation
+          (id) => setActiveRequestId(id)
         );
 
         // Collect final actions (from streaming callback or response)
@@ -534,6 +545,11 @@ export function ChatView() {
           setConversationId(response.conversationId);
         }
       } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          // User cancelled -- partial response is already displayed
+          debug.log("[Pillar] Chat cancelled by user");
+          return;
+        }
         debug.error("[Pillar] Chat error:", error);
         updateLastAssistantMessage(
           "Sorry, I encountered an error. Please try again."
@@ -541,6 +557,8 @@ export function ChatView() {
       } finally {
         setLoading(false);
         clearProgressStatus();
+        setActiveRequestId(null);
+        abortControllerRef.current = null;
 
         // Clear session hint on successful completion
         const pillar = Pillar.getInstance();
@@ -552,6 +570,24 @@ export function ChatView() {
     },
     [api, handleActionsReceived]
   );
+
+  // Handle stop button - cancel in-progress streaming
+  const handleStop = useCallback(() => {
+    // 1. Abort the fetch connection (client-side)
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
+    // 2. Tell backend to stop the LLM stream (server-side)
+    const reqId = activeRequestId.value;
+    if (reqId !== null) {
+      api.mcp.cancelStream(reqId);
+      setActiveRequestId(null);
+    }
+
+    // 3. Keep partial response, clear loading state
+    setLoading(false);
+    clearProgressStatus();
+  }, [api]);
 
   // Handle feedback submission
   const handleFeedback = useCallback(
@@ -886,7 +922,9 @@ export function ChatView() {
       <div class="_pillar-chat-view-input-area pillar-chat-view-input-area">
         <UnifiedChatInput
           placeholder="Ask a question..."
-          disabled={isLoading.value || isLoadingHistory.value}
+          disabled={isLoadingHistory.value}
+          isStreaming={isLoading.value}
+          onStop={handleStop}
           onSubmit={handleInputSubmit}
         />
       </div>

@@ -2,10 +2,11 @@
  * ProgressRow Component
  * 
  * Displays progress events during AI response generation.
- * Uses a chevron-based UI (like Cursor):
- * - Chevron points down when expanded (active state)
- * - Chevron points right when collapsed (done state)
- * - All rows with text content are expandable/collapsible
+ * Cursor-inspired design:
+ * - Thinking rows show "Thought for Xs" with live elapsed timer
+ * - Chevron on right side, visible only on hover
+ * - Content expands inline (no indentation)
+ * - All rows are flush-left aligned
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -27,9 +28,32 @@ export function ProgressRow({
   const effectiveIsActive = progress.status === 'active' || (progress.status === undefined && isActive);
   const isError = progress.status === 'error' || progress.kind === 'query_failed';
   
+  // Check if this is a thinking event
+  const isThinking = progress.kind === 'thinking' || progress.kind === 'step_start';
+  
   // Debounce text display to prevent layout thrashing during rapid updates (50ms)
   // This smooths out the rendering while keeping auto-scroll responsive
   const debouncedText = useDebouncedValue(progress.text, 50);
+  
+  // ── Elapsed time tracking for thinking events ──
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isThinking || !effectiveIsActive) return;
+
+    const startTime =
+      ((progress.metadata as Record<string, unknown>)?._startTime as number) ||
+      Date.now();
+
+    // Set initial value immediately
+    setElapsedSeconds(Math.max(1, Math.round((Date.now() - startTime) / 1000)));
+
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.round((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isThinking, effectiveIsActive, progress.metadata]);
   
   // Check for expandable content:
   // - Has streaming/accumulated text
@@ -163,12 +187,24 @@ export function ProgressRow({
   };
 
   // Skip rendering completely empty events (no label, message, or text)
-  if (!progress.label && !progress.message && !progress.text && !hasChildren && !hasLegacySources) {
+  if (!progress.label && !progress.message && !progress.text && !hasChildren && !hasLegacySources && !isThinking) {
     return null;
   }
 
-  // Get display label for ARIA
-  const displayLabel = progress.label || progress.message || getDefaultMessage(progress.kind);
+  // ── Display label ──
+  const displayLabel = (() => {
+    if (isThinking) {
+      if (effectiveIsActive) {
+        return elapsedSeconds > 0 ? `Thought for ${elapsedSeconds}s` : 'Thinking...';
+      }
+      // Done — use stored duration from metadata, fall back to timer state
+      const duration = (progress.metadata as Record<string, unknown>)?._durationSeconds as number | undefined;
+      const seconds = duration || elapsedSeconds;
+      return seconds > 0 ? `Thought for ${seconds}s` : 'Thought';
+    }
+    return progress.label || progress.message || getDefaultMessage(progress.kind);
+  })();
+  
   const statusLabel = effectiveIsActive ? 'in progress' : isError ? 'error' : 'complete';
 
   return (
@@ -193,34 +229,36 @@ export function ProgressRow({
           }
         } : undefined}
       >
-        {/* Chevron indicator - rotates based on expanded state */}
-        {/* Error state shows X icon instead */}
-        {isError ? (
+        {/* Error icon on left */}
+        {isError && (
           <span class="_pillar-progress-error-icon pillar-progress-error-icon" aria-label="Error">
             ✗
           </span>
-        ) : (
-          <span
-            class="_pillar-progress-chevron pillar-progress-chevron"
-            style={{
-              transform: chevronRotation,
-              transition: 'transform 0.2s ease',
-            }}
-            aria-hidden="true"
-          >
-            ▶
-          </span>
         )}
-        
+
         {/* Label */}
         <span class="_pillar-progress-message pillar-progress-message">
           {displayLabel}
         </span>
-        
+
         {/* No results indicator */}
         {isNoResults && (
           <span class="_pillar-progress-no-results pillar-progress-no-results">
             — no relevant results
+          </span>
+        )}
+
+        {/* Chevron on right side — hidden by default, shown on hover via CSS */}
+        {isExpandable && !isError && (
+          <span
+            class="_pillar-progress-chevron pillar-progress-chevron"
+            style={{
+              transform: chevronRotation,
+              transition: 'transform 0.2s ease, opacity 0.15s ease',
+            }}
+            aria-hidden="true"
+          >
+            ▶
           </span>
         )}
       </div>

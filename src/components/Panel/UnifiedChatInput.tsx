@@ -29,6 +29,9 @@ import { useAPI } from '../context';
 // Arrow up icon for send button
 const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
+// Stop icon for cancel button (filled square)
+const STOP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+
 // Image icon for upload button
 const IMAGE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
 
@@ -54,6 +57,10 @@ interface UnifiedChatInputProps {
   showImageUpload?: boolean;
   /** Additional CSS class for the wrapper */
   className?: string;
+  /** Whether a response is currently streaming (shows Stop button) */
+  isStreaming?: boolean;
+  /** Called when user clicks the Stop button to cancel streaming */
+  onStop?: () => void;
 }
 
 export function UnifiedChatInput({
@@ -63,6 +70,8 @@ export function UnifiedChatInput({
   showContextTags = true,
   showImageUpload = true,
   className = '',
+  isStreaming = false,
+  onStop,
 }: UnifiedChatInputProps) {
   const api = useAPI();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -287,14 +296,14 @@ export function UnifiedChatInput({
         onInput={handleInputChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
-        disabled={disabled}
+        disabled={disabled || isStreaming}
         maxLength={MAX_MESSAGE_LENGTH}
         style={{ height: '41px' }}
       />
 
       <div class="_pillar-unified-input-row pillar-unified-input-row">
         {/* Image upload button */}
-        {showImageUpload && (
+        {showImageUpload && !isStreaming && (
           <button
             type="button"
             class="_pillar-chat-image-btn pillar-chat-image-btn"
@@ -305,14 +314,24 @@ export function UnifiedChatInput({
             dangerouslySetInnerHTML={{ __html: IMAGE_ICON }}
           />
         )}
-        <button
-          type="button"
-          class="_pillar-unified-send-btn pillar-unified-send-btn"
-          onClick={handleSubmit}
-          disabled={disabled || isUploading || !canSubmit}
-          aria-label="Send message"
-          dangerouslySetInnerHTML={{ __html: SEND_ICON }}
-        />
+        {isStreaming ? (
+          <button
+            type="button"
+            class="_pillar-unified-stop-btn pillar-unified-stop-btn"
+            onClick={onStop}
+            aria-label="Stop generating"
+            dangerouslySetInnerHTML={{ __html: STOP_ICON }}
+          />
+        ) : (
+          <button
+            type="button"
+            class="_pillar-unified-send-btn pillar-unified-send-btn"
+            onClick={handleSubmit}
+            disabled={disabled || isUploading || !canSubmit}
+            aria-label="Send message"
+            dangerouslySetInnerHTML={{ __html: SEND_ICON }}
+          />
+        )}
       </div>
 
       {/* Drag overlay */}
