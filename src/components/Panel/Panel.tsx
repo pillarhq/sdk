@@ -342,14 +342,20 @@ export class Panel {
     document.documentElement.style.transition = 'padding 0.3s ease';
     if (panelPosition === 'right') {
       document.documentElement.style.paddingRight = `${panelWidth}px`;
+      document.documentElement.style.setProperty('--pillar-inset-right', `${panelWidth}px`);
+      document.documentElement.style.setProperty('--pillar-inset-left', '0px');
     } else {
       document.documentElement.style.paddingLeft = `${panelWidth}px`;
+      document.documentElement.style.setProperty('--pillar-inset-left', `${panelWidth}px`);
+      document.documentElement.style.setProperty('--pillar-inset-right', '0px');
     }
   }
 
   private removePushModeStyles(): void {
     document.documentElement.style.paddingLeft = '';
     document.documentElement.style.paddingRight = '';
+    document.documentElement.style.removeProperty('--pillar-inset-right');
+    document.documentElement.style.removeProperty('--pillar-inset-left');
     // Remove transition after animation completes
     setTimeout(() => {
       if (!isOpen.value) {

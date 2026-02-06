@@ -501,8 +501,12 @@ export class EdgeTrigger {
 
     if (position === "right") {
       document.documentElement.style.paddingRight = `${totalWidth}px`;
+      document.documentElement.style.setProperty("--pillar-inset-right", `${totalWidth}px`);
+      document.documentElement.style.setProperty("--pillar-inset-left", "0px");
     } else {
       document.documentElement.style.paddingLeft = `${totalWidth}px`;
+      document.documentElement.style.setProperty("--pillar-inset-left", `${totalWidth}px`);
+      document.documentElement.style.setProperty("--pillar-inset-right", "0px");
     }
   }
 
@@ -516,6 +520,8 @@ export class EdgeTrigger {
     } else {
       document.documentElement.style.paddingLeft = "";
     }
+    document.documentElement.style.removeProperty("--pillar-inset-right");
+    document.documentElement.style.removeProperty("--pillar-inset-left");
   }
 
   /**
