@@ -18,12 +18,14 @@ export interface ProgressRowProps {
   progress: ProgressEvent;
   isActive?: boolean;        // Fallback for legacy events without status
   isLast?: boolean;          // Whether this is the last row in the stack
+  responseStarted?: boolean; // Whether the response has started streaming
 }
 
 export function ProgressRow({
   progress,
   isActive = false,
   isLast = false,
+  responseStarted = false,
 }: ProgressRowProps) {
   // Determine effective active state from status or isActive prop
   const effectiveIsActive = progress.status === 'active' || (progress.status === undefined && isActive);
@@ -81,9 +83,9 @@ export function ProgressRow({
   const [manualExpandState, setManualExpandState] = useState(false);
   
   // Determine actual expanded state.
-  // Last row stays expanded even after completing — it only collapses
-  // when the next event arrives and pushes it out of last position.
-  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : (effectiveIsActive || isLast));
+  // Last row stays expanded even after completing — but collapses once
+  // the response starts streaming (unless manually toggled open).
+  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : (effectiveIsActive || (isLast && !responseStarted)));
 
   // Ref for text preview container (auto-scroll)
   const textPreviewRef = useRef<HTMLDivElement>(null);

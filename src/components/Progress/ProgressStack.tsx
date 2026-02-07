@@ -15,6 +15,8 @@ import { ProgressRow } from './ProgressRow';
 
 export interface ProgressStackProps {
   events: ProgressEvent[];
+  /** When true, the response has started streaming - collapse non-manually-opened rows */
+  responseStarted?: boolean;
 }
 
 /**
@@ -22,7 +24,7 @@ export interface ProgressStackProps {
  * Events are permanent — once yielded by the server, they remain in the
  * thread until a new conversation is started.
  */
-export function ProgressStack({ events }: ProgressStackProps) {
+export function ProgressStack({ events, responseStarted = false }: ProgressStackProps) {
   if (!events || events.length === 0) return null;
 
   return (
@@ -33,6 +35,7 @@ export function ProgressStack({ events }: ProgressStackProps) {
           progress={event}
           isActive={event.status === 'active'}
           isLast={idx === events.length - 1}
+          responseStarted={responseStarted}
         />
       ))}
     </div>

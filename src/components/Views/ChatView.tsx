@@ -823,9 +823,13 @@ export function ChatView() {
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
                   {/* Progress events — rendered consistently regardless of content.
-                      Events use their actual status (active/done) for expand/collapse. */}
+                      Events use their actual status (active/done) for expand/collapse.
+                      Once response content starts streaming, collapse non-manually-opened rows. */}
                   {msg.progressEvents && msg.progressEvents.length > 0 && (
-                    <ProgressStack events={msg.progressEvents} />
+                    <ProgressStack 
+                      events={msg.progressEvents} 
+                      responseStarted={Boolean(msg.content)}
+                    />
                   )}
 
                   {/* Message content or loading spinner */}

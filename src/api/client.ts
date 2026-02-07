@@ -109,15 +109,43 @@ export interface ConversationSummary {
 }
 
 /**
+ * Display step in the agent's timeline.
+ * This is a human-readable timeline that includes thinking, tool decisions, and tool results.
+ * Used for UI display of the agent's reasoning process.
+ */
+export interface DisplayStep {
+  step_type: 'thinking' | 'tool_decision' | 'parallel_tool_decision' | 'tool_result' | 'token_summary' | 'step_start' | 'generating';
+  iteration?: number;
+  timestamp_ms?: number;
+  content?: string;           // For thinking steps
+  tool?: string;              // For tool_decision/tool_result
+  tools?: Array<{tool: string; arguments: Record<string, unknown>}>;  // For parallel_tool_decision
+  arguments?: Record<string, unknown>;  // For tool_decision
+  success?: boolean;          // For tool_result
+  reasoning?: string;         // Agent's reasoning for the decision
+  label?: string;             // Display label
+  [key: string]: unknown;     // Allow additional fields
+}
+
+/**
+ * Message in conversation history.
+ * Contains display-oriented fields for UI rendering.
+ * LLM-native fields (llm_message) are kept server-side for conversation replay.
+ */
+export interface HistoryMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string | null;
+  // Display field - human-readable timeline for UI
+  display_trace?: DisplayStep[];
+}
+
+/**
  * Full conversation with messages.
  */
 export interface ConversationDetail extends ConversationSummary {
-  messages: Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: string | null;
-  }>;
+  messages: HistoryMessage[];
 }
 
 // ============================================================================

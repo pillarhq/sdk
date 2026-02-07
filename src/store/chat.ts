@@ -4,7 +4,7 @@
  */
 
 import { computed, signal } from "@preact/signals";
-import type { ArticleSummary, ChatMessage, ConversationSummary } from "../api/client";
+import type { ArticleSummary, ChatMessage, ConversationSummary, HistoryMessage, DisplayStep } from "../api/client";
 import type { ChatImage } from "../api/mcp-client";
 import type { TaskButtonData } from "../components/Panel/TaskButton";
 import type { UserContextItem } from "../types/user-context";
@@ -814,26 +814,109 @@ export const startLoadingHistory = () => {
 };
 
 /**
+ * Build progress events from display trace.
+ * Maps the display_trace (thinking, tool_decision, tool_result) to progressEvents for UI rendering.
+ */
+function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
+  if (!trace || trace.length === 0) return [];
+
+  return trace
+    .filter((step) => step.step_type !== 'token_summary')
+    .map((step) => {
+      if (step.step_type === 'thinking') {
+        return {
+          kind: 'thinking',
+          status: 'done' as const,
+          text: step.content || '',
+          label: 'Thought',
+          metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
+        };
+      }
+      
+      if (step.step_type === 'tool_decision') {
+        return {
+          kind: 'tool_call',
+          status: 'done' as const,
+          label: step.tool || 'Tool',
+          metadata: { 
+            tool: step.tool,
+            arguments: step.arguments,
+            reasoning: step.reasoning,
+            iteration: step.iteration,
+            timestamp_ms: step.timestamp_ms,
+          },
+        };
+      }
+      
+      if (step.step_type === 'parallel_tool_decision') {
+        const toolNames = step.tools?.map((t: { tool: string }) => t.tool).join(', ') || 'Tools';
+        return {
+          kind: 'tool_call',
+          status: 'done' as const,
+          label: `Parallel: ${toolNames}`,
+          metadata: { 
+            tools: step.tools,
+            iteration: step.iteration,
+            timestamp_ms: step.timestamp_ms,
+          },
+        };
+      }
+      
+      if (step.step_type === 'tool_result') {
+        return {
+          kind: 'tool_result',
+          status: 'done' as const,
+          label: step.tool || 'Result',
+          metadata: {
+            tool: step.tool,
+            success: step.success,
+            iteration: step.iteration,
+            timestamp_ms: step.timestamp_ms,
+          },
+        };
+      }
+      
+      if (step.step_type === 'step_start') {
+        return {
+          kind: 'step_start',
+          status: 'done' as const,
+          label: step.label || 'Step',
+          metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
+        };
+      }
+      
+      // Default case for other step types (generating, etc.)
+      return {
+        kind: step.step_type,
+        status: 'done' as const,
+        label: step.label || step.step_type,
+        text: step.content,
+        metadata: step,
+      };
+    });
+}
+
+/**
  * Load a conversation from history.
  * Populates the chat with messages from a previous conversation.
  */
 export const loadConversation = (
   id: string,
-  historyMessages: Array<{
-    role: "user" | "assistant";
-    content: string;
-    id?: string;
-  }>
+  historyMessages: HistoryMessage[]
 ) => {
   // Set the conversation ID
   conversationId.value = id;
   persistConversationIdToStorage(id);
 
-  // Load messages (map to StoredChatMessage format)
+  // Load messages (map to StoredChatMessage format with progressEvents from display_trace)
   messages.value = historyMessages.map((msg) => ({
     role: msg.role,
     content: msg.content,
     id: msg.id,
+    // Map display_trace to progressEvents for UI rendering (preserves interleaved order)
+    progressEvents: msg.role === 'assistant' 
+      ? buildProgressEventsFromTrace(msg.display_trace)
+      : undefined,
   }));
 
   // Expand chat to show messages
