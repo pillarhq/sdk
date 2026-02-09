@@ -114,7 +114,7 @@ export interface ConversationSummary {
  * Used for UI display of the agent's reasoning process.
  */
 export interface DisplayStep {
-  step_type: 'thinking' | 'tool_decision' | 'parallel_tool_decision' | 'tool_result' | 'token_summary' | 'step_start' | 'generating';
+  step_type: 'thinking' | 'tool_decision' | 'parallel_tool_decision' | 'tool_result' | 'token_summary' | 'step_start' | 'generating' | 'narration';
   iteration?: number;
   timestamp_ms?: number;
   content?: string;           // For thinking steps

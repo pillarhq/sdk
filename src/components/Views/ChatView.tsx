@@ -4,7 +4,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import type { ProgressEvent } from "../../api/client";
 import Pillar from "../../core/Pillar";
 import {
   addAssistantMessage,
@@ -34,6 +33,7 @@ import {
   removeLastEmptyAssistantMessage,
   addOptimisticConversation,
   updateLastAssistantMessage,
+  appendTokenToSegments,
   userContext,
   type ChatImage,
   type ProgressEvent as StoreProgressEvent,
@@ -148,7 +148,7 @@ export function ChatView() {
         {
           onToken: (token) => {
             fullResponse += token;
-            updateLastAssistantMessage(fullResponse);
+            appendTokenToSegments(token);
           },
           onProgress: (progress) => {
             addProgressEvent(progress as StoreProgressEvent);
@@ -338,7 +338,7 @@ export function ChatView() {
           // Streaming callback
           (chunk) => {
             fullResponse += chunk;
-            updateLastAssistantMessage(fullResponse);
+            appendTokenToSegments(chunk);
           },
           undefined, // No article slug
           conversationId.value, // Always set - generated client-side for new conversations
@@ -351,9 +351,9 @@ export function ChatView() {
           // Images
           images,
           // Progress callback - show what AI is doing
-          (progress: ProgressEvent) => {
+          (progress: StoreProgressEvent) => {
             // Add to progress events array for display (now markdown-based)
-            addProgressEvent(progress as StoreProgressEvent);
+            addProgressEvent(progress);
           },
           // Conversation started callback - save active session for recovery on page navigation
           // (conversation ID already set client-side via crypto.randomUUID above)
@@ -822,37 +822,59 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Progress events — rendered consistently regardless of content.
-                      Events use their actual status (active/done) for expand/collapse.
-                      Once response content starts streaming, collapse non-manually-opened rows. */}
-                  {msg.progressEvents && msg.progressEvents.length > 0 && (
-                    <ProgressStack 
-                      events={msg.progressEvents} 
-                      responseStarted={Boolean(msg.content)}
-                    />
-                  )}
-
-                  {/* Message content or loading spinner */}
-                  {msg.content ? (
-                    <div class="_pillar-message-assistant pillar-message-assistant">
-                      <PreactMarkdown content={msg.content} />
-                    </div>
-                  ) : (
-                    /* Show spinner only for the active message with no events yet.
-                       Not-last messages show nothing (avoids stale "Processing..."
-                       on restored conversations with incomplete assistant messages). */
-                    isLoading.value &&
-                      index === messages.value.length - 1 &&
-                      (!msg.progressEvents ||
-                        msg.progressEvents.length === 0) && (
-                        <div class="_pillar-progress-indicator pillar-progress-indicator">
-                          <div class="_pillar-loading-spinner pillar-loading-spinner" />
-                          <span class="_pillar-progress-message pillar-progress-message">
-                            Processing...
-                          </span>
+                  {/* Segment-based interleaved rendering (text and progress blocks in chronological order) */}
+                  {msg.segments && msg.segments.length > 0 ? (
+                    msg.segments.map((segment, segIdx) => {
+                      if (segment.type === "progress") {
+                        // Determine if a text segment follows this progress segment
+                        const hasFollowingText = msg.segments!.slice(segIdx + 1).some(s => s.type === "text");
+                        return (
+                          <ProgressStack
+                            key={`seg-${segIdx}`}
+                            events={segment.events}
+                            responseStarted={hasFollowingText || Boolean(msg.content)}
+                          />
+                        );
+                      }
+                      return (
+                        <div key={`seg-${segIdx}`} class="_pillar-message-assistant pillar-message-assistant">
+                          <PreactMarkdown content={segment.content} />
                         </div>
-                      )
+                      );
+                    })
+                  ) : (
+                    /* Fallback: old layout for history messages without segments */
+                    <>
+                      {msg.progressEvents && msg.progressEvents.length > 0 && (
+                        <ProgressStack 
+                          events={msg.progressEvents} 
+                          responseStarted={Boolean(msg.content)}
+                        />
+                      )}
+                      {msg.content ? (
+                        <div class="_pillar-message-assistant pillar-message-assistant">
+                          <PreactMarkdown content={msg.content} />
+                        </div>
+                      ) : (
+                        /* Show spinner only for the active message with no events yet.
+                           Not-last messages show nothing (avoids stale "Processing..."
+                           on restored conversations with incomplete assistant messages). */
+                        isLoading.value &&
+                          index === messages.value.length - 1 &&
+                          (!msg.progressEvents ||
+                            msg.progressEvents.length === 0) && (
+                            <div class="_pillar-progress-indicator pillar-progress-indicator">
+                              <div class="_pillar-loading-spinner pillar-loading-spinner" />
+                              <span class="_pillar-progress-message pillar-progress-message">
+                                Processing...
+                              </span>
+                            </div>
+                          )
+                      )}
+                    </>
                   )}
+                  {/* Loading spinner — only needed for segments path when nothing has arrived yet.
+                     When segments is undefined, the fallback branch above handles the spinner. */}
                   {/* Action status indicator */}
                   {msg.actionStatus &&
                     Object.keys(msg.actionStatus).length > 0 && (

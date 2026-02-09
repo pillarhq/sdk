@@ -19,6 +19,7 @@ export interface ProgressRowProps {
   isActive?: boolean;        // Fallback for legacy events without status
   isLast?: boolean;          // Whether this is the last row in the stack
   responseStarted?: boolean; // Whether the response has started streaming
+  nested?: boolean;          // Whether this row is nested inside a ProgressGroup
 }
 
 export function ProgressRow({
@@ -26,6 +27,7 @@ export function ProgressRow({
   isActive = false,
   isLast = false,
   responseStarted = false,
+  nested = false,
 }: ProgressRowProps) {
   // Determine effective active state from status or isActive prop
   const effectiveIsActive = progress.status === 'active' || (progress.status === undefined && isActive);
@@ -83,9 +85,14 @@ export function ProgressRow({
   const [manualExpandState, setManualExpandState] = useState(false);
   
   // Determine actual expanded state.
-  // Last row stays expanded even after completing — but collapses once
-  // the response starts streaming (unless manually toggled open).
-  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : (effectiveIsActive || (isLast && !responseStarted)));
+  // Nested rows (inside a ProgressGroup): stay expanded while last in the group,
+  // collapse when the next tool call arrives (loses isLast). The parent group
+  // handles collapsing when narration text arrives.
+  // Top-level rows: stay expanded until the response starts streaming.
+  const shouldAutoExpand = nested
+    ? (effectiveIsActive || isLast)
+    : (effectiveIsActive || (isLast && !responseStarted));
+  const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : shouldAutoExpand);
 
   // Ref for text preview container (auto-scroll)
   const textPreviewRef = useRef<HTMLDivElement>(null);
@@ -214,7 +221,7 @@ export function ProgressRow({
 
   return (
     <div 
-      class={`_pillar-progress-row pillar-progress-row${isError ? ' _pillar-progress-row--error pillar-progress-row--error' : ''}${effectiveIsActive ? ' _pillar-progress-row--active pillar-progress-row--active' : ''}${isLast ? ' _pillar-progress-row--last pillar-progress-row--last' : ''}`}
+      class={`_pillar-progress-row pillar-progress-row${isError ? ' _pillar-progress-row--error pillar-progress-row--error' : ''}${effectiveIsActive ? ' _pillar-progress-row--active pillar-progress-row--active' : ''}${isLast ? ' _pillar-progress-row--last pillar-progress-row--last' : ''}${nested ? ' _pillar-progress-row--nested pillar-progress-row--nested' : ''}`}
       role="status"
       aria-live={effectiveIsActive ? 'polite' : 'off'}
       aria-label={`${displayLabel}: ${statusLabel}`}

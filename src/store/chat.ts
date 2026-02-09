@@ -20,6 +20,17 @@ export interface ActionStatus {
   errorMessage?: string;
 }
 
+/**
+ * A segment in an assistant message's timeline.
+ * Segments maintain chronological order so text and tool blocks interleave correctly.
+ *
+ * - "text": Model-generated content tokens (narration or final response)
+ * - "progress": A group of progress events (thinking, search, tool calls)
+ */
+export type MessageSegment =
+  | { type: "text"; content: string }
+  | { type: "progress"; events: ProgressEvent[] };
+
 // Extended chat message with server-assigned ID for feedback
 export interface StoredChatMessage extends ChatMessage {
   id?: string; // Server-assigned message ID (for assistant messages)
@@ -30,6 +41,7 @@ export interface StoredChatMessage extends ChatMessage {
   userContext?: UserContextItem[]; // User context items sent with this message
   images?: ChatImage[]; // Images attached to user messages
   progressEvents?: ProgressEvent[]; // Thinking steps stored per-message for history
+  segments?: MessageSegment[]; // Ordered timeline of text blocks and progress blocks
 }
 
 // Chat messages history
@@ -300,14 +312,81 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
       updatedEvents = [...finalizedEvents, newEvent];
     }
 
+    // --- Also update segments array for interleaved rendering ---
+    const segments = [...(lastMsg.segments || [])];
+    const isUpdate = event.id && existingEvents.some((e) => e.id === event.id);
+
+    if (isUpdate) {
+      // Find the progress segment containing this event and update it in place
+      for (let si = segments.length - 1; si >= 0; si--) {
+        const seg = segments[si];
+        if (seg.type !== "progress") continue;
+        const evtIdx = seg.events.findIndex((e) => e.id === event.id);
+        if (evtIdx >= 0) {
+          // Find the updated version from updatedEvents (already merged above)
+          const merged = updatedEvents.find((e) => e.id === event.id);
+          if (merged) {
+            const newEvents = [...seg.events];
+            newEvents[evtIdx] = merged;
+            segments[si] = { type: "progress", events: newEvents };
+          }
+          break;
+        }
+      }
+    } else {
+      // New event — add to last progress segment or create one
+      // Find the actual new event from updatedEvents (last entry for no-id, or find by id)
+      const newEvt = event.id
+        ? updatedEvents.find((e) => e.id === event.id)
+        : updatedEvents[updatedEvents.length - 1];
+      if (newEvt) {
+        const lastSeg = segments[segments.length - 1];
+        if (lastSeg && lastSeg.type === "progress") {
+          segments[segments.length - 1] = {
+            type: "progress",
+            events: [...lastSeg.events, newEvt],
+          };
+        } else {
+          segments.push({ type: "progress", events: [newEvt] });
+        }
+      }
+    }
+
     messages.value = [
       ...msgs.slice(0, -1),
       {
         ...lastMsg,
         progressEvents: updatedEvents,
+        segments,
       },
     ];
   }
+};
+
+/**
+ * Append a content token to the last assistant message's segments array.
+ * Creates a new text segment or appends to an existing one, while also
+ * updating `content` for backward compat (history persistence, feedback, etc.).
+ */
+export const appendTokenToSegments = (token: string) => {
+  const msgs = messages.value;
+  if (msgs.length === 0 || msgs[msgs.length - 1].role !== "assistant") return;
+  const lastMsg = msgs[msgs.length - 1];
+  const segments = [...(lastMsg.segments || [])];
+  const last = segments[segments.length - 1];
+
+  if (last && last.type === "text") {
+    // Append to existing text segment
+    segments[segments.length - 1] = { type: "text", content: last.content + token };
+  } else {
+    // Create new text segment (first segment, or after a progress segment)
+    segments.push({ type: "text", content: token });
+  }
+
+  messages.value = [
+    ...msgs.slice(0, -1),
+    { ...lastMsg, segments, content: (lastMsg.content || "") + token },
+  ];
 };
 
 // Whether chat area is expanded (shows messages)
@@ -465,6 +544,7 @@ export const updateLastAssistantMessage = (
         sources: sources ?? existingMsg.sources,
         actionStatus: existingMsg.actionStatus, // Preserve action status
         progressEvents: existingMsg.progressEvents, // Preserve progress events
+        segments: existingMsg.segments, // Preserve interleaved segments
       },
     ];
   }
@@ -814,62 +894,125 @@ export const startLoadingHistory = () => {
 };
 
 /**
+ * Map a single DisplayStep to a ProgressEvent.
+ * Returns null for steps that should be skipped (token_summary, decisions, narration).
+ */
+function mapStepToProgressEvent(step: DisplayStep): ProgressEvent | null {
+  // Skip non-renderable step types
+  if (
+    step.step_type === 'token_summary' ||
+    step.step_type === 'tool_decision' ||
+    step.step_type === 'parallel_tool_decision' ||
+    step.step_type === 'narration'
+  ) {
+    return null;
+  }
+
+  if (step.step_type === 'thinking') {
+    return {
+      kind: 'thinking',
+      status: 'done' as const,
+      text: step.content || '',
+      label: 'Thought',
+      metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
+    };
+  }
+
+  if (step.step_type === 'tool_result') {
+    return {
+      kind: (step.kind as string) || 'tool_call',
+      status: (step.success === false ? 'error' : 'done') as 'done' | 'error',
+      label: step.label || step.tool || 'Result',
+      text: step.text as string | undefined,
+      children: step.children as ProgressChild[] | undefined,
+      metadata: {
+        tool: step.tool,
+        success: step.success,
+        iteration: step.iteration,
+        timestamp_ms: step.timestamp_ms,
+      },
+    };
+  }
+
+  if (step.step_type === 'step_start') {
+    return {
+      kind: 'step_start',
+      status: 'done' as const,
+      label: step.label || 'Step',
+      metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
+    };
+  }
+
+  // Default case for other step types (generating, etc.)
+  return {
+    kind: step.step_type,
+    status: 'done' as const,
+    label: step.label || step.step_type,
+    text: step.content,
+    metadata: step,
+  };
+}
+
+/**
  * Build progress events from display trace.
  * Maps the display_trace (thinking, tool_decision, tool_result) to progressEvents for UI rendering.
  */
 function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
   if (!trace || trace.length === 0) return [];
 
-  return trace
-    .filter((step) => step.step_type !== 'token_summary')
-    // Skip tool_decision/parallel_tool_decision -- enriched tool_result entries
-    // now carry the same info (label, text, children) for a single row per tool call
-    .filter((step) => step.step_type !== 'tool_decision' && step.step_type !== 'parallel_tool_decision')
-    .map((step) => {
-      if (step.step_type === 'thinking') {
-        return {
-          kind: 'thinking',
-          status: 'done' as const,
-          text: step.content || '',
-          label: 'Thought',
-          metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
-        };
+  const events: ProgressEvent[] = [];
+  for (const step of trace) {
+    const evt = mapStepToProgressEvent(step);
+    if (evt) events.push(evt);
+  }
+  return events;
+}
+
+/**
+ * Build interleaved segments from display trace for history replay.
+ * Walks the trace chronologically: narration steps become text segments,
+ * all other renderable steps become progress segments.
+ * Falls back gracefully for old conversations without narration entries.
+ */
+function buildSegmentsFromTrace(
+  trace: DisplayStep[] | undefined,
+  content: string
+): MessageSegment[] | undefined {
+  if (!trace || trace.length === 0) return undefined;
+
+  const segments: MessageSegment[] = [];
+
+  for (const step of trace) {
+    if (step.step_type === 'narration') {
+      // Narration text → text segment
+      const text = step.content || '';
+      const last = segments[segments.length - 1];
+      if (last && last.type === 'text') {
+        last.content += text;
+      } else {
+        segments.push({ type: 'text', content: text });
       }
-      
-      if (step.step_type === 'tool_result') {
-        return {
-          kind: (step.kind as string) || 'tool_call',
-          status: (step.success === false ? 'error' : 'done') as 'done' | 'error',
-          label: step.label || step.tool || 'Result',
-          text: step.text as string | undefined,
-          children: step.children as ProgressChild[] | undefined,
-          metadata: {
-            tool: step.tool,
-            success: step.success,
-            iteration: step.iteration,
-            timestamp_ms: step.timestamp_ms,
-          },
-        };
+    } else {
+      // Convert to ProgressEvent and add to progress segment
+      const evt = mapStepToProgressEvent(step);
+      if (!evt) continue;
+      const last = segments[segments.length - 1];
+      if (last && last.type === 'progress') {
+        last.events.push(evt);
+      } else {
+        segments.push({ type: 'progress', events: [evt] });
       }
-      
-      if (step.step_type === 'step_start') {
-        return {
-          kind: 'step_start',
-          status: 'done' as const,
-          label: step.label || 'Step',
-          metadata: { iteration: step.iteration, timestamp_ms: step.timestamp_ms },
-        };
-      }
-      
-      // Default case for other step types (generating, etc.)
-      return {
-        kind: step.step_type,
-        status: 'done' as const,
-        label: step.label || step.step_type,
-        text: step.content,
-        metadata: step,
-      };
-    });
+    }
+  }
+
+  // If trace had no narration steps (old data before this feature),
+  // append the full content as a final text segment for backward compat
+  const hasNarration = trace.some(s => s.step_type === 'narration');
+  if (!hasNarration && content) {
+    segments.push({ type: 'text', content });
+  }
+
+  return segments.length > 0 ? segments : undefined;
 }
 
 /**
@@ -884,14 +1027,18 @@ export const loadConversation = (
   conversationId.value = id;
   persistConversationIdToStorage(id);
 
-  // Load messages (map to StoredChatMessage format with progressEvents from display_trace)
+  // Load messages (map to StoredChatMessage format with progressEvents and segments from display_trace)
   messages.value = historyMessages.map((msg) => ({
     role: msg.role,
     content: msg.content,
     id: msg.id,
-    // Map display_trace to progressEvents for UI rendering (preserves interleaved order)
+    // Map display_trace to progressEvents for UI rendering (flat list, backward compat)
     progressEvents: msg.role === 'assistant' 
       ? buildProgressEventsFromTrace(msg.display_trace)
+      : undefined,
+    // Map display_trace to interleaved segments for segment-based rendering
+    segments: msg.role === 'assistant'
+      ? buildSegmentsFromTrace(msg.display_trace, msg.content)
       : undefined,
   }));
 

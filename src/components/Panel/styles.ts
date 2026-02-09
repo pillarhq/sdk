@@ -2569,6 +2569,92 @@ export const PANEL_STYLES = `
   font-size: 11px;
 }
 
+/* ============================================================================
+   Progress Group (collapsible tool event groups)
+   Internal: _pillar-progress-group | Public: pillar-progress-group
+   ============================================================================ */
+
+._pillar-progress-group {
+  margin: 1px 0;
+  animation: pillar-progress-row-fade-in 0.3s ease-in-out;
+}
+
+._pillar-progress-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--pillar-text-secondary, #6b7280);
+  user-select: none;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+._pillar-progress-group-header:hover {
+  color: var(--pillar-text-primary, #374151);
+}
+
+._pillar-progress-group-chevron {
+  flex-shrink: 0;
+  font-size: 8px;
+  line-height: 1;
+  color: inherit;
+}
+
+._pillar-progress-group-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+._pillar-progress-group-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pillar-brand, #3b82f6);
+  flex-shrink: 0;
+  animation: pillar-progress-group-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pillar-progress-group-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+._pillar-progress-group-children {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+  overflow: hidden;
+}
+
+._pillar-progress-group-children--expanded {
+  grid-template-rows: 1fr;
+}
+
+._pillar-progress-group-children-inner {
+  min-height: 0;
+  padding-left: 14px;
+}
+
+/* Nested rows inside groups have reduced spacing */
+._pillar-progress-row--nested {
+  margin: 0;
+  padding: 0;
+}
+
+._pillar-progress-row--nested ._pillar-progress-row-header {
+  padding: 2px 0;
+}
+
+._pillar-progress-row--nested ._pillar-progress-message {
+  font-size: 11px;
+}
+
 .pillar-progress-events {}
 .pillar-progress-chevron {}
 .pillar-progress-error-icon {}
@@ -2592,6 +2678,12 @@ export const PANEL_STYLES = `
 .pillar-progress-content-container {}
 .pillar-progress-content-gradient {}
 .pillar-progress-text {}
+.pillar-progress-group {}
+.pillar-progress-group-header {}
+.pillar-progress-group-chevron {}
+.pillar-progress-group-summary {}
+.pillar-progress-group-active-dot {}
+.pillar-progress-group-children {}
 
 /* ============================================================================
    Resume Prompt (Session Resumption)
