@@ -1005,11 +1005,15 @@ function buildSegmentsFromTrace(
     }
   }
 
-  // If trace had no narration steps (old data before this feature),
-  // append the full content as a final text segment for backward compat
-  const hasNarration = trace.some(s => s.step_type === 'narration');
-  if (!hasNarration && content) {
-    segments.push({ type: 'text', content });
+  // Ensure the final assistant response is included in segments.
+  // New sessions include it as the last narration in the trace.
+  // Old sessions may only have it in the message content field.
+  if (content) {
+    const lastNarration = [...trace].reverse().find(s => s.step_type === 'narration');
+    const finalResponseInTrace = lastNarration?.content?.trim() === content.trim();
+    if (!finalResponseInTrace) {
+      segments.push({ type: 'text', content });
+    }
   }
 
   return segments.length > 0 ? segments : undefined;

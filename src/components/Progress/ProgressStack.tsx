@@ -163,9 +163,9 @@ export function ProgressStack({ events, responseStarted = false }: ProgressStack
 
   return (
     <div class="_pillar-progress-stack pillar-progress-stack">
-      {segments.map((segment, idx) => {
+      {segments.flatMap((segment, idx) => {
         if (segment.type === 'thinking') {
-          return (
+          return [
             <ProgressRow
               key={segment.event.id || segment.event.progress_id || `thinking-${idx}`}
               progress={segment.event}
@@ -173,11 +173,29 @@ export function ProgressStack({ events, responseStarted = false }: ProgressStack
               isLast={idx === segments.length - 1}
               responseStarted={responseStarted}
             />
-          );
+          ];
         }
 
-        // Tool group
-        return (
+        // Simple group (≤ 2 distinct tool calls) — render flat without
+        // the collapsible group wrapper to avoid redundant nesting.
+        const meaningfulEvents = segment.events.filter(
+          e => !STATUS_UPDATE_KINDS.has(e.kind)
+        );
+
+        if (meaningfulEvents.length <= 2) {
+          return segment.events.map((event, eventIdx) => (
+            <ProgressRow
+              key={event.id || event.progress_id || `flat-${idx}-${eventIdx}`}
+              progress={event}
+              isActive={event.status === 'active'}
+              isLast={idx === segments.length - 1 && eventIdx === segment.events.length - 1}
+              responseStarted={responseStarted}
+            />
+          ));
+        }
+
+        // Complex group (3+ tool calls) — use collapsible wrapper
+        return [
           <ProgressGroup
             key={`group-${idx}`}
             events={segment.events}
@@ -185,7 +203,7 @@ export function ProgressStack({ events, responseStarted = false }: ProgressStack
             isLast={idx === segments.length - 1}
             responseStarted={responseStarted}
           />
-        );
+        ];
       })}
     </div>
   );
