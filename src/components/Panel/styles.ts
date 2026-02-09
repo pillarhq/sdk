@@ -801,6 +801,25 @@ export const PANEL_STYLES = `
 .pillar-progress-indicator {}
 .pillar-progress-message {}
 
+._pillar-thinking-shimmer {
+  display: inline-block;
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-text-muted);
+  background: linear-gradient(
+    90deg,
+    var(--pillar-text-muted) 0%,
+    var(--pillar-text-primary, #e5e5e5) 40%,
+    var(--pillar-text-muted) 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pillar-shimmer 2s ease-in-out infinite;
+}
+
+.pillar-thinking-shimmer {}
+
 /* ============================================================================
    Empty States
    Internal: _pillar-empty | Public: pillar-empty
@@ -2471,6 +2490,24 @@ export const PANEL_STYLES = `
   color: var(--pillar-error, #dc2626);
 }
 
+/* Tool call arguments (inputs) */
+._pillar-progress-arguments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+._pillar-progress-argument-key {
+  color: var(--pillar-text-muted);
+}
+
+._pillar-progress-argument-value {
+  color: var(--pillar-text-secondary);
+}
+
 /* Text preview for streaming content */
 ._pillar-progress-text-preview-wrapper {
   position: relative;
@@ -2674,6 +2711,10 @@ export const PANEL_STYLES = `
 .pillar-progress-source-item {}
 .pillar-progress-source-link {}
 .pillar-progress-source-title {}
+.pillar-progress-arguments {}
+.pillar-progress-argument {}
+.pillar-progress-argument-key {}
+.pillar-progress-argument-value {}
 .pillar-progress-content-wrapper {}
 .pillar-progress-content-container {}
 .pillar-progress-content-gradient {}

@@ -926,7 +926,9 @@ function mapStepToProgressEvent(step: DisplayStep): ProgressEvent | null {
       text: step.text as string | undefined,
       children: step.children as ProgressChild[] | undefined,
       metadata: {
+        tool_name: step.tool,
         tool: step.tool,
+        arguments: step.arguments as Record<string, unknown> | undefined,
         success: step.success,
         iteration: step.iteration,
         timestamp_ms: step.timestamp_ms,
@@ -954,21 +956,6 @@ function mapStepToProgressEvent(step: DisplayStep): ProgressEvent | null {
 }
 
 /**
- * Build progress events from display trace.
- * Maps the display_trace (thinking, tool_decision, tool_result) to progressEvents for UI rendering.
- */
-function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
-  if (!trace || trace.length === 0) return [];
-
-  const events: ProgressEvent[] = [];
-  for (const step of trace) {
-    const evt = mapStepToProgressEvent(step);
-    if (evt) events.push(evt);
-  }
-  return events;
-}
-
-/**
  * Build interleaved segments from display trace for history replay.
  * Walks the trace chronologically: narration steps become text segments,
  * all other renderable steps become progress segments.
@@ -976,7 +963,6 @@ function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
  */
 function buildSegmentsFromTrace(
   trace: DisplayStep[] | undefined,
-  content: string
 ): MessageSegment[] | undefined {
   if (!trace || trace.length === 0) return undefined;
 
@@ -1005,17 +991,6 @@ function buildSegmentsFromTrace(
     }
   }
 
-  // Ensure the final assistant response is included in segments.
-  // New sessions include it as the last narration in the trace.
-  // Old sessions may only have it in the message content field.
-  if (content) {
-    const lastNarration = [...trace].reverse().find(s => s.step_type === 'narration');
-    const finalResponseInTrace = lastNarration?.content?.trim() === content.trim();
-    if (!finalResponseInTrace) {
-      segments.push({ type: 'text', content });
-    }
-  }
-
   return segments.length > 0 ? segments : undefined;
 }
 
@@ -1031,18 +1006,13 @@ export const loadConversation = (
   conversationId.value = id;
   persistConversationIdToStorage(id);
 
-  // Load messages (map to StoredChatMessage format with progressEvents and segments from display_trace)
+  // Load messages — segments are the single rendering path
   messages.value = historyMessages.map((msg) => ({
     role: msg.role,
     content: msg.content,
     id: msg.id,
-    // Map display_trace to progressEvents for UI rendering (flat list, backward compat)
-    progressEvents: msg.role === 'assistant' 
-      ? buildProgressEventsFromTrace(msg.display_trace)
-      : undefined,
-    // Map display_trace to interleaved segments for segment-based rendering
     segments: msg.role === 'assistant'
-      ? buildSegmentsFromTrace(msg.display_trace, msg.content)
+      ? buildSegmentsFromTrace(msg.display_trace)
       : undefined,
   }));
 

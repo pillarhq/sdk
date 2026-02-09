@@ -64,14 +64,17 @@ export function ProgressRow({
   // - Has streaming/accumulated text
   // - Has children array (new schema)
   // - Has legacy sources
+  // - Has arguments (tool call inputs)
   const hasText = Boolean(progress.text);
   const hasChildren = progress.children && progress.children.length > 0;
   const legacySources = (progress.metadata as Record<string, unknown>)?.sources as Array<{title: string; url: string}> | undefined;
   const hasLegacySources = progress.kind === 'search_complete' && legacySources && legacySources.length > 0;
   const noSourcesUsed = (progress.metadata as Record<string, unknown>)?.no_sources_used === true;
+  const toolArguments = (progress.metadata as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+  const hasArguments = toolArguments && Object.keys(toolArguments).length > 0;
   
-  // Row is expandable if it has text content, children, or sources
-  const isExpandable = hasText || hasChildren || (hasLegacySources && !noSourcesUsed);
+  // Row is expandable if it has text content, children, sources, or arguments
+  const isExpandable = hasText || hasChildren || (hasLegacySources && !noSourcesUsed) || hasArguments;
 
   // Check if this is a search that found no results
   const resultCount = (progress.metadata as Record<string, unknown>)?.result_count as number | undefined;
@@ -281,6 +284,20 @@ export function ProgressRow({
           class={`_pillar-progress-content-wrapper pillar-progress-content-wrapper ${isExpanded ? '_pillar-progress-content-wrapper--expanded pillar-progress-content-wrapper--expanded' : ''}`}
         >
           <div class="_pillar-progress-content-container pillar-progress-content-container">
+            {/* Tool call arguments (inputs) */}
+            {hasArguments && (
+              <div class="_pillar-progress-arguments pillar-progress-arguments">
+                {Object.entries(toolArguments!).map(([key, value]) => (
+                  <span key={key} class="_pillar-progress-argument pillar-progress-argument">
+                    <span class="_pillar-progress-argument-key pillar-progress-argument-key">{key}:</span>{' '}
+                    <span class="_pillar-progress-argument-value pillar-progress-argument-value">
+                      {typeof value === 'string' ? value : JSON.stringify(value)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Text content with top gradient when scrolled */}
             {hasText && (
               <div class="_pillar-progress-text-preview-wrapper pillar-progress-text-preview-wrapper">

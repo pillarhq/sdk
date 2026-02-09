@@ -849,7 +849,6 @@ export function ChatView() {
                   {msg.segments && msg.segments.length > 0 ? (
                     msg.segments.map((segment, segIdx) => {
                       if (segment.type === "progress") {
-                        // Determine if a text segment follows this progress segment
                         const hasFollowingText = msg.segments!.slice(segIdx + 1).some(s => s.type === "text");
                         return (
                           <ProgressStack
@@ -866,36 +865,13 @@ export function ChatView() {
                       );
                     })
                   ) : (
-                    /* Fallback: old layout for history messages without segments */
-                    <>
-                      {msg.progressEvents && msg.progressEvents.length > 0 && (
-                        <ProgressStack
-                          events={msg.progressEvents}
-                          responseStarted={Boolean(msg.content)}
-                        />
-                      )}
-                      {msg.content ? (
-                        <div class="_pillar-message-assistant pillar-message-assistant">
-                          <PreactMarkdown content={msg.content} />
-                        </div>
-                      ) : (
-                        /* Show spinner only for the active message with no events yet.
-                           Not-last messages show nothing (avoids stale "Processing..."
-                           on restored conversations with incomplete assistant messages). */
-                        isLoading.value &&
-                          index === messages.value.length - 1 &&
-                          (!msg.progressEvents ||
-                            msg.progressEvents.length === 0) && (
-                            <div class="_pillar-progress-indicator pillar-progress-indicator">
-                              <div class="_pillar-loading-spinner pillar-loading-spinner" />
-                              <span class="_pillar-progress-message pillar-progress-message">
-                                Processing...
-                              </span>
-                            </div>
-                          )
-                      )}
-                    </>
-
+                    /* No segments yet — shimmer text while waiting for first SSE event */
+                    isLoading.value &&
+                      index === messages.value.length - 1 && (
+                        <span class="_pillar-thinking-shimmer pillar-thinking-shimmer">
+                          Thinking...
+                        </span>
+                      )
                   )}
                   {/* Loading spinner — only needed for segments path when nothing has arrived yet.
                      When segments is undefined, the fallback branch above handles the spinner. */}
