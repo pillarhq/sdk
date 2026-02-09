@@ -822,6 +822,9 @@ function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
 
   return trace
     .filter((step) => step.step_type !== 'token_summary')
+    // Skip tool_decision/parallel_tool_decision -- enriched tool_result entries
+    // now carry the same info (label, text, children) for a single row per tool call
+    .filter((step) => step.step_type !== 'tool_decision' && step.step_type !== 'parallel_tool_decision')
     .map((step) => {
       if (step.step_type === 'thinking') {
         return {
@@ -833,40 +836,13 @@ function buildProgressEventsFromTrace(trace?: DisplayStep[]): ProgressEvent[] {
         };
       }
       
-      if (step.step_type === 'tool_decision') {
-        return {
-          kind: 'tool_call',
-          status: 'done' as const,
-          label: step.tool || 'Tool',
-          metadata: { 
-            tool: step.tool,
-            arguments: step.arguments,
-            reasoning: step.reasoning,
-            iteration: step.iteration,
-            timestamp_ms: step.timestamp_ms,
-          },
-        };
-      }
-      
-      if (step.step_type === 'parallel_tool_decision') {
-        const toolNames = step.tools?.map((t: { tool: string }) => t.tool).join(', ') || 'Tools';
-        return {
-          kind: 'tool_call',
-          status: 'done' as const,
-          label: `Parallel: ${toolNames}`,
-          metadata: { 
-            tools: step.tools,
-            iteration: step.iteration,
-            timestamp_ms: step.timestamp_ms,
-          },
-        };
-      }
-      
       if (step.step_type === 'tool_result') {
         return {
-          kind: 'tool_result',
-          status: 'done' as const,
-          label: step.tool || 'Result',
+          kind: (step.kind as string) || 'tool_call',
+          status: (step.success === false ? 'error' : 'done') as 'done' | 'error',
+          label: step.label || step.tool || 'Result',
+          text: step.text as string | undefined,
+          children: step.children as ProgressChild[] | undefined,
           metadata: {
             tool: step.tool,
             success: step.success,
@@ -972,9 +948,7 @@ export const selectConversationById = async (conversationId: string): Promise<vo
   if (!apiClient) return;
 
   startLoadingHistory();
-  navigate("chat");
-
-  try {
+  navigate("chat");  try {
     const conversation = await apiClient.getConversation(conversationId);
     if (conversation && conversation.messages.length > 0) {
       loadConversation(conversation.id, conversation.messages);
