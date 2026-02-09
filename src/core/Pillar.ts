@@ -54,7 +54,7 @@ import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
 import { RouteObserver, type RouteInfo } from "../utils/route-observer";
 import { DebugPanel } from "../components/DebugPanel";
 import { domReady } from "../utils/dom";
-import { buildSelectorFromRef } from "../utils/dom-scanner";
+import { buildSelectorFromRef, isValidPillarRef, isDestructiveElement } from "../utils/dom-scanner";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
   mergeServerConfig,
@@ -956,25 +956,64 @@ export class Pillar {
   /**
    * Handle the interact_with_page action from the LLM.
    * Routes to appropriate DOM interaction method based on operation.
+   * Validates the ref format, verifies the element attribute, and
+   * prompts user confirmation for destructive actions.
    *
    * @param params - Interaction parameters from LLM
    * @returns Result object with success status and optional error
    *
    * @example
    * // Click a button
-   * pillar.handlePageInteraction({ operation: 'click', ref: 'pr-a1' });
+   * await pillar.handlePageInteraction({ operation: 'click', ref: 'pr-a1' });
    *
    * // Type in an input
-   * pillar.handlePageInteraction({ operation: 'type', ref: 'pr-b1', value: 'hello' });
+   * await pillar.handlePageInteraction({ operation: 'type', ref: 'pr-b1', value: 'hello' });
    */
-  handlePageInteraction(params: {
+  async handlePageInteraction(params: {
     operation: 'click' | 'type' | 'select' | 'focus' | 'toggle';
     ref: string;
     value?: string;
-  }): { success: boolean; error?: string } {
+  }): Promise<{ success: boolean; error?: string }> {
     debug.log('[Pillar] handlePageInteraction called with params:', params);
+
+    // Validate ref format to prevent CSS selector injection
+    if (!isValidPillarRef(params.ref)) {
+      debug.warn('[Pillar] handlePageInteraction rejected invalid ref format:', params.ref);
+      return { success: false, error: 'Invalid ref format' };
+    }
+
     const selector = buildSelectorFromRef(params.ref);
     debug.log('[Pillar] handlePageInteraction built selector:', selector);
+
+    // Defense-in-depth: verify the element's data-pillar-ref matches exactly
+    const targetEl = this.getElement(selector);
+    if (!targetEl) {
+      debug.warn('[Pillar] handlePageInteraction element not found for ref:', params.ref);
+      return { success: false, error: 'Element not found' };
+    }
+    if (targetEl.getAttribute('data-pillar-ref') !== params.ref) {
+      debug.warn('[Pillar] handlePageInteraction ref attribute mismatch');
+      return { success: false, error: 'Ref attribute mismatch' };
+    }
+
+    // Check for destructive actions and request user confirmation
+    if (isDestructiveElement(targetEl)) {
+      const label = targetEl.textContent?.trim().slice(0, 50) ||
+        targetEl.getAttribute('aria-label') ||
+        params.operation;
+      debug.log('[Pillar] handlePageInteraction detected destructive element:', label);
+
+      const { requestConfirmation } = await import('../store/pagePilot');
+      const confirmed = await requestConfirmation(
+        `Agent wants to ${params.operation} "${label}"`
+      );
+
+      if (!confirmed) {
+        debug.log('[Pillar] handlePageInteraction destructive action denied by user');
+        return { success: false, error: 'User denied destructive action' };
+      }
+      debug.log('[Pillar] handlePageInteraction destructive action confirmed by user');
+    }
 
     let result: { success: boolean; error?: string };
 

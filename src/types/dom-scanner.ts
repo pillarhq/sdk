@@ -38,6 +38,10 @@ export interface ScanOptions {
   minTextLength?: number;
   /** Maximum text length before truncation (default: 500) */
   maxTextLength?: number;
+  /** Maximum total output length in characters (default: 50000) */
+  maxTotalLength?: number;
+  /** Maximum label length for interactable elements (default: 100) */
+  maxLabelLength?: number;
   /** Include element positions/coordinates (default: false) */
   includePositions?: boolean;
 }
@@ -51,6 +55,8 @@ export const DEFAULT_SCAN_OPTIONS: Required<
   visibleOnly: true,
   minTextLength: 1,
   maxTextLength: 500,
+  maxTotalLength: 50_000,
+  maxLabelLength: 100,
   includePositions: false,
 };
 

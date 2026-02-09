@@ -411,7 +411,7 @@ export function ChatView() {
                     }
 
                     const interactionResult =
-                      pillar.handlePageInteraction(params);
+                      await pillar.handlePageInteraction(params);
 
                     // Check if cancelled after executing
                     if (wasCancelled()) {

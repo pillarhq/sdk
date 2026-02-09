@@ -72,6 +72,86 @@ function isElementVisible(el: Element): boolean {
 }
 
 // ============================================================================
+// Redaction
+// ============================================================================
+
+/**
+ * Check if an element or any of its ancestors is marked for redaction.
+ * Elements with `data-pillar-redact` or password inputs are redacted.
+ * Their text content is replaced with [REDACTED] in scan output.
+ */
+export function isRedacted(el: Element): boolean {
+  // Check for password input
+  if (
+    el instanceof HTMLInputElement &&
+    el.type.toLowerCase() === "password"
+  ) {
+    return true;
+  }
+
+  // Check if this element or an ancestor has data-pillar-redact
+  return el.closest("[data-pillar-redact]") !== null;
+}
+
+// ============================================================================
+// Destructive Element Detection
+// ============================================================================
+
+/** Keywords that indicate a destructive action */
+const DESTRUCTIVE_KEYWORDS =
+  /\b(delete|remove|destroy|reset|revoke|archive|cancel subscription|deactivate|disable|erase|purge|terminate|unsubscribe|drop)\b/i;
+
+/**
+ * Check if an element represents a destructive action.
+ * Used to gate interactions behind user confirmation.
+ *
+ * Returns true if:
+ * - The element has `data-pillar-destructive` attribute (explicit opt-in)
+ * - The element's label or text content contains destructive keywords
+ * - The element is a reset/submit button on a form with "delete" in its action URL
+ */
+export function isDestructiveElement(el: Element): boolean {
+  // Explicit opt-in via data attribute
+  if (el.hasAttribute("data-pillar-destructive")) {
+    return true;
+  }
+
+  // Check aria-label
+  const ariaLabel = el.getAttribute("aria-label");
+  if (ariaLabel && DESTRUCTIVE_KEYWORDS.test(ariaLabel)) {
+    return true;
+  }
+
+  // Check text content (limited to first 200 chars to avoid scanning huge subtrees)
+  const textContent = el.textContent?.trim().slice(0, 200);
+  if (textContent && DESTRUCTIVE_KEYWORDS.test(textContent)) {
+    return true;
+  }
+
+  // Check title attribute
+  const title = el.getAttribute("title");
+  if (title && DESTRUCTIVE_KEYWORDS.test(title)) {
+    return true;
+  }
+
+  // Check for reset/submit inputs on forms with destructive action URLs
+  if (el instanceof HTMLInputElement || el instanceof HTMLButtonElement) {
+    const type = el.type?.toLowerCase();
+    if (type === "reset" || type === "submit") {
+      const form = el.closest("form");
+      if (form) {
+        const action = form.getAttribute("action") || "";
+        if (DESTRUCTIVE_KEYWORDS.test(action)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+// ============================================================================
 // Interactable Detection
 // ============================================================================
 
@@ -252,17 +332,36 @@ function getElementLabel(el: Element): string | undefined {
 }
 
 // ============================================================================
-// Selector Building
+// Selector Building & Ref Validation
 // ============================================================================
+
+/** Strict pattern for pillar ref IDs: pr-{base36timestamp}-{base36counter} */
+const PILLAR_REF_PATTERN = /^pr-[a-z0-9]+-[a-z0-9]+$/;
+
+/**
+ * Validate that a ref string matches the expected pillar ref format.
+ * Prevents CSS selector injection from malformed/malicious ref values.
+ *
+ * @param ref - Ref string to validate
+ * @returns true if the ref matches the expected format
+ */
+export function isValidPillarRef(ref: string): boolean {
+  return PILLAR_REF_PATTERN.test(ref);
+}
 
 /**
  * Build full selector from short ref ID.
  * Converts "pr-abc" to '[data-pillar-ref="pr-abc"]'
+ * Throws if the ref format is invalid to prevent CSS selector injection.
  *
  * @param shortRef - Short ref ID (e.g., "pr-abc")
  * @returns Full CSS selector for querySelector
+ * @throws Error if the ref format is invalid
  */
 export function buildSelectorFromRef(shortRef: string): string {
+  if (!isValidPillarRef(shortRef)) {
+    throw new Error(`Invalid pillar ref format: "${shortRef}"`);
+  }
   return `[data-pillar-ref="${shortRef}"]`;
 }
 
@@ -271,30 +370,39 @@ export function buildSelectorFromRef(shortRef: string): string {
 // ============================================================================
 
 /**
- * Get a human-readable label directly from a DOM element for compact output.
+ * Truncate a string to a maximum length, appending "..." if truncated.
  */
-function getElementLabelForCompact(el: Element): string {
+function truncateLabel(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + "...";
+}
+
+/**
+ * Get a human-readable label directly from a DOM element for compact output.
+ * All label sources are truncated to maxLength for consistent output size.
+ */
+function getElementLabelForCompact(el: Element, maxLength: number): string {
   // Try the existing getElementLabel first
   const label = getElementLabel(el);
-  if (label) return label;
+  if (label) return truncateLabel(label, maxLength);
 
   // Check placeholder
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    if (el.placeholder) return el.placeholder;
+    if (el.placeholder) return truncateLabel(el.placeholder, maxLength);
   }
 
-  // Check inner text (for buttons, links, etc.) - limited length
+  // Check inner text (for buttons, links, etc.)
   const innerText = el.textContent?.trim();
-  if (innerText && innerText.length <= 50) {
-    return innerText;
+  if (innerText && innerText.length > 0) {
+    return truncateLabel(innerText, maxLength);
   }
 
   // Check name attribute
   const name = el.getAttribute("name");
-  if (name) return name;
+  if (name) return truncateLabel(name, maxLength);
 
   // Check id
-  if (el.id) return el.id;
+  if (el.id) return truncateLabel(el.id, maxLength);
 
   // Fallback to tag name
   return el.tagName.toLowerCase();
@@ -304,6 +412,8 @@ function getElementLabelForCompact(el: Element): string {
 interface DirectScanContext {
   lines: string[];
   interactableCount: number;
+  totalLength: number;
+  budgetExhausted: boolean;
   maxDepth: number;
   options: Required<Omit<ScanOptions, "root" | "excludeSelector">> & {
     excludeSelector?: string;
@@ -330,7 +440,7 @@ function traverseDOMDirect(
 
   // Handle text nodes
   if (node.nodeType === Node.TEXT_NODE) {
-    if (ctx.options.includeText) {
+    if (ctx.options.includeText && !ctx.budgetExhausted) {
       const text = node.textContent?.trim();
       if (text && text.length >= ctx.options.minTextLength) {
         // Truncate long text
@@ -338,7 +448,13 @@ function traverseDOMDirect(
           text.length > ctx.options.maxTextLength
             ? text.slice(0, ctx.options.maxTextLength) + "..."
             : text;
+        const lineLength = truncated.length + 1; // +1 for newline join
+        if (ctx.totalLength + lineLength > ctx.options.maxTotalLength) {
+          ctx.budgetExhausted = true;
+          return;
+        }
         ctx.lines.push(truncated);
+        ctx.totalLength += lineLength;
       }
     }
     return;
@@ -373,17 +489,28 @@ function traverseDOMDirect(
     return;
   }
 
-  // Check if interactable
+  // Skip redacted subtrees entirely — no text, no interactables, no recursion
+  if (el.hasAttribute("data-pillar-redact")) {
+    return;
+  }
+
+  // Check if interactable — skip individually redacted elements (e.g. password inputs)
   if (isInteractable(el)) {
+    if (isRedacted(el)) {
+      return;
+    }
+
     const interactionType = getInteractionType(el);
-    const label = getElementLabelForCompact(el);
+    const label = getElementLabelForCompact(el, ctx.options.maxLabelLength);
     const refId = generateRefId();
 
     // Add data-pillar-ref attribute to the element
     el.setAttribute("data-pillar-ref", refId);
 
     // Output in format: TYPE: label [[ref]]
-    ctx.lines.push(`${interactionType.toUpperCase()}: ${label} [[${refId}]]`);
+    const line = `${interactionType.toUpperCase()}: ${label} [[${refId}]]`;
+    ctx.lines.push(line);
+    ctx.totalLength += line.length + 1;
     ctx.interactableCount++;
   }
 
@@ -419,6 +546,8 @@ export function scanPageDirect(options?: ScanOptions): CompactScanResult {
   const ctx: DirectScanContext = {
     lines: [],
     interactableCount: 0,
+    totalLength: 0,
+    budgetExhausted: false,
     maxDepth: 0,
     options: {
       ...DEFAULT_SCAN_OPTIONS,

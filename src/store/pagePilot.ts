@@ -62,3 +62,47 @@ export function resetCancellation(): void {
 export function wasCancelled(): boolean {
   return isCancelled.value;
 }
+
+// ============================================================================
+// Destructive Action Confirmation
+// ============================================================================
+
+/** Whether a destructive action is awaiting user confirmation */
+export const needsConfirmation = signal(false);
+
+/** Human-readable description of the action pending confirmation */
+export const confirmationLabel = signal<string | null>(null);
+
+/** Resolver function for the confirmation promise */
+export const confirmationResolver = signal<((confirmed: boolean) => void) | null>(null);
+
+/**
+ * Request user confirmation for a destructive action.
+ * Shows a confirmation UI and returns a Promise that resolves when the user responds.
+ *
+ * @param label - Description of the action (e.g., 'Agent wants to click "Delete Account"')
+ * @returns Promise<boolean> - true if user confirmed, false if denied
+ */
+export function requestConfirmation(label: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    confirmationLabel.value = label;
+    confirmationResolver.value = resolve;
+    needsConfirmation.value = true;
+  });
+}
+
+/**
+ * Resolve the pending confirmation request.
+ * Called by the UI when the user clicks Allow or Deny.
+ *
+ * @param confirmed - Whether the user confirmed the action
+ */
+export function resolveConfirmation(confirmed: boolean): void {
+  const resolver = confirmationResolver.value;
+  // Reset state before resolving to avoid stale UI
+  needsConfirmation.value = false;
+  confirmationLabel.value = null;
+  confirmationResolver.value = null;
+  // Resolve the promise last so the handler sees clean state
+  resolver?.(confirmed);
+}

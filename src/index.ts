@@ -132,7 +132,10 @@ export {
 export {
   buildSelectorFromRef,
   clearPillarRefs,
+  isDestructiveElement,
   isInteractable,
+  isRedacted,
+  isValidPillarRef,
   scanPageDirect,
 } from "./utils/dom-scanner";
 
