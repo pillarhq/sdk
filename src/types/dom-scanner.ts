@@ -78,6 +78,26 @@ export interface CompactScanResult {
   title: string;
 }
 
+/** Result of a delta scan showing only changes since the last scan */
+export interface DeltaScanResult {
+  /** Formatted delta string for LLM context, or null if no changes */
+  content: string | null;
+  /** Ref IDs of elements no longer on the page */
+  removedRefs: string[];
+  /** Number of new interactable elements found */
+  newInteractableCount: number;
+  /** Total interactable elements currently on the page */
+  totalInteractableCount: number;
+  /** Whether any changes were detected */
+  hasChanges: boolean;
+  /** Timestamp when scan was performed */
+  timestamp: number;
+  /** URL of the page that was scanned */
+  url: string;
+  /** Title of the page */
+  title: string;
+}
+
 // ============================================================================
 // Constants
 // ============================================================================

@@ -6,32 +6,32 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import Pillar from "../../core/Pillar";
 import {
+  activeRequestId,
   addAssistantMessage,
+  addOptimisticConversation,
   addProgressEvent,
   addUserMessage,
   clearInterruptedSession,
   clearPendingMessage,
   clearPendingUserContext,
   clearProgressStatus,
-  finalizeActiveProgressEvents,
   conversationId,
+  finalizeActiveProgressEvents,
   interruptedSession,
   isLoading,
   isLoadingHistory,
   messages,
   pendingMessage,
   pendingUserContext,
+  removeLastEmptyAssistantMessage,
   setActionComplete,
   setActionPending,
+  setActiveRequestId,
   setConversationId,
   setLoading,
   setMessageFeedback,
   submitPendingTrigger,
-  activeRequestId,
-  setActiveRequestId,
   updateActionMessageContent,
-  removeLastEmptyAssistantMessage,
-  addOptimisticConversation,
   updateLastAssistantMessage,
   appendTokenToSegments,
   userContext,
@@ -46,27 +46,23 @@ import {
   type PilotOperation,
 } from "../../store/pagePilot";
 import { clearActiveSession } from "../../store/session-persistence";
+import { suggestions, suggestionsLoading } from "../../store/suggestions";
 import type {
   DOMSnapshotContext,
   UserContextItem,
 } from "../../types/user-context";
 import { generateContextId } from "../../types/user-context";
 import { debug } from "../../utils/debug";
-import { scanPageDirect } from "../../utils/dom-scanner";
+import type { ScanOptions } from "../../types/dom-scanner";
+import { scanPageDelta, scanPageDirect } from "../../utils/dom-scanner";
 import { PreactMarkdown } from "../../utils/preact-markdown";
 import { useAPI } from "../context";
 import { ContextTagList } from "../Panel/ContextTag";
-import {
-  type TaskButtonData,
-} from "../Panel/TaskButton";
+import { type TaskButtonData } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
 import { ProgressStack } from "../Progress";
 import { QuestionChip, QuestionChipSkeleton } from "../shared";
 import { ResumePrompt } from "./ResumePrompt";
-import {
-  suggestions,
-  suggestionsLoading,
-} from "../../store/suggestions";
 
 const THUMBS_UP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
 
@@ -101,6 +97,20 @@ function getCompletionText(actionName: string, success: boolean): string {
   return "Done!";
 }
 
+/**
+ * Build scan options that always exclude Pillar's own UI (#pillar-root)
+ * and merges in any user-configured excludeSelector.
+ */
+function getScanOptions(): ScanOptions {
+  const pillar = Pillar.getInstance();
+  const userExclude = pillar?.config?.domScanning?.excludeSelector;
+  return {
+    excludeSelector: userExclude
+      ? `#pillar-root, ${userExclude}`
+      : "#pillar-root",
+  };
+}
+
 export function ChatView() {
   const api = useAPI();
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -120,7 +130,7 @@ export function ChatView() {
     let resumeContext: UserContextItem[] = [...userContext.value];
 
     if (isDOMScanningEnabled) {
-      const scanResult = scanPageDirect();
+      const scanResult = scanPageDirect(getScanOptions());
       const domContext: DOMSnapshotContext = {
         id: generateContextId(),
         type: "dom_snapshot",
@@ -426,18 +436,30 @@ export function ChatView() {
                       return;
                     }
 
-                    // If action succeeded and DOM scanning is enabled, rescan after a brief delay
+                    // If action succeeded and DOM scanning is enabled, delta scan after a brief delay
                     let updatedDomSnapshot: string | null = null;
+                    console.log(
+                      "[PILLAR HIT]",
+                      interactionResult.success,
+                      pillar?.isDOMScanningEnabled
+                    );
                     if (
                       interactionResult.success &&
                       pillar?.isDOMScanningEnabled
                     ) {
                       // Wait for DOM to settle (animations, async updates)
                       await new Promise((resolve) => setTimeout(resolve, 150));
-                      const scanResult = scanPageDirect();
-                      updatedDomSnapshot = scanResult.content;
+                      const deltaResult = scanPageDelta(getScanOptions());
+                      updatedDomSnapshot = deltaResult.content;
+                      console.log(
+                        "[Pillar DOM Scanner] Delta content:\n",
+                        deltaResult.content ?? "(no changes)"
+                      );
                       debug.log(
-                        "[Pillar] DOM rescanned after page interaction"
+                        "[Pillar] DOM delta scanned after page interaction:",
+                        deltaResult.hasChanges
+                          ? `${deltaResult.newInteractableCount} new, ${deltaResult.removedRefs.length} removed`
+                          : "no changes"
                       );
                     }
 
@@ -628,9 +650,10 @@ export function ChatView() {
       // If DOM scanning is enabled, scan the page and add to context
       if (isDOMScanningEnabled) {
         // Use optimized single-pass scanner (no AST intermediate)
-        const scanResult = scanPageDirect();
+        const scanResult = scanPageDirect(getScanOptions());
 
         // Log the compact content for debugging
+        console.log("PILLAR HIT YO");
         console.log(
           "[Pillar DOM Scanner] Compact content:\n",
           scanResult.content
@@ -846,8 +869,8 @@ export function ChatView() {
                     /* Fallback: old layout for history messages without segments */
                     <>
                       {msg.progressEvents && msg.progressEvents.length > 0 && (
-                        <ProgressStack 
-                          events={msg.progressEvents} 
+                        <ProgressStack
+                          events={msg.progressEvents}
                           responseStarted={Boolean(msg.content)}
                         />
                       )}
@@ -872,6 +895,7 @@ export function ChatView() {
                           )
                       )}
                     </>
+
                   )}
                   {/* Loading spinner — only needed for segments path when nothing has arrived yet.
                      When segments is undefined, the fallback branch above handles the spinner. */}

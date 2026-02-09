@@ -9,6 +9,7 @@ import {
   INTERACTABLE_TAGS,
   SKIP_TAGS,
   type CompactScanResult,
+  type DeltaScanResult,
   type InteractionType,
   type ScanOptions,
 } from "../types/dom-scanner";
@@ -21,15 +22,16 @@ import {
 let refCounter = 0;
 
 /**
- * Generate a unique ref ID for data-pillar-ref attribute
+ * Generate a unique ref ID for data-pillar-ref attribute.
+ * Uses a simple counter for stable, deterministic refs across rescans.
  */
 function generateRefId(): string {
-  return `pr-${Date.now().toString(36)}-${(refCounter++).toString(36)}`;
+  return `pr-${(refCounter++).toString(36)}`;
 }
 
 /**
  * Clear all pillar refs from the DOM.
- * Called before scanning to remove stale refs.
+ * Called before full scans to remove stale refs and reset counter.
  */
 export function clearPillarRefs(): void {
   document
@@ -38,6 +40,10 @@ export function clearPillarRefs(): void {
   // Reset counter for cleaner IDs
   refCounter = 0;
 }
+
+/** State from the last scan, used for delta computation */
+let lastScanLines: Set<string> = new Set();
+let lastScanRefs: Set<string> = new Set();
 
 // ============================================================================
 // Visibility Checking
@@ -335,8 +341,8 @@ function getElementLabel(el: Element): string | undefined {
 // Selector Building & Ref Validation
 // ============================================================================
 
-/** Strict pattern for pillar ref IDs: pr-{base36timestamp}-{base36counter} */
-const PILLAR_REF_PATTERN = /^pr-[a-z0-9]+-[a-z0-9]+$/;
+/** Strict pattern for pillar ref IDs: pr-{base36counter} */
+const PILLAR_REF_PATTERN = /^pr-[a-z0-9]+$/;
 
 /**
  * Validate that a ref string matches the expected pillar ref format.
@@ -411,6 +417,7 @@ function getElementLabelForCompact(el: Element, maxLength: number): string {
 /** Context for direct scanning */
 interface DirectScanContext {
   lines: string[];
+  refs: Set<string>;
   interactableCount: number;
   totalLength: number;
   budgetExhausted: boolean;
@@ -502,10 +509,16 @@ function traverseDOMDirect(
 
     const interactionType = getInteractionType(el);
     const label = getElementLabelForCompact(el, ctx.options.maxLabelLength);
-    const refId = generateRefId();
 
-    // Add data-pillar-ref attribute to the element
-    el.setAttribute("data-pillar-ref", refId);
+    // Reuse existing ref if present (for delta scans), otherwise generate a new one
+    let refId = el.getAttribute("data-pillar-ref");
+    if (!refId) {
+      refId = generateRefId();
+      el.setAttribute("data-pillar-ref", refId);
+    }
+
+    // Track ref for delta computation
+    ctx.refs.add(refId);
 
     // Output in format: TYPE: label [[ref]]
     const line = `${interactionType.toUpperCase()}: ${label} [[${refId}]]`;
@@ -545,6 +558,7 @@ export function scanPageDirect(options?: ScanOptions): CompactScanResult {
 
   const ctx: DirectScanContext = {
     lines: [],
+    refs: new Set(),
     interactableCount: 0,
     totalLength: 0,
     budgetExhausted: false,
@@ -568,9 +582,97 @@ export function scanPageDirect(options?: ScanOptions): CompactScanResult {
   ctx.lines.push("");
   ctx.lines.push(`=== ${ctx.interactableCount} interactable elements ===`);
 
+  // Store scan state for future delta comparisons
+  lastScanLines = new Set(ctx.lines);
+  lastScanRefs = new Set(ctx.refs);
+
   return {
     content: ctx.lines.join("\n"),
     interactableCount: ctx.interactableCount,
+    timestamp: Date.now(),
+    url: window.location.href,
+    title: document.title,
+  };
+}
+
+/**
+ * Delta DOM scanner that only returns changes since the last scan.
+ * Reuses existing refs on elements, assigns new refs only to new elements.
+ * Compares output lines against the previous scan to find new content.
+ *
+ * Must be called after an initial `scanPageDirect()` which establishes
+ * the baseline. If called without a prior scan, behaves like a full scan
+ * but without the header/footer framing.
+ *
+ * @param options - Scan options
+ * @returns Delta scan result with only new lines and removed ref IDs
+ */
+export function scanPageDelta(options?: ScanOptions): DeltaScanResult {
+  // Do NOT clear refs — reuse existing ones on elements that still have them
+  const root = options?.root || document.body;
+
+  const ctx: DirectScanContext = {
+    lines: [],
+    refs: new Set(),
+    interactableCount: 0,
+    totalLength: 0,
+    budgetExhausted: false,
+    maxDepth: 0,
+    options: {
+      ...DEFAULT_SCAN_OPTIONS,
+      ...options,
+    },
+  };
+
+  // Traverse DOM reusing existing refs, assigning new ones where needed
+  traverseDOMDirect(root, ctx, 0);
+
+  // Compute new lines (in current scan but not in last scan)
+  const newLines = ctx.lines.filter((line) => !lastScanLines.has(line));
+
+  // Compute removed refs (in last scan but no longer visible/interactable)
+  const removedRefs = [...lastScanRefs].filter((ref) => !ctx.refs.has(ref));
+
+  // Count new interactable elements (lines with ref markers)
+  const refPattern = /\[\[pr-[a-z0-9]+\]\]$/;
+  const newInteractableCount = newLines.filter((line) =>
+    refPattern.test(line)
+  ).length;
+
+  const hasChanges = newLines.length > 0 || removedRefs.length > 0;
+
+  // Update stored state for next delta
+  lastScanLines = new Set(ctx.lines);
+  lastScanRefs = new Set(ctx.refs);
+
+  // Format content string for LLM
+  let content: string | null = null;
+  if (hasChanges) {
+    const parts: string[] = [];
+
+    if (newLines.length > 0) {
+      parts.push(...newLines);
+      parts.push("");
+    }
+
+    // Footer with summary
+    const removedStr =
+      removedRefs.length > 0
+        ? `, ${removedRefs.length} removed: ${removedRefs.join(", ")}`
+        : "";
+    parts.push(
+      `=== ${newInteractableCount} new${removedStr} ===`
+    );
+
+    content = parts.join("\n");
+  }
+
+  return {
+    content,
+    removedRefs,
+    newInteractableCount,
+    totalInteractableCount: ctx.refs.size,
+    hasChanges,
     timestamp: Date.now(),
     url: window.location.href,
     title: document.title,
