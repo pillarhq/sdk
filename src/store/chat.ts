@@ -106,7 +106,7 @@ export interface InterruptedSession {
   conversationId: string;
   userMessage: string;
   partialResponse: string;
-  summary: string;
+  displayTrace: any[];
   elapsedMs: number;
 }
 
@@ -424,6 +424,9 @@ export const userContext = signal<UserContextItem[]>([]);
 
 // Pending user context to be sent after navigation to chat view
 export const pendingUserContext = signal<UserContextItem[]>([]);
+
+// Pending images to be sent after navigation to chat view (e.g. HomeView → ChatView)
+export const pendingImagesForNavigation = signal<ChatImage[]>([]);
 
 // ============================================================================
 // Image Upload State
@@ -862,6 +865,14 @@ export const clearPendingUserContext = () => {
   pendingUserContext.value = [];
 };
 
+export const setPendingImagesForNavigation = (images: ChatImage[]) => {
+  pendingImagesForNavigation.value = images;
+};
+
+export const clearPendingImagesForNavigation = () => {
+  pendingImagesForNavigation.value = [];
+};
+
 export const resetChat = () => {
   messages.value = [];
   conversationId.value = null;
@@ -879,6 +890,7 @@ export const resetChat = () => {
   submitPendingTrigger.value = 0;
   userContext.value = [];
   pendingUserContext.value = [];
+  pendingImagesForNavigation.value = [];
   clearPendingImages();
 };
 

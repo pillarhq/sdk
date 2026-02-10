@@ -20,6 +20,7 @@ export interface ProgressRowProps {
   isLast?: boolean;          // Whether this is the last row in the stack
   responseStarted?: boolean; // Whether the response has started streaming
   nested?: boolean;          // Whether this row is nested inside a ProgressGroup
+  groupActive?: boolean;     // Whether the parent group still has active children
 }
 
 export function ProgressRow({
@@ -28,6 +29,7 @@ export function ProgressRow({
   isLast = false,
   responseStarted = false,
   nested = false,
+  groupActive = false,
 }: ProgressRowProps) {
   // Determine effective active state from status or isActive prop
   const effectiveIsActive = progress.status === 'active' || (progress.status === undefined && isActive);
@@ -88,12 +90,13 @@ export function ProgressRow({
   const [manualExpandState, setManualExpandState] = useState(false);
   
   // Determine actual expanded state.
-  // Nested rows (inside a ProgressGroup): stay expanded while last in the group,
-  // collapse when the next tool call arrives (loses isLast). The parent group
-  // handles collapsing when narration text arrives.
+  // Nested rows (inside a ProgressGroup): stay expanded while active, or while
+  // last in the group AND the group still has active children. Once the group
+  // finishes (no active children), nested rows collapse so that re-opening
+  // a collapsed group shows all children collapsed.
   // Top-level rows: stay expanded until the response starts streaming.
   const shouldAutoExpand = nested
-    ? (effectiveIsActive || isLast)
+    ? (effectiveIsActive || (isLast && groupActive))
     : (effectiveIsActive || (isLast && !responseStarted));
   const isExpanded = isExpandable && (isManuallyToggled ? manualExpandState : shouldAutoExpand);
 

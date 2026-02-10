@@ -106,6 +106,7 @@ export function ProgressGroup({
               isLast={idx === events.length - 1}
               responseStarted={responseStarted}
               nested={true}
+              groupActive={hasActiveChild}
             />
           ))}
         </div>

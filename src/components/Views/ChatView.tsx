@@ -12,6 +12,7 @@ import {
   addProgressEvent,
   addUserMessage,
   clearInterruptedSession,
+  clearPendingImagesForNavigation,
   clearPendingMessage,
   clearPendingUserContext,
   clearProgressStatus,
@@ -21,6 +22,7 @@ import {
   isLoading,
   isLoadingHistory,
   messages,
+  pendingImagesForNavigation,
   pendingMessage,
   pendingUserContext,
   removeLastEmptyAssistantMessage,
@@ -583,8 +585,11 @@ export function ChatView() {
           return;
         }
         debug.error("[Pillar] Chat error:", error);
+        const errorDetail = error instanceof Error ? error.message : "";
         updateLastAssistantMessage(
-          "Sorry, I encountered an error. Please try again."
+          errorDetail
+            ? `Sorry, something went wrong: ${errorDetail}`
+            : "Sorry, I encountered an error. Please try again."
         );
       } finally {
         setLoading(false);
@@ -696,11 +701,13 @@ export function ChatView() {
   useEffect(() => {
     const pending = pendingMessage.value;
     const pendingContext = pendingUserContext.value;
+    const pendingImages = pendingImagesForNavigation.value;
     if (pending) {
       clearPendingMessage();
       clearPendingUserContext();
+      clearPendingImagesForNavigation();
       // Route through handleInputSubmit so DOM scanning logic is applied
-      handleInputSubmit(pending, pendingContext, []);
+      handleInputSubmit(pending, pendingContext, pendingImages);
     }
   }, [submitPendingTrigger.value, handleInputSubmit]);
 

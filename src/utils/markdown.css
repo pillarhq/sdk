@@ -263,13 +263,13 @@
 /* Base markdown container */
 ._pillar-markdown {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.45;
   color: var(--pillar-text, #1a1a1a);
 }
 
 /* Headings */
 ._pillar-md-heading {
-  margin: 16px 0 8px 0;
+  margin: 10px 0 4px 0;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -283,7 +283,7 @@
 
 /* Paragraphs */
 ._pillar-md-paragraph {
-  margin: 8px 0;
+  margin: 4px 0;
 }
 
 /* Links */
@@ -307,12 +307,12 @@
 
 /* Lists */
 ._pillar-md-list {
-  margin: 8px 0;
+  margin: 4px 0;
   padding-left: 24px;
 }
 
 ._pillar-md-list-item {
-  margin: 4px 0;
+  margin: 2px 0;
 }
 
 /* Task list items */

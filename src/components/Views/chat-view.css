@@ -148,12 +148,12 @@
 
 ._pillar-message-assistant {
   font-size: var(--pillar-font-size-base);
-  line-height: 1.6;
+  line-height: 1.45;
   color: var(--pillar-text-secondary);
 }
 
 ._pillar-message-assistant p {
-  margin: 0 0 var(--pillar-spacing-md);
+  margin: 0 0 var(--pillar-spacing-sm);
 }
 
 ._pillar-message-assistant p:last-child {
@@ -164,26 +164,26 @@
   font-size: var(--pillar-font-size-lg);
   font-weight: 600;
   color: var(--pillar-text);
-  margin: var(--pillar-spacing-lg) 0 var(--pillar-spacing-sm);
+  margin: var(--pillar-spacing-md) 0 var(--pillar-spacing-xs);
 }
 
 ._pillar-message-assistant h3 {
   font-size: var(--pillar-font-size-md);
   font-weight: 600;
   color: var(--pillar-text);
-  margin: 14px 0 6px;
+  margin: 10px 0 4px;
 }
 
 ._pillar-message-assistant h4 {
   font-size: var(--pillar-font-size-base);
   font-weight: 600;
   color: var(--pillar-text);
-  margin: var(--pillar-spacing-md) 0 6px;
+  margin: var(--pillar-spacing-sm) 0 4px;
 }
 
 ._pillar-message-assistant ul,
 ._pillar-message-assistant ol {
-  margin: 0 0 var(--pillar-spacing-md);
+  margin: 0 0 var(--pillar-spacing-sm);
   padding-left: var(--pillar-spacing-2xl);
   list-style-position: outside;
 }
@@ -197,7 +197,7 @@
 }
 
 ._pillar-message-assistant li {
-  margin-bottom: var(--pillar-spacing-xs);
+  margin-bottom: 2px;
 }
 
 ._pillar-message-assistant code {
@@ -542,7 +542,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px;
 }
 
 ._pillar-action-status {

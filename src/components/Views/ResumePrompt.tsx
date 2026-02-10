@@ -74,9 +74,9 @@ export function ResumePrompt({
                 "{truncate(session.userMessage, 50)}"
               </span>
             )}
-            {session.summary && (
+            {session.partialResponse && (
               <span class="_pillar-resume-prompt-summary pillar-resume-prompt-summary">
-                {session.summary}
+                {truncate(session.partialResponse, 80)}
               </span>
             )}
           </div>

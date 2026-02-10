@@ -14,6 +14,7 @@ import {
   pendingImages,
   removePendingImage,
   removeUserContext,
+  setPendingImagesForNavigation,
   setPendingMessage,
   setPendingUserContext,
   updateImageStatus,
@@ -234,9 +235,12 @@ export function UnifiedChatInput({
       // Custom handler (e.g., ChatView sends directly)
       onSubmit(trimmed, currentContext, currentImages);
     } else {
-      // Default: store message and pending context, then navigate to chat
+      // Default: store message, pending context, and images, then navigate to chat
       if (hasContext) {
         setPendingUserContext(currentContext);
+      }
+      if (hasImages) {
+        setPendingImagesForNavigation(currentImages);
       }
       setPendingMessage(trimmed);
       navigateToChat();

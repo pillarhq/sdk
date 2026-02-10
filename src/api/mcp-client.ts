@@ -1138,8 +1138,8 @@ export interface ConversationStatus {
   elapsed_ms?: number;
   user_message?: string;
   partial_response?: string;
-  summary?: string;
-  accomplished?: Array<{ action: string; result_summary: string }>;
+  display_trace?: any[];
+  registered_actions?: any[];
 }
 
 /**

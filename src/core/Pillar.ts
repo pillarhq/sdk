@@ -2404,7 +2404,7 @@ export class Pillar {
         conversationId: savedSession.conversationId,
         userMessage: status.user_message ?? '',
         partialResponse: status.partial_response ?? '',
-        summary: status.summary ?? '',
+        displayTrace: status.display_trace ?? [],
         elapsedMs: status.elapsed_ms ?? 0,
       });
 
@@ -2475,7 +2475,7 @@ export class Pillar {
                 conversationId: storedId,
                 userMessage: status.user_message ?? '',
                 partialResponse: status.partial_response ?? '',
-                summary: status.summary ?? '',
+                displayTrace: status.display_trace ?? [],
                 elapsedMs: status.elapsed_ms ?? 0,
               });
             }
