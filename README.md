@@ -1,6 +1,6 @@
 # @pillar-ai/sdk
 
-Cursor for your product — Embed an AI co-pilot that executes tasks, not just answers questions.
+[Pillar](https://trypillar.com) is an open-source product copilot SDK for SaaS and web apps — embed an AI assistant that executes tasks, not just answers questions. [GitHub](https://github.com/pillarhq/pillar) · [Docs](https://trypillar.com/docs)
 
 [![npm version](https://img.shields.io/npm/v/@pillar-ai/sdk)](https://www.npmjs.com/package/@pillar-ai/sdk)
 [![npm downloads](https://img.shields.io/npm/dm/@pillar-ai/sdk)](https://www.npmjs.com/package/@pillar-ai/sdk)
@@ -9,13 +9,21 @@ Cursor for your product — Embed an AI co-pilot that executes tasks, not just a
 
 ## What is Pillar?
 
-Pillar is an embedded AI co-pilot that helps users complete tasks, not just answer questions. Users say what they want, and Pillar uses your UI to make it happen — navigating pages, pre-filling forms, and calling your APIs.
+Pillar is a product copilot for SaaS and web applications. Users say what they want, and Pillar uses your UI to make it happen — navigating pages, pre-filling forms, and calling your APIs.
 
-**How it works:**
+A CRM user could ask:
 
-1. User asks: *"Export this to CSV"* or *"Turn off email notifications"*
-2. Pillar understands intent and chains actions
-3. Your code executes with the user's session
+> "Close the Walmart deal as won in Salesforce and notify implementation"
+
+An analytics user could ask:
+
+> "Add a weekly signups chart to my Amplitude dashboard"
+
+Or an HR user:
+
+> "How do I change my direct deposit in Rippling?"
+
+Pillar understands the intent, builds a multi-step plan, and executes it client-side with the user's session.
 
 ## Features
 

@@ -1,7 +1,7 @@
 {
   "name": "@pillar-ai/sdk",
   "version": "0.1.16",
-  "description": "Pillar Embedded Help SDK - Add contextual help and AI chat to your application",
+  "description": "Product copilot SDK for SaaS and web apps — AI assistant that executes tasks, not just answers questions",
   "type": "module",
   "main": "./dist/pillar.esm.js",
   "module": "./dist/pillar.esm.js",
@@ -32,12 +32,15 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "help",
-    "documentation",
-    "support",
-    "chat",
+    "copilot",
+    "assistant",
     "ai",
-    "embedded"
+    "sdk",
+    "saas",
+    "embedded",
+    "agent",
+    "support",
+    "chat"
   ],
   "author": "Pillar Team",
   "license": "MIT",
