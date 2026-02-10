@@ -73,25 +73,6 @@
   transform: translateY(0);
 }
 
-/* Drag handle - visual indicator at top of mobile sheet */
-._pillar-mobile-handle {
-  display: none;
-}
-
-._pillar-panel--mobile ._pillar-mobile-handle {
-  display: block;
-  width: 36px;
-  height: 4px;
-  background: var(--pillar-border);
-  border-radius: 2px;
-  margin: 8px auto 0;
-  flex-shrink: 0;
-}
-
-.pillar-panel--mobile {
-}
-.pillar-mobile-handle {
-}
 
 ._pillar-panel-root {
   display: flex;

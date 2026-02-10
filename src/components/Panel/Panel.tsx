@@ -50,7 +50,6 @@ export class Panel {
   private shadow: ShadowRoot | null = null;
   private backdrop: HTMLElement | null = null;
   private panelElement: HTMLElement | null = null;
-  private mobileHandle: HTMLElement | null = null;
   private renderRoot: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
   private isManualMount: boolean = false;
@@ -229,7 +228,6 @@ export class Panel {
     this.shadow = null;
     this.backdrop = null;
     this.panelElement = null;
-    this.mobileHandle = null;
     this.renderRoot = null;
 
     document.removeEventListener("keydown", this.handleKeyDown);
@@ -639,11 +637,6 @@ export class Panel {
     this.panelElement.setAttribute("role", "dialog");
     this.panelElement.setAttribute("aria-modal", "true");
     this.panelElement.setAttribute("aria-label", "Assistant panel");
-
-    // Create mobile drag handle (visible only when in mobile sheet mode via CSS)
-    this.mobileHandle = document.createElement("div");
-    this.mobileHandle.className = "_pillar-mobile-handle pillar-mobile-handle";
-    this.panelElement.appendChild(this.mobileHandle);
 
     // Create render root for Preact with both internal and public classes
     this.renderRoot = document.createElement("div");
