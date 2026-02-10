@@ -50,11 +50,9 @@ yarn add @pillar-ai/sdk
 
 ### 1. Get Your Product Key
 
-First, register your product in the [Pillar app](https://app.trypillar.com):
-
-1. Sign up or log in at [app.trypillar.com](https://app.trypillar.com)
-2. Create a new product
-3. Copy your **Product Key** from the settings page
+> **⚠️ Beta Onboarding:** Cloud access is currently manual while we learn from early teams. Join the waitlist at [trypillar.com](https://trypillar.com), and we will reach out to onboard you.
+>
+> By default, you'll get an engineer from Pillar to help with setup. If you prefer onboarding without engineering support, include that in your waitlist request and we will support that too.
 
 ### 2. Initialize the SDK
 
@@ -63,7 +61,7 @@ import { Pillar } from "@pillar-ai/sdk";
 
 // Initialize and get the instance
 const pillar = await Pillar.init({
-  productKey: "your-product-key", // From Pillar app
+  productKey: "your-product-key", // Provided during onboarding
 });
 
 // Now you can use instance methods
