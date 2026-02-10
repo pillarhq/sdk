@@ -1,9 +1,3 @@
-/**
- * Text Selection Popover CSS Styles
- * Injected into the document head
- */
-
-export const TEXT_SELECTION_STYLES = `
 /* Pillar Text Selection Popover Styles */
 .pillar-text-selection-popover {
   position: absolute;
@@ -74,5 +68,3 @@ export const TEXT_SELECTION_STYLES = `
   top: -5px;
   background: linear-gradient(135deg, #6366f1 0%, #6366f1 100%);
 }
-`;
-

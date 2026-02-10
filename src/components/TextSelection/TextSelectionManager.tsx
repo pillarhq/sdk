@@ -6,7 +6,7 @@
 import { h, render } from 'preact';
 import type { EventEmitter } from '../../core/events';
 import type { ResolvedConfig } from '../../core/config';
-import { TEXT_SELECTION_STYLES } from './styles';
+import textSelectionCSS from './text-selection.css';
 import { TextSelectionPopover } from './TextSelectionPopover';
 import { injectStyles } from '../../utils/dom';
 import { addUserContext } from '../../store/chat';
@@ -40,7 +40,7 @@ export class TextSelectionManager {
   init(): void {
     // Inject styles
     if (!this.stylesInjected) {
-      injectStyles(document, TEXT_SELECTION_STYLES, STYLES_ID);
+      injectStyles(document, textSelectionCSS, STYLES_ID);
       this.stylesInjected = true;
     }
 

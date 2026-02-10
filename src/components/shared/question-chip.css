@@ -1,0 +1,68 @@
+/* ============================================================================
+   Question Chip
+   ============================================================================ */
+
+._pillar-question-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--pillar-spacing-md) var(--pillar-spacing-lg);
+  font-size: var(--pillar-font-size-base);
+  font-family: var(--pillar-font-family);
+  text-align: left;
+  color: var(--pillar-text);
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-lg);
+  cursor: pointer;
+  transition: background var(--pillar-transition-fast), border-color var(--pillar-transition-fast);
+}
+
+._pillar-question-chip:hover {
+  border-color: var(--pillar-primary);
+}
+
+._pillar-question-chip-text {
+  flex: 1;
+}
+
+._pillar-question-chip-arrow {
+  color: var(--pillar-text-muted);
+  margin-left: var(--pillar-spacing-sm);
+  transition: color var(--pillar-transition-fast), transform var(--pillar-transition-fast);
+}
+
+._pillar-question-chip:hover ._pillar-question-chip-arrow {
+  color: var(--pillar-primary);
+  transform: translateX(2px);
+}
+
+._pillar-question-chip-skeleton {
+  height: 44px;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-lg);
+  overflow: hidden;
+}
+
+._pillar-question-chip-skeleton-bar {
+  width: 60%;
+  height: 14px;
+  margin: 15px var(--pillar-spacing-lg);
+  background: linear-gradient(90deg, var(--pillar-border) 25%, var(--pillar-bg-tertiary) 50%, var(--pillar-border) 75%);
+  background-size: 200% 100%;
+  animation: pillar-shimmer 1.5s infinite;
+  border-radius: var(--pillar-radius-sm);
+}
+
+@keyframes pillar-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.pillar-question-chip {}
+.pillar-question-chip-text {}
+.pillar-question-chip-arrow {}
+.pillar-question-chip-skeleton {}
+.pillar-question-chip-skeleton-bar {}

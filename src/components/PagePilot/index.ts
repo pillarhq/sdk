@@ -5,4 +5,3 @@
 
 export { PagePilotBanner } from './PagePilotBanner';
 export { PagePilotManager } from './PagePilotManager';
-export { PAGE_PILOT_STYLES } from './styles';

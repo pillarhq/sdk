@@ -1,0 +1,98 @@
+/* ============================================================================
+   Panel Container
+   Internal: _pillar-panel | Public: pillar-panel
+   ============================================================================ */
+
+._pillar-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: var(--pillar-panel-width);
+  max-width: 100vw;
+  background: var(--pillar-bg);
+  border-left: 1px solid var(--pillar-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 99999;
+  transform: translateX(100%);
+  transition: transform var(--pillar-transition-normal);
+}
+
+._pillar-panel--right {
+  right: 0;
+}
+
+._pillar-panel--left {
+  left: 0;
+  border-left: none;
+  border-right: 1px solid var(--pillar-border);
+  transform: translateX(-100%);
+}
+
+._pillar-panel--open {
+  transform: translateX(0);
+}
+
+._pillar-panel--manual {
+  position: static;
+  transform: none;
+  height: 100%;
+}
+
+._pillar-panel--full-width {
+  width: 100vw;
+  max-width: 100vw;
+}
+
+._pillar-panel-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+._pillar-panel-ui {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Public override classes - empty by default */
+.pillar-panel {}
+.pillar-panel-root {}
+.pillar-panel-ui {}
+
+/* ============================================================================
+   Backdrop
+   ============================================================================ */
+
+._pillar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--pillar-transition-normal), visibility var(--pillar-transition-normal);
+  z-index: 99998;
+}
+
+._pillar-backdrop--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pillar-backdrop {}
+
+/* ============================================================================
+   Content Area
+   Internal: _pillar-content | Public: pillar-content
+   ============================================================================ */
+
+._pillar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.pillar-content {}

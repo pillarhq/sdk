@@ -1,0 +1,71 @@
+/* Mobile trigger floating button */
+.pillar-mobile-trigger {
+  position: fixed;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pillar-mobile-trigger:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.12);
+}
+
+.pillar-mobile-trigger:active {
+  transform: scale(0.95);
+}
+
+.pillar-mobile-trigger:focus-visible {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(255, 255, 255, 0.5), 0 0 0 5px var(--pillar-mobile-bg, #c2410c);
+}
+
+/* Position variants */
+.pillar-mobile-trigger--bottom-right {
+  bottom: var(--pillar-mobile-offset, 24px);
+  right: var(--pillar-mobile-offset, 24px);
+}
+
+.pillar-mobile-trigger--bottom-left {
+  bottom: var(--pillar-mobile-offset, 24px);
+  left: var(--pillar-mobile-offset, 24px);
+}
+
+/* Icon styling */
+.pillar-mobile-trigger__icon {
+  width: 55%;
+  height: 55%;
+  flex-shrink: 0;
+  transform: translateY(-1px);
+}
+
+/* Hidden state (when panel is open) */
+.pillar-mobile-trigger--hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+  transform: scale(0.8) !important;
+  visibility: hidden;
+}
+
+/* Animation on mount */
+@keyframes pillar-mobile-trigger-mount {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pillar-mobile-trigger--mounted {
+  animation: pillar-mobile-trigger-mount 0.2s ease forwards;
+}

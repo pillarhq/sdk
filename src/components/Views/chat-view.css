@@ -1,0 +1,589 @@
+/* ============================================================================
+   Standalone Chat View
+   Internal: _pillar-chat-view | Public: pillar-chat-view
+   ============================================================================ */
+
+._pillar-chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+._pillar-chat-view-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--pillar-spacing-xl);
+  display: flex;
+  flex-direction: column;
+}
+
+._pillar-chat-view-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--pillar-spacing-xl);
+  text-align: center;
+}
+
+._pillar-chat-view-welcome-icon {
+  font-size: 48px;
+  margin-bottom: var(--pillar-spacing-lg);
+}
+
+._pillar-chat-view-welcome-title {
+  font-size: var(--pillar-font-size-xl);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin-bottom: var(--pillar-spacing-sm);
+}
+
+._pillar-chat-view-welcome-text {
+  font-size: var(--pillar-font-size-base);
+  color: var(--pillar-text-muted);
+  max-width: 280px;
+}
+
+/* History Loading Skeleton */
+._pillar-chat-history-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pillar-spacing-lg);
+  padding: var(--pillar-spacing-md) 0;
+}
+
+._pillar-chat-history-loading-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pillar-spacing-xs);
+}
+
+._pillar-chat-history-loading-message--user {
+  align-items: flex-end;
+}
+
+._pillar-chat-history-loading-message--assistant {
+  align-items: flex-start;
+}
+
+._pillar-chat-history-loading-bar {
+  height: 16px;
+  border-radius: var(--pillar-radius-md);
+  background: linear-gradient(90deg, var(--pillar-bg-secondary) 25%, var(--pillar-border) 50%, var(--pillar-bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: pillar-shimmer 1.5s infinite;
+}
+
+._pillar-chat-history-loading-message--user ._pillar-chat-history-loading-bar {
+  background: linear-gradient(90deg, var(--pillar-bg-secondary) 25%, var(--pillar-border) 50%, var(--pillar-bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: pillar-shimmer 1.5s infinite;
+}
+
+.pillar-chat-history-loading {}
+.pillar-chat-history-loading-message--user {}
+.pillar-chat-history-loading-message--assistant {}
+.pillar-chat-history-loading-bar {}
+
+._pillar-chat-view-message {
+  margin-bottom: var(--pillar-spacing-lg);
+}
+
+._pillar-chat-view-message--user {
+  text-align: right;
+}
+
+._pillar-chat-view-message--assistant {
+  text-align: left;
+}
+
+.pillar-chat-view {}
+.pillar-chat-view-messages {}
+.pillar-chat-view-welcome {}
+.pillar-chat-view-message {}
+
+/* ============================================================================
+   User Message Bubble
+   Internal: _pillar-message-user | Public: pillar-message-user
+   ============================================================================ */
+
+._pillar-message-user {
+  display: inline-block;
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--pillar-spacing-lg);
+  border-bottom-right-radius: var(--pillar-radius-sm);
+  font-size: var(--pillar-font-size-base);
+  line-height: 1.5;
+  background: var(--pillar-primary);
+  color: #ffffff;
+  white-space: pre-wrap;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+._pillar-message-user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--pillar-spacing-sm);
+}
+
+._pillar-message-user-image {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: var(--pillar-radius-md);
+  object-fit: cover;
+}
+
+.pillar-message-user {}
+.pillar-message-user-images {}
+.pillar-message-user-image {}
+
+/* ============================================================================
+   AI Response
+   Internal: _pillar-message-assistant | Public: pillar-message-assistant
+   ============================================================================ */
+
+._pillar-message-assistant {
+  font-size: var(--pillar-font-size-base);
+  line-height: 1.6;
+  color: var(--pillar-text-secondary);
+}
+
+._pillar-message-assistant p {
+  margin: 0 0 var(--pillar-spacing-md);
+}
+
+._pillar-message-assistant p:last-child {
+  margin-bottom: 0;
+}
+
+._pillar-message-assistant h2 {
+  font-size: var(--pillar-font-size-lg);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin: var(--pillar-spacing-lg) 0 var(--pillar-spacing-sm);
+}
+
+._pillar-message-assistant h3 {
+  font-size: var(--pillar-font-size-md);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin: 14px 0 6px;
+}
+
+._pillar-message-assistant h4 {
+  font-size: var(--pillar-font-size-base);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin: var(--pillar-spacing-md) 0 6px;
+}
+
+._pillar-message-assistant ul,
+._pillar-message-assistant ol {
+  margin: 0 0 var(--pillar-spacing-md);
+  padding-left: var(--pillar-spacing-2xl);
+  list-style-position: outside;
+}
+
+._pillar-message-assistant ul {
+  list-style-type: disc;
+}
+
+._pillar-message-assistant ol {
+  list-style-type: decimal;
+}
+
+._pillar-message-assistant li {
+  margin-bottom: var(--pillar-spacing-xs);
+}
+
+._pillar-message-assistant code {
+  padding: 2px 6px;
+  font-size: var(--pillar-font-size-sm);
+  background: var(--pillar-bg-tertiary);
+  border-radius: var(--pillar-radius-sm);
+  font-family: var(--pillar-font-mono);
+  color: var(--pillar-text);
+}
+
+._pillar-message-assistant pre {
+  margin: var(--pillar-spacing-md) 0;
+  padding: var(--pillar-spacing-md) 14px;
+  background: var(--pillar-code-bg);
+  border-radius: var(--pillar-radius-lg);
+  overflow-x: auto;
+}
+
+._pillar-message-assistant pre code {
+  padding: 0;
+  background: none;
+  color: var(--pillar-code-text);
+  font-size: var(--pillar-font-size-sm);
+  line-height: 1.5;
+}
+
+._pillar-message-assistant a {
+  color: var(--pillar-primary);
+  text-decoration: none;
+}
+
+._pillar-message-assistant a:hover {
+  text-decoration: underline;
+}
+
+._pillar-message-assistant strong {
+  font-weight: 600;
+  color: var(--pillar-text);
+}
+
+._pillar-message-assistant em {
+  font-style: italic;
+}
+
+.pillar-message-assistant {}
+
+/* ============================================================================
+   Chat Sources
+   Internal: _pillar-chat-sources | Public: pillar-chat-sources
+   ============================================================================ */
+
+._pillar-chat-sources {
+  margin-top: var(--pillar-spacing-md);
+  padding-top: var(--pillar-spacing-md);
+  border-top: 1px solid var(--pillar-border);
+}
+
+._pillar-chat-sources-title {
+  font-size: var(--pillar-font-size-xs);
+  font-weight: 500;
+  color: var(--pillar-text-muted);
+  margin-bottom: var(--pillar-spacing-sm);
+}
+
+._pillar-chat-source {
+  display: block;
+  padding: var(--pillar-spacing-sm) var(--pillar-spacing-md);
+  margin-bottom: 6px;
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-primary);
+  background: var(--pillar-primary-light);
+  border-radius: var(--pillar-radius-lg);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--pillar-transition-fast);
+}
+
+._pillar-chat-source:hover {
+  background: var(--pillar-primary-light-hover);
+}
+
+.pillar-chat-sources {}
+.pillar-chat-sources-title {}
+.pillar-chat-source {}
+
+/* ============================================================================
+   Chat Actions (Suggested action buttons)
+   Internal: _pillar-chat-actions | Public: pillar-chat-actions
+   ============================================================================ */
+
+._pillar-chat-actions {
+  margin-top: var(--pillar-spacing-md);
+  padding-top: var(--pillar-spacing-md);
+  border-top: 1px solid var(--pillar-border);
+}
+
+._pillar-chat-actions-title {
+  font-size: var(--pillar-font-size-xs);
+  font-weight: 500;
+  color: var(--pillar-text-muted);
+  margin-bottom: var(--pillar-spacing-sm);
+}
+
+._pillar-chat-actions-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pillar-spacing-sm);
+}
+
+/* Task buttons should wrap horizontally */
+._pillar-chat-actions-buttons > ._pillar-task-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pillar-spacing-sm);
+}
+
+/* Confirm cards take full width */
+._pillar-chat-actions-buttons > .pillar-confirm-card-wrapper {
+  width: 100%;
+}
+
+.pillar-chat-actions {}
+.pillar-chat-actions-title {}
+.pillar-chat-actions-buttons {}
+
+/* ============================================================================
+   Chat View Input Area - Cursor-style design
+   ============================================================================ */
+
+._pillar-chat-view-input-area {
+  flex-shrink: 0;
+  padding: 0 var(--pillar-spacing-xl) var(--pillar-spacing-xl);
+  background: var(--pillar-bg);
+}
+
+._pillar-chat-view-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-xl);
+  transition: border-color var(--pillar-transition-fast), box-shadow var(--pillar-transition-fast);
+}
+
+._pillar-chat-view-input-wrapper:focus-within {
+  border-color: var(--pillar-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+._pillar-chat-view-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px 8px;
+  font-size: var(--pillar-font-size-base);
+  font-family: var(--pillar-font-family);
+  line-height: 1.5;
+  color: var(--pillar-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;
+  box-sizing: border-box;
+}
+
+._pillar-chat-view-input::placeholder {
+  color: var(--pillar-text-placeholder);
+}
+
+._pillar-chat-view-input-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+}
+
+._pillar-chat-view-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--pillar-text-muted);
+  background: var(--pillar-bg-tertiary);
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-chat-view-send-btn:hover:not(:disabled) {
+  color: #ffffff;
+  background: var(--pillar-primary);
+}
+
+._pillar-chat-view-send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+._pillar-chat-view-send-btn:disabled {
+  color: var(--pillar-text-placeholder);
+  background: var(--pillar-bg-tertiary);
+  cursor: not-allowed;
+}
+
+._pillar-chat-view-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pillar-chat-view-input-area {}
+.pillar-chat-view-input-wrapper {}
+.pillar-chat-view-input {}
+.pillar-chat-view-send-btn {}
+.pillar-chat-view-input-footer {}
+.pillar-chat-view-new-chat-btn {}
+
+/* New chat button styling */
+._pillar-chat-view-input-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--pillar-spacing-sm);
+}
+
+._pillar-chat-view-new-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: var(--pillar-font-size-sm);
+  font-weight: 500;
+  font-family: var(--pillar-font-family);
+  color: var(--pillar-text-muted);
+  background: transparent;
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-lg);
+  cursor: pointer;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-chat-view-new-chat-btn:hover {
+  color: var(--pillar-text);
+  background: var(--pillar-bg-secondary);
+  border-color: var(--pillar-text-muted);
+}
+
+._pillar-chat-view-new-chat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+._pillar-chat-view-new-chat-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Scrollbar for chat view */
+._pillar-chat-view-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+._pillar-chat-view-messages::-webkit-scrollbar-track {
+  background: var(--pillar-scrollbar-track);
+}
+
+._pillar-chat-view-messages::-webkit-scrollbar-thumb {
+  background: var(--pillar-scrollbar-thumb);
+  border-radius: 3px;
+}
+
+._pillar-chat-view-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--pillar-scrollbar-thumb-hover);
+}
+
+/* ============================================================================
+   Feedback Icons
+   Internal: _pillar-feedback | Public: pillar-feedback
+   ============================================================================ */
+
+._pillar-message-assistant-wrapper {
+  position: relative;
+}
+
+._pillar-feedback-icons {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--pillar-spacing-sm);
+  justify-content: flex-end;
+}
+
+._pillar-feedback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  color: var(--pillar-text-placeholder);
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-feedback-btn:hover {
+  color: var(--pillar-text-muted);
+  background: var(--pillar-bg-secondary);
+  border-color: var(--pillar-border);
+}
+
+._pillar-feedback-btn--active {
+  color: var(--pillar-primary);
+  background: var(--pillar-primary-light);
+  border-color: var(--pillar-primary);
+}
+
+._pillar-feedback-btn--active:hover {
+  color: var(--pillar-primary);
+  background: var(--pillar-primary-light-hover);
+}
+
+._pillar-feedback-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pillar-feedback-icons {}
+.pillar-feedback-btn {}
+.pillar-message-assistant-wrapper {}
+
+/* ============================================================================
+   Action Status Indicators
+   Internal: _pillar-action-status | Public: pillar-action-status
+   Shows completion status for auto-run actions (checkmark, X, or spinner)
+   ============================================================================ */
+
+._pillar-message-assistant-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+._pillar-action-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+._pillar-action-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+._pillar-action-status-indicator svg {
+  width: 16px;
+  height: 16px;
+}
+
+._pillar-action-status-indicator--success {
+  color: #22c55e;
+}
+
+._pillar-action-status-indicator--failed {
+  color: #ef4444;
+}
+
+._pillar-action-status-indicator--pending {
+  color: var(--pillar-text-muted);
+  animation: pillar-spin 1s linear infinite;
+}
+
+@keyframes pillar-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pillar-action-status {}
+.pillar-action-status-indicator {}
+.pillar-message-assistant-content {}

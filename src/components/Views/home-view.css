@@ -1,0 +1,115 @@
+/* ============================================================================
+   Home View
+   ============================================================================ */
+
+._pillar-home-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--pillar-spacing-xl);
+}
+
+._pillar-home-view-header {
+  text-align: center;
+  padding: var(--pillar-spacing-2xl) 0;
+}
+
+._pillar-home-view-icon {
+  font-size: 40px;
+  margin-bottom: var(--pillar-spacing-md);
+}
+
+._pillar-home-view-title {
+  font-size: var(--pillar-font-size-xl);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin: 0;
+}
+
+._pillar-home-view-questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pillar-spacing-sm);
+  margin-bottom: var(--pillar-spacing-xl);
+}
+
+._pillar-home-view-input-wrapper {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-xl);
+  transition: border-color var(--pillar-transition-fast), box-shadow var(--pillar-transition-fast);
+}
+
+._pillar-home-view-input-wrapper:focus-within {
+  border-color: var(--pillar-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+._pillar-home-view-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px 8px;
+  font-size: var(--pillar-font-size-base);
+  font-family: var(--pillar-font-family);
+  line-height: 1.5;
+  color: var(--pillar-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;
+  box-sizing: border-box;
+}
+
+._pillar-home-view-input::placeholder {
+  color: var(--pillar-text-placeholder);
+}
+
+._pillar-home-view-input-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+}
+
+._pillar-home-view-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--pillar-text-muted);
+  background: var(--pillar-bg-tertiary);
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-home-view-send-btn:hover:not(:disabled) {
+  color: #ffffff;
+  background: var(--pillar-primary);
+}
+
+._pillar-home-view-send-btn:disabled {
+  color: var(--pillar-text-placeholder);
+  background: var(--pillar-bg-tertiary);
+  cursor: not-allowed;
+}
+
+._pillar-home-view-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pillar-home-view {}
+.pillar-home-view-header {}
+.pillar-home-view-title {}
+.pillar-home-view-questions {}
+.pillar-home-view-input-wrapper {}
+.pillar-home-view-input {}
+.pillar-home-view-send-btn {}

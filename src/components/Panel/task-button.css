@@ -1,0 +1,152 @@
+/* Task Button Component */
+.pillar-task-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+
+.pillar-task-btn__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pillar-task-btn__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pillar-task-btn__label {
+  white-space: nowrap;
+}
+
+/* Primary variant (default) */
+.pillar-task-btn--primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.pillar-task-btn--primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* Default variant */
+.pillar-task-btn--default {
+  background: #f3f4f6;
+  color: #1a1a1a;
+  border-color: #e5e7eb;
+}
+
+.pillar-task-btn--default:hover {
+  background: #e5e7eb;
+}
+
+/* Secondary variant */
+.pillar-task-btn--secondary {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #dbeafe;
+}
+
+.pillar-task-btn--secondary:hover {
+  background: #dbeafe;
+}
+
+/* Outline variant */
+.pillar-task-btn--outline {
+  background: transparent;
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.pillar-task-btn--outline:hover {
+  background: #eff6ff;
+}
+
+/* Ghost variant */
+.pillar-task-btn--ghost {
+  background: transparent;
+  color: #6b7280;
+  border-color: transparent;
+}
+
+.pillar-task-btn--ghost:hover {
+  background: #f3f4f6;
+  color: #1a1a1a;
+}
+
+/* Active state for inline_ui buttons with expanded card */
+.pillar-task-btn--active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* Task button group */
+.pillar-task-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Inline card container for inline_ui actions */
+.pillar-task-btn-inline-card {
+  margin-top: 12px;
+  animation: pillar-slide-down 0.15s ease-out;
+}
+
+@keyframes pillar-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Task suggestion card in chat */
+.pillar-task-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.pillar-task-suggestion__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+}
+
+.pillar-task-suggestion__header svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pillar-task-suggestion__description {
+  font-size: 13px;
+  color: #374151;
+}

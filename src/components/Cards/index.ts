@@ -7,5 +7,4 @@
 export {
   createConfirmActionCard,
   createDefaultConfirmCard,
-  CONFIRM_CARD_STYLES,
 } from './ConfirmActionCard';

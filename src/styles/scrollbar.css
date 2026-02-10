@@ -1,0 +1,24 @@
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+._pillar-content::-webkit-scrollbar,
+._pillar-chat-input-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+._pillar-content::-webkit-scrollbar-track,
+._pillar-chat-input-messages::-webkit-scrollbar-track {
+  background: var(--pillar-scrollbar-track);
+}
+
+._pillar-content::-webkit-scrollbar-thumb,
+._pillar-chat-input-messages::-webkit-scrollbar-thumb {
+  background: var(--pillar-scrollbar-thumb);
+  border-radius: 3px;
+}
+
+._pillar-content::-webkit-scrollbar-thumb:hover,
+._pillar-chat-input-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--pillar-scrollbar-thumb-hover);
+}

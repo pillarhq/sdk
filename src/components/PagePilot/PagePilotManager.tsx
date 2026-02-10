@@ -7,7 +7,7 @@
 import { h, render } from 'preact';
 import { effect } from '@preact/signals';
 import { isPiloting } from '../../store/pagePilot';
-import { PAGE_PILOT_STYLES } from './styles';
+import pagePilotCSS from './page-pilot.css';
 import { PagePilotBanner } from './PagePilotBanner';
 import { injectStyles } from '../../utils/dom';
 
@@ -72,7 +72,7 @@ export class PagePilotManager {
     this.primaryColor = primaryColor;
     // Inject styles into the document (not shadow DOM)
     if (!this.stylesInjected) {
-      injectStyles(document, PAGE_PILOT_STYLES, STYLES_ID);
+      injectStyles(document, pagePilotCSS, STYLES_ID);
       this.stylesInjected = true;
     }
 

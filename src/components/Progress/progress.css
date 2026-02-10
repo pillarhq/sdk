@@ -1,0 +1,459 @@
+/* ============================================================================
+   Progress Row (for search, query, generating events)
+   Internal: _pillar-progress-row | Public: pillar-progress-row
+   ============================================================================ */
+
+._pillar-progress-events {
+  margin: 4px 0;
+}
+
+._pillar-progress-row {
+  margin: 1px 0;
+  padding: 1px 0;
+  font-size: 12px;
+  animation: pillar-progress-row-fade-in 0.3s ease-in-out;
+}
+
+._pillar-progress-row--error {
+  color: #dc2626;
+}
+
+@keyframes pillar-progress-row-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+._pillar-progress-row-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+._pillar-progress-expand-icon {
+  font-size: 10px;
+  color: var(--pillar-text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+._pillar-progress-row-header[style*="cursor: pointer"]:hover ._pillar-progress-expand-icon {
+  color: var(--pillar-text-secondary);
+}
+
+._pillar-progress-row-header[data-expanded="true"] ._pillar-progress-expand-icon {
+  transform: rotate(90deg);
+}
+
+._pillar-progress-message {
+  color: var(--pillar-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+._pillar-progress-no-results {
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+._pillar-progress-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+._pillar-progress-source-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+._pillar-progress-source-link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  overflow: hidden;
+  color: inherit;
+}
+
+._pillar-progress-source-link:hover ._pillar-progress-source-title {
+  text-decoration: underline;
+}
+
+._pillar-progress-source-title {
+  font-weight: 400;
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+}
+
+._pillar-progress-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+._pillar-progress-detail-item {
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  padding: 1px 0;
+}
+
+._pillar-progress-detail-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+._pillar-progress-detail-name {
+  font-weight: 500;
+}
+
+._pillar-progress-detail-desc {
+  color: var(--pillar-text-muted);
+  opacity: 0.8;
+}
+
+._pillar-progress-content-wrapper {
+  position: relative;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out;
+}
+
+._pillar-progress-content-wrapper--expanded {
+  grid-template-rows: 1fr;
+  margin-top: 6px;
+}
+
+._pillar-progress-content-container {
+  overflow: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pillar-scrollbar-thumb) transparent;
+}
+
+._pillar-progress-content-wrapper--expanded ._pillar-progress-content-container {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+._pillar-progress-content-container::-webkit-scrollbar-thumb {
+  background-color: var(--pillar-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+._pillar-progress-content-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(transparent, var(--pillar-bg));
+  pointer-events: none;
+}
+
+._pillar-progress-text {
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+._pillar-progress-text p {
+  margin: 0 0 4px 0;
+}
+
+._pillar-progress-text p:last-child {
+  margin-bottom: 0;
+}
+
+._pillar-progress-text ol,
+._pillar-progress-text ul {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+._pillar-progress-text li {
+  margin-bottom: 1px;
+}
+
+._pillar-progress-text br {
+  display: block;
+  content: "";
+  margin-top: 2px;
+}
+
+/* Chevron indicator for progress rows - rotates based on expanded state */
+/* Positioned inline next to label, hidden by default, shown on hover */
+._pillar-progress-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--pillar-text-muted);
+  transition: transform 0.2s ease, opacity 0.15s ease;
+  opacity: 0;
+}
+
+._pillar-progress-row:hover ._pillar-progress-chevron {
+  opacity: 1;
+}
+
+._pillar-progress-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--pillar-error, #dc2626);
+}
+
+/* Tool call arguments (inputs) */
+._pillar-progress-arguments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+._pillar-progress-argument-key {
+  color: var(--pillar-text-muted);
+}
+
+._pillar-progress-argument-value {
+  color: var(--pillar-text-secondary);
+}
+
+/* Text preview for streaming content */
+._pillar-progress-text-preview-wrapper {
+  position: relative;
+  margin-top: 4px;
+}
+
+._pillar-progress-text-preview {
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 11px;
+  color: var(--pillar-text-muted);
+  line-height: 1.4;
+  scroll-behavior: smooth;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pillar-scrollbar-thumb) transparent;
+}
+
+/* All content inside progress text preview should stay muted and small.
+   Markdown headers, paragraphs, etc. must not look like answer text. */
+._pillar-progress-text-preview * {
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: normal !important;
+  line-height: inherit !important;
+  margin: 0 !important;
+}
+
+/* Top gradient - fades out older text at the top */
+._pillar-progress-text-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to bottom, var(--pillar-bg), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar {
+  width: 4px;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+._pillar-progress-text-preview::-webkit-scrollbar-thumb {
+  background-color: var(--pillar-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+/* Active state indicator */
+._pillar-progress-row--active ._pillar-progress-message {
+  font-weight: 500;
+}
+
+/* Long text truncation for labels */
+._pillar-progress-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+/* Children/sub-items styling */
+._pillar-progress-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+._pillar-progress-child-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+._pillar-progress-child-link {
+  color: var(--pillar-text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+._pillar-progress-child-link:hover {
+  color: var(--pillar-text-secondary);
+  text-decoration: underline;
+}
+
+._pillar-progress-child-label {
+  color: var(--pillar-text-muted);
+  font-size: 11px;
+}
+
+/* ============================================================================
+   Progress Group (collapsible tool event groups)
+   Internal: _pillar-progress-group | Public: pillar-progress-group
+   ============================================================================ */
+
+._pillar-progress-group {
+  margin: 1px 0;
+  animation: pillar-progress-row-fade-in 0.3s ease-in-out;
+}
+
+._pillar-progress-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--pillar-text-secondary, #6b7280);
+  user-select: none;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+._pillar-progress-group-chevron {
+  flex-shrink: 0;
+  font-size: 8px;
+  line-height: 1;
+  color: inherit;
+}
+
+._pillar-progress-group-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+._pillar-progress-group-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pillar-brand, #3b82f6);
+  flex-shrink: 0;
+  animation: pillar-progress-group-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pillar-progress-group-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+._pillar-progress-group-children {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+  overflow: hidden;
+}
+
+._pillar-progress-group-children--expanded {
+  grid-template-rows: 1fr;
+}
+
+._pillar-progress-group-children-inner {
+  min-height: 0;
+  padding-left: 14px;
+}
+
+/* Nested rows inside groups have reduced spacing */
+._pillar-progress-row--nested {
+  margin: 0;
+  padding: 0;
+}
+
+._pillar-progress-row--nested ._pillar-progress-row-header {
+  padding: 2px 0;
+}
+
+._pillar-progress-row--nested ._pillar-progress-message {
+  font-size: 11px;
+}
+
+.pillar-progress-events {}
+.pillar-progress-chevron {}
+.pillar-progress-error-icon {}
+.pillar-progress-text-preview-wrapper {}
+.pillar-progress-text-preview {}
+.pillar-progress-text-gradient {}
+.pillar-progress-children {}
+.pillar-progress-child-item {}
+.pillar-progress-child-link {}
+.pillar-progress-child-label {}
+.pillar-progress-row {}
+.pillar-progress-row-header {}
+.pillar-progress-expand-icon {}
+.pillar-progress-message {}
+.pillar-progress-no-results {}
+.pillar-progress-sources {}
+.pillar-progress-source-item {}
+.pillar-progress-source-link {}
+.pillar-progress-source-title {}
+.pillar-progress-arguments {}
+.pillar-progress-argument {}
+.pillar-progress-argument-key {}
+.pillar-progress-argument-value {}
+.pillar-progress-content-wrapper {}
+.pillar-progress-content-container {}
+.pillar-progress-content-gradient {}
+.pillar-progress-text {}
+.pillar-progress-group {}
+.pillar-progress-group-header {}
+.pillar-progress-group-chevron {}
+.pillar-progress-group-summary {}
+.pillar-progress-group-active-dot {}
+.pillar-progress-group-children {}

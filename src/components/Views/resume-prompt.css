@@ -1,0 +1,153 @@
+/* ============================================================================
+   Resume Prompt (Session Resumption)
+   Internal: _pillar-resume-prompt | Public: pillar-resume-prompt
+   Shows when user reconnects and has an interrupted session to resume
+   ============================================================================ */
+
+._pillar-resume-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pillar-spacing-md);
+  padding: var(--pillar-spacing-lg);
+  margin: var(--pillar-spacing-md) 0;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-lg);
+}
+
+._pillar-resume-prompt--seamless {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--pillar-spacing-sm);
+  padding: var(--pillar-spacing-md) var(--pillar-spacing-lg);
+  background: transparent;
+  border: none;
+  justify-content: center;
+}
+
+._pillar-resume-prompt-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--pillar-border);
+  border-top-color: var(--pillar-primary);
+  border-radius: 50%;
+  animation: pillar-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+._pillar-resume-prompt-text {
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-text-muted);
+  font-style: italic;
+}
+
+._pillar-resume-prompt-content {
+  display: flex;
+  gap: var(--pillar-spacing-md);
+  align-items: flex-start;
+}
+
+._pillar-resume-prompt-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--pillar-primary);
+  background: var(--pillar-primary-light);
+  border-radius: var(--pillar-radius-md);
+}
+
+._pillar-resume-prompt-body {
+  flex: 1;
+  min-width: 0;
+}
+
+._pillar-resume-prompt-title {
+  font-size: var(--pillar-font-size-base);
+  font-weight: 600;
+  color: var(--pillar-text);
+  margin-bottom: var(--pillar-spacing-xs);
+}
+
+._pillar-resume-prompt-message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-text-muted);
+}
+
+._pillar-resume-prompt-user-msg {
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+._pillar-resume-prompt-summary {
+  font-size: var(--pillar-font-size-xs);
+  color: var(--pillar-text-placeholder);
+}
+
+._pillar-resume-prompt-actions {
+  display: flex;
+  gap: var(--pillar-spacing-sm);
+  justify-content: flex-end;
+}
+
+._pillar-resume-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: var(--pillar-font-size-sm);
+  font-weight: 500;
+  font-family: var(--pillar-font-family);
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  transition: all var(--pillar-transition-fast);
+  border: 1px solid transparent;
+}
+
+._pillar-resume-prompt-btn--primary {
+  background: var(--pillar-primary);
+  color: #ffffff;
+  border-color: var(--pillar-primary);
+}
+
+._pillar-resume-prompt-btn--primary:hover {
+  background: var(--pillar-primary-hover);
+  border-color: var(--pillar-primary-hover);
+}
+
+._pillar-resume-prompt-btn--ghost {
+  background: transparent;
+  color: var(--pillar-text-muted);
+  border-color: transparent;
+}
+
+._pillar-resume-prompt-btn--ghost:hover {
+  background: var(--pillar-bg-tertiary);
+  color: var(--pillar-text);
+}
+
+._pillar-resume-prompt-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.pillar-resume-prompt {}
+.pillar-resume-prompt-spinner {}
+.pillar-resume-prompt-text {}
+.pillar-resume-prompt-content {}
+.pillar-resume-prompt-icon {}
+.pillar-resume-prompt-body {}
+.pillar-resume-prompt-title {}
+.pillar-resume-prompt-message {}
+.pillar-resume-prompt-user-msg {}
+.pillar-resume-prompt-summary {}
+.pillar-resume-prompt-actions {}
+.pillar-resume-prompt-btn {}

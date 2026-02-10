@@ -1,9 +1,3 @@
-/**
- * DevTools CSS Styles
- * Styles for the DOM Scanner preview panel
- */
-
-export const DEVTOOLS_STYLES = `
 /* Pillar DevTools Styles */
 .pillar-devtools-overlay {
   position: fixed;
@@ -264,4 +258,3 @@ export const DEVTOOLS_STYLES = `
 .pillar-devtools-btn--primary:hover {
   background: #4f46e5;
 }
-`;

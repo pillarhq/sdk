@@ -6,9 +6,29 @@ import alias from '@rollup/plugin-alias';
 
 const production = !process.env.ROLLUP_WATCH;
 
+/**
+ * Raw CSS plugin - imports .css files as string constants.
+ * This allows CSS to live in plain .css files while still being
+ * inlined into the JS bundle for Shadow DOM / head injection.
+ */
+function rawCSSPlugin() {
+  return {
+    name: 'raw-css',
+    transform(code, id) {
+      if (id.endsWith('.css')) {
+        return {
+          code: `export default ${JSON.stringify(code)};`,
+          map: null,
+        };
+      }
+    },
+  };
+}
+
 // Common plugins used across all builds
 const getPlugins = (minify = false) => {
   const plugins = [
+    rawCSSPlugin(),
     alias({
       entries: [
         { find: 'react', replacement: 'preact/compat' },

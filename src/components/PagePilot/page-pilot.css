@@ -1,10 +1,3 @@
-/**
- * Page Pilot Banner CSS Styles
- * Injected into the document head (outside Shadow DOM)
- * Uses the same CSS variables as the Pillar panel for consistent theming
- */
-
-export const PAGE_PILOT_STYLES = `
 /* Pillar Page Pilot Banner Styles */
 
 /* Define CSS variables at the container level (same as panel) */
@@ -254,4 +247,3 @@ html.dark #pillar-page-pilot-container,
 ._pillar-page-pilot-banner__allow:active {
   transform: scale(0.97);
 }
-`;

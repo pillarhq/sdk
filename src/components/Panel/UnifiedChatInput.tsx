@@ -4,27 +4,27 @@
  * Used across all views in the SDK
  */
 
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
+  addPendingImage,
+  clearPendingImages,
   clearUserContext,
+  getReadyImages,
+  isUploadingImages,
+  pendingImages,
+  removePendingImage,
   removeUserContext,
   setPendingMessage,
   setPendingUserContext,
-  userContext,
-  pendingImages,
-  isUploadingImages,
-  addPendingImage,
   updateImageStatus,
-  removePendingImage,
-  clearPendingImages,
-  getReadyImages,
-  type PendingImage,
+  userContext,
   type ChatImage,
-} from '../../store/chat';
-import { navigateToChat } from '../../store/router';
-import { ContextTagList } from './ContextTag';
-import type { UserContextItem } from '../../types';
-import { useAPI } from '../context';
+  type PendingImage,
+} from "../../store/chat";
+import { navigateToChat } from "../../store/router";
+import type { UserContextItem } from "../../types";
+import { useAPI } from "../context";
+import { ContextTagList } from "./ContextTag";
 
 // Arrow up icon for send button
 const SEND_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
@@ -50,7 +50,11 @@ interface UnifiedChatInputProps {
   /** Whether the input is disabled */
   disabled?: boolean;
   /** Custom submit handler - if provided, will be called instead of default navigation */
-  onSubmit?: (message: string, context: UserContextItem[], images: ChatImage[]) => void;
+  onSubmit?: (
+    message: string,
+    context: UserContextItem[],
+    images: ChatImage[]
+  ) => void;
   /** Whether to show context tags (default: true) */
   showContextTags?: boolean;
   /** Whether to show image upload button (default: true) */
@@ -64,87 +68,99 @@ interface UnifiedChatInputProps {
 }
 
 export function UnifiedChatInput({
-  placeholder = 'Ask anything...',
+  placeholder = "Ask anything...",
   disabled = false,
   onSubmit,
   showContextTags = true,
   showImageUpload = true,
-  className = '',
+  className = "",
   isStreaming = false,
   onStop,
 }: UnifiedChatInputProps) {
   const api = useAPI();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const resizeTextarea = useCallback(() => {
     const textarea = inputRef.current;
     if (!textarea) return;
 
-    textarea.style.height = '41px';
+    textarea.style.height = "41px";
     const scrollHeight = textarea.scrollHeight;
 
     if (scrollHeight > MAX_INPUT_HEIGHT) {
       textarea.style.height = `${MAX_INPUT_HEIGHT}px`;
-      textarea.style.overflowY = 'auto';
+      textarea.style.overflowY = "auto";
     } else {
       textarea.style.height = `${scrollHeight}px`;
-      textarea.style.overflowY = 'hidden';
+      textarea.style.overflowY = "hidden";
     }
   }, []);
 
   // Upload a single image file
-  const uploadImage = useCallback(async (file: File) => {
-    if (pendingImages.value.length >= 4) return;
+  const uploadImage = useCallback(
+    async (file: File) => {
+      if (pendingImages.value.length >= 4) return;
 
-    const id = `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const preview = URL.createObjectURL(file);
+      const id = `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const preview = URL.createObjectURL(file);
 
-    const pendingImage: PendingImage = {
-      id,
-      file,
-      preview,
-      status: 'uploading',
-    };
+      const pendingImage: PendingImage = {
+        id,
+        file,
+        preview,
+        status: "uploading",
+      };
 
-    addPendingImage(pendingImage);
+      addPendingImage(pendingImage);
 
-    try {
-      const response = await api.uploadImage(file);
-      updateImageStatus(id, 'ready', response.url);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Upload failed';
-      updateImageStatus(id, 'error', undefined, errorMsg);
-    }
-  }, [api]);
+      try {
+        const response = await api.uploadImage(file);
+        updateImageStatus(id, "ready", response.url);
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : "Upload failed";
+        updateImageStatus(id, "error", undefined, errorMsg);
+      }
+    },
+    [api]
+  );
 
   // Handle multiple image files
-  const handleImageFiles = useCallback((files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-    const availableSlots = 4 - pendingImages.value.length;
-    imageFiles.slice(0, availableSlots).forEach(uploadImage);
-  }, [uploadImage]);
+  const handleImageFiles = useCallback(
+    (files: FileList | File[]) => {
+      const imageFiles = Array.from(files).filter((f) =>
+        f.type.startsWith("image/")
+      );
+      const availableSlots = 4 - pendingImages.value.length;
+      imageFiles.slice(0, availableSlots).forEach(uploadImage);
+    },
+    [uploadImage]
+  );
 
   // Handle paste event for images
-  const handlePaste = useCallback((e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
 
-    const imageFiles: File[] = [];
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+      const imageFiles: File[] = [];
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
       }
-    }
 
-    if (imageFiles.length > 0) {
-      e.preventDefault();
-      handleImageFiles(imageFiles);
-    }
-  }, [handleImageFiles]);
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        handleImageFiles(imageFiles);
+      }
+    },
+    [handleImageFiles]
+  );
 
   // Drag and drop handlers
   const handleDragOver = useCallback((e: DragEvent) => {
@@ -159,25 +175,31 @@ export function UnifiedChatInput({
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = e.dataTransfer?.files;
-    if (files) {
-      handleImageFiles(files);
-    }
-  }, [handleImageFiles]);
+      const files = e.dataTransfer?.files;
+      if (files) {
+        handleImageFiles(files);
+      }
+    },
+    [handleImageFiles]
+  );
 
   // Handle file input change
-  const handleFileSelect = useCallback((e: Event) => {
-    const input = e.target as HTMLInputElement;
-    if (input.files) {
-      handleImageFiles(input.files);
-      input.value = ''; // Reset for next selection
-    }
-  }, [handleImageFiles]);
+  const handleFileSelect = useCallback(
+    (e: Event) => {
+      const input = e.target as HTMLInputElement;
+      if (input.files) {
+        handleImageFiles(input.files);
+        input.value = ""; // Reset for next selection
+      }
+    },
+    [handleImageFiles]
+  );
 
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -221,24 +243,28 @@ export function UnifiedChatInput({
     }
 
     // Clear input
-    setInputValue('');
+    setInputValue("");
     if (inputRef.current) {
-      inputRef.current.style.height = '41px';
-      inputRef.current.style.overflowY = 'hidden';
+      inputRef.current.style.height = "41px";
+      inputRef.current.style.overflowY = "hidden";
     }
   }, [inputValue, onSubmit]);
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
   const isUploading = isUploadingImages.value;
-  const canSubmit = inputValue.trim() || userContext.value.length > 0 || pendingImages.value.some(img => img.status === 'ready');
+  const canSubmit =
+    inputValue.trim() ||
+    userContext.value.length > 0 ||
+    pendingImages.value.some((img) => img.status === "ready");
 
-  const wrapperClass = `_pillar-unified-input-wrapper pillar-unified-input-wrapper ${isDragging ? '_pillar-unified-input-wrapper--dragging' : ''} ${className}`.trim();
+  const wrapperClass =
+    `_pillar-unified-input-wrapper pillar-unified-input-wrapper ${isDragging ? "_pillar-unified-input-wrapper--dragging" : ""} ${className}`.trim();
 
   return (
     <div
@@ -254,22 +280,33 @@ export function UnifiedChatInput({
         accept="image/*"
         multiple
         onChange={handleFileSelect}
-        style={{ display: 'none' }}
+        style={{ display: "none" }}
       />
 
       {/* Pending images preview */}
       {pendingImages.value.length > 0 && (
         <div class="_pillar-chat-images-preview pillar-chat-images-preview">
           {pendingImages.value.map((img) => (
-            <div key={img.id} class="_pillar-chat-image-thumb pillar-chat-image-thumb">
+            <div
+              key={img.id}
+              class="_pillar-chat-image-thumb pillar-chat-image-thumb"
+            >
               <img src={img.preview} alt="Upload preview" />
-              {img.status === 'uploading' && (
+              {img.status === "uploading" && (
                 <div class="_pillar-chat-image-loading pillar-chat-image-loading">
-                  <div class="_pillar-loading-spinner pillar-loading-spinner" style={{ width: '16px', height: '16px' }} />
+                  <div
+                    class="_pillar-loading-spinner pillar-loading-spinner"
+                    style={{ width: "16px", height: "16px" }}
+                  />
                 </div>
               )}
-              {img.status === 'error' && (
-                <div class="_pillar-chat-image-error pillar-chat-image-error" title={img.error}>!</div>
+              {img.status === "error" && (
+                <div
+                  class="_pillar-chat-image-error pillar-chat-image-error"
+                  title={img.error}
+                >
+                  !
+                </div>
               )}
               <button
                 type="button"
@@ -285,20 +322,23 @@ export function UnifiedChatInput({
 
       {/* Context tags - below images */}
       {showContextTags && (
-        <ContextTagList contexts={userContext.value} onRemove={removeUserContext} />
+        <ContextTagList
+          contexts={userContext.value}
+          onRemove={removeUserContext}
+        />
       )}
 
       <textarea
         ref={inputRef}
         class="_pillar-unified-input pillar-unified-input"
-        placeholder={isDragging ? 'Drop image here...' : placeholder}
+        placeholder={isDragging ? "Drop image here..." : placeholder}
         value={inputValue}
         onInput={handleInputChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         disabled={disabled || isStreaming}
         maxLength={MAX_MESSAGE_LENGTH}
-        style={{ height: '41px' }}
+        style={{ height: "41px" }}
       />
 
       <div class="_pillar-unified-input-row pillar-unified-input-row">
@@ -308,30 +348,34 @@ export function UnifiedChatInput({
             type="button"
             class="_pillar-chat-image-btn pillar-chat-image-btn"
             onClick={openFilePicker}
-            disabled={disabled || isUploading || pendingImages.value.length >= 4}
+            disabled={
+              disabled || isUploading || pendingImages.value.length >= 4
+            }
             aria-label="Attach image"
             title="Attach image (max 4)"
             dangerouslySetInnerHTML={{ __html: IMAGE_ICON }}
           />
         )}
-        {isStreaming ? (
-          <button
-            type="button"
-            class="_pillar-unified-stop-btn pillar-unified-stop-btn"
-            onClick={onStop}
-            aria-label="Stop generating"
-            dangerouslySetInnerHTML={{ __html: STOP_ICON }}
-          />
-        ) : (
-          <button
-            type="button"
-            class="_pillar-unified-send-btn pillar-unified-send-btn"
-            onClick={handleSubmit}
-            disabled={disabled || isUploading || !canSubmit}
-            aria-label="Send message"
-            dangerouslySetInnerHTML={{ __html: SEND_ICON }}
-          />
-        )}
+        <div class="_pillar-unified-input-actions pillar-unified-input-actions">
+          {isStreaming ? (
+            <button
+              type="button"
+              class="_pillar-unified-stop-btn pillar-unified-stop-btn"
+              onClick={onStop}
+              aria-label="Stop generating"
+              dangerouslySetInnerHTML={{ __html: STOP_ICON }}
+            />
+          ) : (
+            <button
+              type="button"
+              class="_pillar-unified-send-btn pillar-unified-send-btn"
+              onClick={handleSubmit}
+              disabled={disabled || isUploading || !canSubmit}
+              aria-label="Send message"
+              dangerouslySetInnerHTML={{ __html: SEND_ICON }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Drag overlay */}

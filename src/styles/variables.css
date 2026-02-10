@@ -1,0 +1,128 @@
+/* ============================================================================
+   CSS Custom Properties (Variables)
+   Users can override these to customize colors
+   ============================================================================ */
+
+:host {
+  /* Core colors - Light mode (default) */
+  --pillar-primary: #2563eb;
+  --pillar-primary-hover: #1d4ed8;
+  --pillar-primary-light: #eff6ff;
+  --pillar-primary-light-hover: #dbeafe;
+  
+  --pillar-bg: #ffffff;
+  --pillar-bg-secondary: #f9fafb;
+  --pillar-bg-tertiary: #f3f4f6;
+  
+  --pillar-text: #1a1a1a;
+  --pillar-text-secondary: #374151;
+  --pillar-text-muted: #6b7280;
+  --pillar-text-placeholder: #9ca3af;
+  
+  --pillar-border: #e5e7eb;
+  --pillar-border-light: #f3f4f6;
+  
+  /* Shadows */
+  --pillar-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --pillar-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  
+  /* Code blocks */
+  --pillar-code-bg: #1f2937;
+  --pillar-code-text: #e5e7eb;
+  
+  /* Scrollbar */
+  --pillar-scrollbar-track: transparent;
+  --pillar-scrollbar-thumb: #d1d5db;
+  --pillar-scrollbar-thumb-hover: #9ca3af;
+  
+  /* Spacing (can be customized) */
+  --pillar-panel-width: 380px;
+  --pillar-spacing-xs: 4px;
+  --pillar-spacing-sm: 8px;
+  --pillar-spacing-md: 12px;
+  --pillar-spacing-lg: 16px;
+  --pillar-spacing-xl: 20px;
+  --pillar-spacing-2xl: 24px;
+  
+  /* Border radius */
+  --pillar-radius-sm: 4px;
+  --pillar-radius-md: 6px;
+  --pillar-radius-lg: 8px;
+  --pillar-radius-xl: 10px;
+  --pillar-radius-full: 9999px;
+  
+  /* Typography */
+  --pillar-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --pillar-font-mono: 'SF Mono', Consolas, monospace;
+  --pillar-font-size-xs: 11px;
+  --pillar-font-size-sm: 12px;
+  --pillar-font-size-base: 14px;
+  --pillar-font-size-md: 15px;
+  --pillar-font-size-lg: 16px;
+  --pillar-font-size-xl: 18px;
+  --pillar-font-size-2xl: 20px;
+  
+  /* Animation */
+  --pillar-transition-fast: 0.15s ease;
+  --pillar-transition-normal: 0.3s ease;
+}
+
+/* Dark mode - Auto-detect from system preference */
+@media (prefers-color-scheme: dark) {
+  :host:not([data-theme="light"]) {
+    --pillar-primary: #3b82f6;
+    --pillar-primary-hover: #60a5fa;
+    --pillar-primary-light: #1e3a5f;
+    --pillar-primary-light-hover: #1e4976;
+    
+    --pillar-bg: #1a1a1a;
+    --pillar-bg-secondary: #262626;
+    --pillar-bg-tertiary: #333333;
+    
+    --pillar-text: #f5f5f5;
+    --pillar-text-secondary: #e5e5e5;
+    --pillar-text-muted: #a3a3a3;
+    --pillar-text-placeholder: #737373;
+    
+    --pillar-border: #404040;
+    --pillar-border-light: #333333;
+    
+    --pillar-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --pillar-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    
+    --pillar-code-bg: #0d0d0d;
+    --pillar-code-text: #e5e7eb;
+    
+    --pillar-scrollbar-thumb: #525252;
+    --pillar-scrollbar-thumb-hover: #737373;
+  }
+}
+
+/* Dark mode - Manual override */
+:host([data-theme="dark"]) {
+  --pillar-primary: #3b82f6;
+  --pillar-primary-hover: #60a5fa;
+  --pillar-primary-light: #1e3a5f;
+  --pillar-primary-light-hover: #1e4976;
+  
+  --pillar-bg: #1a1a1a;
+  --pillar-bg-secondary: #262626;
+  --pillar-bg-tertiary: #333333;
+  
+  --pillar-text: #f5f5f5;
+  --pillar-text-secondary: #e5e5e5;
+  --pillar-text-muted: #a3a3a3;
+  --pillar-text-placeholder: #737373;
+  
+  --pillar-border: #404040;
+  --pillar-border-light: #333333;
+  
+  --pillar-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pillar-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  
+  --pillar-code-bg: #0d0d0d;
+  --pillar-code-text: #e5e7eb;
+  
+  --pillar-scrollbar-thumb: #525252;
+  --pillar-scrollbar-thumb-hover: #737373;
+}

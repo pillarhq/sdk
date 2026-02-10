@@ -6,6 +6,7 @@
 
 import { render } from "preact";
 import { useCallback } from "preact/hooks";
+import edgeTriggerCSS from './edge-trigger.css';
 import type {
   ResolvedConfig,
   SidebarTabConfig,
@@ -51,117 +52,7 @@ const getTabIcon = (tabId: string, icon?: string): string => {
 // Width of the sidebar trigger
 const TRIGGER_WIDTH = 48;
 
-// Base styles use SDK theme variables for consistency with Panel
-const EDGE_TRIGGER_STYLES = `
-/* Sidebar container - always visible, shifts when panel opens */
-.pillar-edge-sidebar {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  width: ${TRIGGER_WIDTH}px;
-  z-index: 100000;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: var(--pillar-bg);
-  border-left: 1px solid var(--pillar-border);
-  transition: right 0.3s ease, left 0.3s ease;
-}
-
-.pillar-edge-sidebar--right {
-  right: 0;
-  border-left: 1px solid var(--pillar-border);
-  border-right: none;
-}
-
-.pillar-edge-sidebar--left {
-  left: 0;
-  border-right: 1px solid var(--pillar-border);
-  border-left: none;
-}
-
-/* When panel is open, shift the trigger to sit at the panel's outer edge */
-.pillar-edge-sidebar--right.pillar-edge-sidebar--panel-open {
-  right: var(--pillar-panel-width, 380px);
-}
-
-.pillar-edge-sidebar--left.pillar-edge-sidebar--panel-open {
-  left: var(--pillar-panel-width, 380px);
-}
-
-/* The trigger button - vertical sideways text */
-.pillar-edge-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 8px;
-  margin-top: 8px;
-  font-family: var(--pillar-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--pillar-text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  outline: none;
-  gap: 8px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-}
-
-.pillar-edge-trigger:hover {
-  background: var(--pillar-bg-secondary);
-  color: var(--pillar-primary);
-}
-
-.pillar-edge-trigger--active {
-  background: var(--pillar-primary-light, rgba(194, 65, 12, 0.1));
-  color: var(--pillar-primary);
-}
-
-.pillar-edge-trigger--active .pillar-edge-trigger__icon {
-  opacity: 1;
-  color: var(--pillar-primary);
-}
-
-.pillar-edge-trigger:focus-visible {
-  background: var(--pillar-bg-secondary);
-  box-shadow: 0 0 0 2px var(--pillar-primary);
-}
-
-.pillar-edge-trigger__icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  opacity: 0.8;
-}
-
-.pillar-edge-trigger:hover .pillar-edge-trigger__icon {
-  opacity: 1;
-  color: var(--pillar-primary);
-}
-
-.pillar-edge-trigger__label {
-  white-space: nowrap;
-  letter-spacing: 0.5px;
-}
-
-/* Animation on mount */
-@keyframes pillar-sidebar-mount {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.pillar-edge-sidebar--mounted {
-  animation: pillar-sidebar-mount 0.2s ease forwards;
-}
-`;
+// Styles are now loaded from edge-trigger.css via raw import
 
 /**
  * Generate theme CSS variables for the edge trigger
@@ -390,7 +281,7 @@ export class EdgeTrigger {
   init(): void {
     // Inject base styles
     if (!this.stylesInjected) {
-      injectStyles(document, EDGE_TRIGGER_STYLES, "pillar-edge-trigger-styles");
+      injectStyles(document, edgeTriggerCSS, "pillar-edge-trigger-styles");
       this.stylesInjected = true;
     }
 

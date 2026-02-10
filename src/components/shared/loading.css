@@ -1,0 +1,136 @@
+/* ============================================================================
+   Loading States
+   Internal: _pillar-loading | Public: pillar-loading
+   ============================================================================ */
+
+._pillar-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px var(--pillar-spacing-xl);
+  color: var(--pillar-text-muted);
+}
+
+._pillar-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--pillar-border);
+  border-top-color: var(--pillar-primary);
+  border-radius: 50%;
+  animation: pillar-spin 0.8s linear infinite;
+}
+
+@keyframes pillar-spin {
+  to { transform: rotate(360deg); }
+}
+
+.pillar-loading {}
+.pillar-loading-spinner {}
+
+/* ============================================================================
+   Progress Indicator (AI activity status)
+   Internal: _pillar-progress | Public: pillar-progress
+   ============================================================================ */
+
+._pillar-progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--pillar-spacing-sm);
+  padding: var(--pillar-spacing-sm) 0;
+}
+
+._pillar-progress-indicator ._pillar-loading-spinner {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+._pillar-progress-message {
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-text-muted);
+  font-style: italic;
+}
+
+.pillar-progress-indicator {}
+.pillar-progress-message {}
+
+._pillar-thinking-shimmer {
+  display: inline-block;
+  font-size: var(--pillar-font-size-sm);
+  color: var(--pillar-text-muted);
+  background: linear-gradient(
+    90deg,
+    var(--pillar-text-muted) 0%,
+    var(--pillar-text-primary, #e5e5e5) 40%,
+    var(--pillar-text-muted) 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pillar-shimmer 2s ease-in-out infinite;
+}
+
+.pillar-thinking-shimmer {}
+
+/* ============================================================================
+   Empty States
+   Internal: _pillar-empty | Public: pillar-empty
+   ============================================================================ */
+
+._pillar-empty {
+  padding: 40px var(--pillar-spacing-xl);
+  text-align: center;
+  color: var(--pillar-text-muted);
+}
+
+._pillar-empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--pillar-spacing-lg);
+  color: var(--pillar-border);
+}
+
+._pillar-empty-title {
+  font-size: var(--pillar-font-size-lg);
+  font-weight: 500;
+  color: var(--pillar-text);
+  margin-bottom: var(--pillar-spacing-xs);
+}
+
+._pillar-empty-description {
+  font-size: var(--pillar-font-size-base);
+}
+
+.pillar-empty {}
+.pillar-empty-icon {}
+.pillar-empty-title {}
+.pillar-empty-description {}
+
+/* ============================================================================
+   Section Titles
+   Internal: _pillar-section-title | Public: pillar-section-title
+   ============================================================================ */
+
+._pillar-section-title {
+  padding: var(--pillar-spacing-md) var(--pillar-spacing-xl) var(--pillar-spacing-sm);
+  font-size: var(--pillar-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--pillar-text-muted);
+}
+
+.pillar-section-title {}
+
+/* ============================================================================
+   Related Articles
+   ============================================================================ */
+
+._pillar-related-articles {
+  border-top: 1px solid var(--pillar-border);
+  margin-top: var(--pillar-spacing-2xl);
+  padding-top: var(--pillar-spacing-sm);
+}
+
+.pillar-related-articles {}

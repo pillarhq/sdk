@@ -1,0 +1,118 @@
+/* ============================================================================
+   Unified Chat Input
+   Internal: _pillar-unified-input | Public: pillar-unified-input
+   Reusable input component with context tag support
+   ============================================================================ */
+
+._pillar-unified-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
+  border-radius: var(--pillar-radius-xl);
+  transition: border-color var(--pillar-transition-fast), box-shadow var(--pillar-transition-fast);
+}
+
+._pillar-unified-input-wrapper:focus-within {
+  border-color: var(--pillar-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+._pillar-unified-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px 8px;
+  font-size: var(--pillar-font-size-base);
+  font-family: var(--pillar-font-family);
+  line-height: 1.5;
+  color: var(--pillar-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;
+  box-sizing: border-box;
+}
+
+._pillar-unified-input::placeholder {
+  color: var(--pillar-text-placeholder);
+}
+
+._pillar-unified-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+._pillar-unified-input-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: 4px 8px 0px 8px;
+}
+
+._pillar-unified-input-actions {
+  padding-bottom: 8px;
+}
+
+._pillar-unified-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #ffffff;
+  background: var(--pillar-primary);
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-unified-send-btn:hover:not(:disabled) {
+  background: var(--pillar-primary-hover);
+}
+
+._pillar-unified-send-btn:disabled {
+  color: var(--pillar-text-placeholder);
+  background: var(--pillar-bg-tertiary);
+  cursor: not-allowed;
+}
+
+._pillar-unified-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pillar-unified-input-wrapper {}
+.pillar-unified-input {}
+.pillar-unified-input-row {}
+.pillar-unified-send-btn {}
+
+._pillar-unified-stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--pillar-text-muted);
+  background: var(--pillar-bg-tertiary);
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--pillar-transition-fast);
+}
+
+._pillar-unified-stop-btn:hover {
+  opacity: 0.9;
+}
+
+._pillar-unified-stop-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.pillar-unified-stop-btn {}

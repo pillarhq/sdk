@@ -38,14 +38,10 @@ import {
   resetRouter,
   type ViewType,
 } from '../../store/router';
-import { CONFIRM_CARD_STYLES } from '../Cards/ConfirmActionCard';
 import { PillarProvider } from '../context';
 import { PanelContent } from './PanelContent';
-import { PANEL_STYLES, generateThemeCSS } from './styles';
-import { TASK_BUTTON_STYLES } from './TaskButton';
-import { WORKFLOW_STYLES } from './WorkflowChecklist';
-import { MARKDOWN_COMPONENT_STYLES } from '../../utils/markdown-components';
-import { PREACT_MARKDOWN_STYLES } from '../../utils/preact-markdown';
+import { ALL_PANEL_STYLES } from '../../styles/panel-styles';
+import { generateThemeCSS } from '../../styles/theme';
 
 export class Panel {
   private config: ResolvedConfig;
@@ -393,7 +389,7 @@ export class Panel {
     const styleId = 'pillar-sdk-styles';
     if (document.getElementById(styleId)) return; // Prevent duplicates
 
-    const rawCSS = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + MARKDOWN_COMPONENT_STYLES + PREACT_MARKDOWN_STYLES;
+    const rawCSS = ALL_PANEL_STYLES;
     const transformedCSS = this.transformStylesForRegularDOM(rawCSS);
 
     const styles = document.createElement('style');
@@ -427,7 +423,7 @@ export class Panel {
 
     // Inject base styles
     const styles = document.createElement('style');
-    styles.textContent = PANEL_STYLES + TASK_BUTTON_STYLES + WORKFLOW_STYLES + CONFIRM_CARD_STYLES + MARKDOWN_COMPONENT_STYLES + PREACT_MARKDOWN_STYLES;
+    styles.textContent = ALL_PANEL_STYLES;
     this.shadow.appendChild(styles);
 
     // Inject theme customization CSS (color overrides from config)

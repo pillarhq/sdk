@@ -1,0 +1,14 @@
+/* ============================================================================
+   Base Styles
+   Note: No CSS reset - we rely on explicit styles for SDK components
+   and allow custom cards to inherit host app styling (Tailwind, etc.)
+   ============================================================================ */
+
+:host {
+  font-family: var(--pillar-font-family);
+  font-size: var(--pillar-font-size-base);
+  line-height: 1.5;
+  color: var(--pillar-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

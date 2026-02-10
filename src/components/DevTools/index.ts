@@ -3,4 +3,4 @@
  * Development tools for debugging and previewing Pillar SDK features
  */
 
-export { DEVTOOLS_STYLES } from './styles';
+export { default as devtoolsCSS } from './devtools.css';
