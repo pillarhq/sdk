@@ -3,17 +3,16 @@
  * Shadow DOM container for the help panel with Preact rendering
  */
 
-import { render } from 'preact';
-import type { APIClient } from '../../api/client';
-import type { ResolvedConfig } from '../../core/config';
-import type { EventEmitter } from '../../core/events';
-import { debug } from '../../utils/debug';
+import { render } from "preact";
+import type { APIClient } from "../../api/client";
+import type { ResolvedConfig } from "../../core/config";
+import type { EventEmitter } from "../../core/events";
 import {
   resetChat,
   setPendingMessage,
   triggerInputFocus,
   triggerSubmitPending,
-} from '../../store/chat';
+} from "../../store/chat";
 import {
   closePanel,
   destroyViewportListener,
@@ -22,6 +21,7 @@ import {
   initViewportListener,
   isFullWidth,
   isHoverMode,
+  isMobileMode,
   isOpen,
   openPanel,
   position,
@@ -31,17 +31,14 @@ import {
   setMode,
   setPosition,
   setWidth,
-  width
-} from '../../store/panel';
-import {
-  navigate,
-  resetRouter,
-  type ViewType,
-} from '../../store/router';
-import { PillarProvider } from '../context';
-import { PanelContent } from './PanelContent';
-import { ALL_PANEL_STYLES } from '../../styles/panel-styles';
-import { generateThemeCSS } from '../../styles/theme';
+  width,
+} from "../../store/panel";
+import { navigate, resetRouter, type ViewType } from "../../store/router";
+import { ALL_PANEL_STYLES } from "../../styles/panel-styles";
+import { generateThemeCSS } from "../../styles/theme";
+import { debug } from "../../utils/debug";
+import { PillarProvider } from "../context";
+import { PanelContent } from "./PanelContent";
 
 export class Panel {
   private config: ResolvedConfig;
@@ -53,17 +50,23 @@ export class Panel {
   private shadow: ShadowRoot | null = null;
   private backdrop: HTMLElement | null = null;
   private panelElement: HTMLElement | null = null;
+  private mobileHandle: HTMLElement | null = null;
   private renderRoot: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
   private isManualMount: boolean = false;
   private themeObserver: MutationObserver | null = null;
 
-  constructor(config: ResolvedConfig, api: APIClient, events: EventEmitter, rootContainer?: HTMLElement | null) {
+  constructor(
+    config: ResolvedConfig,
+    api: APIClient,
+    events: EventEmitter,
+    rootContainer?: HTMLElement | null
+  ) {
     this.config = config;
     this.api = api;
     this.events = events;
     this.rootContainer = rootContainer || null;
-    this.isManualMount = config.panel.container === 'manual';
+    this.isManualMount = config.panel.container === "manual";
   }
 
   /**
@@ -71,21 +74,21 @@ export class Panel {
    * Checks for .dark class (next-themes) or data-theme attribute
    * Returns explicit 'light' or 'dark' to match app theme (not system preference)
    */
-  private detectThemeFromDOM(): 'light' | 'dark' {
+  private detectThemeFromDOM(): "light" | "dark" {
     const html = document.documentElement;
-    
+
     // Check for .dark class (next-themes pattern - most common)
-    if (html.classList.contains('dark')) return 'dark';
-    
+    if (html.classList.contains("dark")) return "dark";
+
     // Check for data-theme attribute
-    const dataTheme = html.getAttribute('data-theme');
-    if (dataTheme === 'dark') return 'dark';
-    
+    const dataTheme = html.getAttribute("data-theme");
+    if (dataTheme === "dark") return "dark";
+
     // Check for color-scheme style
-    if (html.style.colorScheme === 'dark') return 'dark';
-    
+    if (html.style.colorScheme === "dark") return "dark";
+
     // Default to light (web default, matches next-themes behavior)
-    return 'light';
+    return "light";
   }
 
   /**
@@ -105,7 +108,7 @@ export class Panel {
     setWidth(this.config.panel.width);
     setHoverBreakpoint(this.config.panel.hoverBreakpoint);
     setHoverBackdrop(this.config.panel.hoverBackdrop);
-    
+
     // Initialize viewport listener for responsive behavior
     initViewportListener();
 
@@ -123,12 +126,16 @@ export class Panel {
   /**
    * Open the panel
    */
-  open(options?: { view?: string; search?: string; focusInput?: boolean }): void {
+  open(options?: {
+    view?: string;
+    search?: string;
+    focusInput?: boolean;
+  }): void {
     // Handle search option - set pending message and navigate to chat
     if (options?.search) {
       setPendingMessage(options.search);
       // Navigate to chat view to process the search query
-      navigate('chat');
+      navigate("chat");
       // Trigger ChatView to process the pending message
       // This works whether ChatView is already mounted or will mount after navigation
       triggerSubmitPending();
@@ -197,10 +204,10 @@ export class Panel {
     // Unsubscribe from state
     this.unsubscribe?.();
     this.unsubscribe = null;
-    
+
     // Clean up viewport listener
     destroyViewportListener();
-    
+
     // Clean up theme observer
     this.themeObserver?.disconnect();
     this.themeObserver = null;
@@ -214,17 +221,18 @@ export class Panel {
     this.host?.remove();
 
     // Remove injected styles from document head (non-Shadow DOM mode)
-    document.getElementById('pillar-sdk-styles')?.remove();
-    document.getElementById('pillar-sdk-theme')?.remove();
-    document.getElementById('pillar-sdk-custom')?.remove();
+    document.getElementById("pillar-sdk-styles")?.remove();
+    document.getElementById("pillar-sdk-theme")?.remove();
+    document.getElementById("pillar-sdk-custom")?.remove();
 
     this.host = null;
     this.shadow = null;
     this.backdrop = null;
     this.panelElement = null;
+    this.mobileHandle = null;
     this.renderRoot = null;
 
-    document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener("keydown", this.handleKeyDown);
 
     resetPanel();
     resetRouter();
@@ -240,7 +248,7 @@ export class Panel {
     if (this.isManualMount) {
       this.unsubscribe = isOpen.subscribe((currentValue) => {
         if (!currentValue) {
-          this.events.emit('panel:close');
+          this.events.emit("panel:close");
         }
       });
       return;
@@ -254,10 +262,11 @@ export class Panel {
     const updatePanelUI = () => {
       const currentOpen = isOpen.value;
       const currentMode = effectiveMode.value;
-      const isPushMode = currentMode === 'push';
+      const isPushMode = currentMode === "push";
       const panelWidth = width.value;
       const panelPosition = position.value;
-      const showBackdrop = isHoverMode.value && hoverBackdrop.value;
+      const showBackdrop =
+        (isHoverMode.value && hoverBackdrop.value) || isMobileMode.value;
 
       if (currentOpen) {
         // Panel is open
@@ -265,25 +274,27 @@ export class Panel {
           // In push mode, shift the page content via padding
           this.applyPushModeStyles(panelWidth, panelPosition);
           // Hide backdrop in push mode
-          this.backdrop?.classList.remove('_pillar-backdrop--visible', 'pillar-backdrop--visible');
+          this.setBackdropVisible(false);
         } else {
           // In hover/overlay mode, remove push padding and prevent body scroll
           this.removePushModeStyles();
-          document.body.style.overflow = 'hidden';
-          // Show backdrop if enabled for hover mode
-          if (showBackdrop) {
-            this.backdrop?.classList.add('_pillar-backdrop--visible', 'pillar-backdrop--visible');
-          } else {
-            this.backdrop?.classList.remove('_pillar-backdrop--visible', 'pillar-backdrop--visible');
-          }
+          document.body.style.overflow = "hidden";
+          // Show backdrop if enabled for hover mode or in mobile mode
+          this.setBackdropVisible(showBackdrop);
         }
-        this.panelElement?.classList.add('_pillar-panel--open', 'pillar-panel--open');
+        this.panelElement?.classList.add(
+          "_pillar-panel--open",
+          "pillar-panel--open"
+        );
       } else {
         // Panel is closed
         this.removePushModeStyles();
-        document.body.style.overflow = '';
-        this.backdrop?.classList.remove('_pillar-backdrop--visible', 'pillar-backdrop--visible');
-        this.panelElement?.classList.remove('_pillar-panel--open', 'pillar-panel--open');
+        document.body.style.overflow = "";
+        this.setBackdropVisible(false);
+        this.panelElement?.classList.remove(
+          "_pillar-panel--open",
+          "pillar-panel--open"
+        );
       }
     };
 
@@ -300,7 +311,7 @@ export class Panel {
 
       if (!currentValue) {
         // Emit close event
-        this.events.emit('panel:close');
+        this.events.emit("panel:close");
       }
     });
 
@@ -318,10 +329,34 @@ export class Panel {
     // Subscribe to isFullWidth changes (viewport below fullWidthBreakpoint)
     const unsubscribeFullWidth = isFullWidth.subscribe((fullWidth) => {
       if (fullWidth) {
-        this.panelElement?.classList.add('_pillar-panel--full-width', 'pillar-panel--full-width');
+        this.panelElement?.classList.add(
+          "_pillar-panel--full-width",
+          "pillar-panel--full-width"
+        );
       } else {
-        this.panelElement?.classList.remove('_pillar-panel--full-width', 'pillar-panel--full-width');
+        this.panelElement?.classList.remove(
+          "_pillar-panel--full-width",
+          "pillar-panel--full-width"
+        );
       }
+    });
+
+    // Subscribe to isMobileMode changes (viewport below mobileBreakpoint)
+    // Toggles bottom-sheet presentation instead of side-sliding
+    const unsubscribeMobile = isMobileMode.subscribe((mobile) => {
+      if (mobile) {
+        this.panelElement?.classList.add(
+          "_pillar-panel--mobile",
+          "pillar-panel--mobile"
+        );
+      } else {
+        this.panelElement?.classList.remove(
+          "_pillar-panel--mobile",
+          "pillar-panel--mobile"
+        );
+      }
+      // Backdrop visibility may change with mobile mode, update UI
+      updatePanelUI();
     });
 
     // Combined cleanup
@@ -329,33 +364,67 @@ export class Panel {
       unsubscribeOpen();
       unsubscribeMode();
       unsubscribeFullWidth();
+      unsubscribeMobile();
     };
   }
 
-  private applyPushModeStyles(panelWidth: number, panelPosition: 'left' | 'right'): void {
+  /**
+   * Toggle backdrop visibility using inline styles.
+   * The backdrop is created with inline styles, so we must toggle via
+   * inline styles too (class-based overrides lose to inline specificity).
+   */
+  private setBackdropVisible(visible: boolean): void {
+    if (!this.backdrop) return;
+    if (visible) {
+      this.backdrop.style.opacity = "1";
+      this.backdrop.style.visibility = "visible";
+      this.backdrop.classList.add(
+        "_pillar-backdrop--visible",
+        "pillar-backdrop--visible"
+      );
+    } else {
+      this.backdrop.style.opacity = "0";
+      this.backdrop.style.visibility = "hidden";
+      this.backdrop.classList.remove(
+        "_pillar-backdrop--visible",
+        "pillar-backdrop--visible"
+      );
+    }
+  }
+
+  private applyPushModeStyles(
+    panelWidth: number,
+    panelPosition: "left" | "right"
+  ): void {
     // Use padding to shrink the content area next to the panel
     // The panel is position: fixed so it stays in place while content shrinks
-    document.documentElement.style.transition = 'padding 0.3s ease';
-    if (panelPosition === 'right') {
+    document.documentElement.style.transition = "padding 0.3s ease";
+    if (panelPosition === "right") {
       document.documentElement.style.paddingRight = `${panelWidth}px`;
-      document.documentElement.style.setProperty('--pillar-inset-right', `${panelWidth}px`);
-      document.documentElement.style.setProperty('--pillar-inset-left', '0px');
+      document.documentElement.style.setProperty(
+        "--pillar-inset-right",
+        `${panelWidth}px`
+      );
+      document.documentElement.style.setProperty("--pillar-inset-left", "0px");
     } else {
       document.documentElement.style.paddingLeft = `${panelWidth}px`;
-      document.documentElement.style.setProperty('--pillar-inset-left', `${panelWidth}px`);
-      document.documentElement.style.setProperty('--pillar-inset-right', '0px');
+      document.documentElement.style.setProperty(
+        "--pillar-inset-left",
+        `${panelWidth}px`
+      );
+      document.documentElement.style.setProperty("--pillar-inset-right", "0px");
     }
   }
 
   private removePushModeStyles(): void {
-    document.documentElement.style.paddingLeft = '';
-    document.documentElement.style.paddingRight = '';
-    document.documentElement.style.removeProperty('--pillar-inset-right');
-    document.documentElement.style.removeProperty('--pillar-inset-left');
+    document.documentElement.style.paddingLeft = "";
+    document.documentElement.style.paddingRight = "";
+    document.documentElement.style.removeProperty("--pillar-inset-right");
+    document.documentElement.style.removeProperty("--pillar-inset-left");
     // Remove transition after animation completes
     setTimeout(() => {
       if (!isOpen.value) {
-        document.documentElement.style.transition = '';
+        document.documentElement.style.transition = "";
       }
     }, 300);
   }
@@ -375,10 +444,10 @@ export class Panel {
     // Replace :host selectors with attribute selector for the host element
     // Handle :host, :host(...), :host-context(...), :host:not(...) etc.
     return css
-      .replace(/:host\(([^)]+)\)/g, '[data-pillar-panel]$1') // :host(.class) -> [data-pillar-panel].class
-      .replace(/:host-context\(([^)]+)\)/g, '$1 [data-pillar-panel]') // :host-context(.dark) -> .dark [data-pillar-panel]
-      .replace(/:host:not\(([^)]+)\)/g, '[data-pillar-panel]:not($1)') // :host:not(.x) -> [data-pillar-panel]:not(.x)
-      .replace(/:host/g, '[data-pillar-panel]'); // :host -> [data-pillar-panel]
+      .replace(/:host\(([^)]+)\)/g, "[data-pillar-panel]$1") // :host(.class) -> [data-pillar-panel].class
+      .replace(/:host-context\(([^)]+)\)/g, "$1 [data-pillar-panel]") // :host-context(.dark) -> .dark [data-pillar-panel]
+      .replace(/:host:not\(([^)]+)\)/g, "[data-pillar-panel]:not($1)") // :host:not(.x) -> [data-pillar-panel]:not(.x)
+      .replace(/:host/g, "[data-pillar-panel]"); // :host -> [data-pillar-panel]
   }
 
   /**
@@ -386,13 +455,13 @@ export class Panel {
    * Uses IDs to prevent duplicate injection.
    */
   private injectStylesIntoHead(): void {
-    const styleId = 'pillar-sdk-styles';
+    const styleId = "pillar-sdk-styles";
     if (document.getElementById(styleId)) return; // Prevent duplicates
 
     const rawCSS = ALL_PANEL_STYLES;
     const transformedCSS = this.transformStylesForRegularDOM(rawCSS);
 
-    const styles = document.createElement('style');
+    const styles = document.createElement("style");
     styles.id = styleId;
     styles.textContent = transformedCSS;
     document.head.appendChild(styles);
@@ -400,17 +469,19 @@ export class Panel {
     // Theme styles (also need transformation)
     const themeCSS = generateThemeCSS(this.config.theme);
     if (themeCSS) {
-      const themeStyles = document.createElement('style');
-      themeStyles.id = 'pillar-sdk-theme';
+      const themeStyles = document.createElement("style");
+      themeStyles.id = "pillar-sdk-theme";
       themeStyles.textContent = this.transformStylesForRegularDOM(themeCSS);
       document.head.appendChild(themeStyles);
     }
 
     // Custom CSS from config
     if (this.config.customCSS) {
-      const customStyles = document.createElement('style');
-      customStyles.id = 'pillar-sdk-custom';
-      customStyles.textContent = this.transformStylesForRegularDOM(this.config.customCSS);
+      const customStyles = document.createElement("style");
+      customStyles.id = "pillar-sdk-custom";
+      customStyles.textContent = this.transformStylesForRegularDOM(
+        this.config.customCSS
+      );
       document.head.appendChild(customStyles);
     }
   }
@@ -422,37 +493,37 @@ export class Panel {
     if (!this.shadow) return;
 
     // Inject base styles
-    const styles = document.createElement('style');
+    const styles = document.createElement("style");
     styles.textContent = ALL_PANEL_STYLES;
     this.shadow.appendChild(styles);
 
     // Inject theme customization CSS (color overrides from config)
     const themeCSS = generateThemeCSS(this.config.theme);
     if (themeCSS) {
-      const themeStyles = document.createElement('style');
+      const themeStyles = document.createElement("style");
       themeStyles.textContent = themeCSS;
-      themeStyles.setAttribute('data-pillar-theme', '');
+      themeStyles.setAttribute("data-pillar-theme", "");
       this.shadow.appendChild(themeStyles);
     }
 
     // Inject custom CSS from config (user overrides)
     if (this.config.customCSS) {
-      const customStyles = document.createElement('style');
+      const customStyles = document.createElement("style");
       customStyles.textContent = this.config.customCSS;
-      customStyles.setAttribute('data-pillar-custom', '');
+      customStyles.setAttribute("data-pillar-custom", "");
       this.shadow.appendChild(customStyles);
     }
   }
 
   private createHost(): void {
     // Create host element
-    this.host = document.createElement('div');
-    this.host.className = 'pillar-panel-host';
-    this.host.setAttribute('data-pillar-panel', '');
+    this.host = document.createElement("div");
+    this.host.className = "pillar-panel-host";
+    this.host.setAttribute("data-pillar-panel", "");
 
     if (this.config.panel.useShadowDOM) {
       // Shadow DOM mode (opt-in for style isolation)
-      this.shadow = this.host.attachShadow({ mode: 'open' });
+      this.shadow = this.host.attachShadow({ mode: "open" });
       this.injectStylesIntoShadow();
     } else {
       // Regular DOM mode (default - inherits host app CSS)
@@ -462,14 +533,14 @@ export class Panel {
 
     // Set theme mode attribute on host for CSS selectors
     this.applyThemeMode();
-    
+
     // Watch for theme changes on documentElement (for auto mode)
     this.setupThemeObserver();
 
     // Determine mount point based on container config
     const container = this.config.panel.container;
 
-    if (container === 'manual') {
+    if (container === "manual") {
       // Manual mode: don't mount automatically, wait for mountTo() call
       return;
     }
@@ -479,11 +550,13 @@ export class Panel {
     const defaultTarget = this.rootContainer || document.body;
     let mountTarget: HTMLElement | null = null;
 
-    if (typeof container === 'string') {
+    if (typeof container === "string") {
       // CSS selector
       mountTarget = document.querySelector<HTMLElement>(container);
       if (!mountTarget) {
-        debug.warn(`[Pillar] Container element not found: ${container}, falling back to root container`);
+        debug.warn(
+          `[Pillar] Container element not found: ${container}, falling back to root container`
+        );
         mountTarget = defaultTarget;
       }
     } else if (container instanceof HTMLElement) {
@@ -503,7 +576,7 @@ export class Panel {
    */
   mountTo(container: HTMLElement): void {
     if (!this.host) {
-      debug.warn('[Pillar] Panel host not created yet');
+      debug.warn("[Pillar] Panel host not created yet");
       return;
     }
 
@@ -527,20 +600,20 @@ export class Panel {
     // participates in the same stacking context. The root container uses
     // isolation: isolate, and position: fixed still covers the full viewport
     // since isolation does NOT change the containing block for fixed children.
-    this.backdrop = document.createElement('div');
-    this.backdrop.className = '_pillar-backdrop pillar-backdrop';
+    this.backdrop = document.createElement("div");
+    this.backdrop.className = "_pillar-backdrop pillar-backdrop";
     this.backdrop.style.cssText = `
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.3);
       opacity: 0;
       visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition: opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1), visibility 0.4s cubic-bezier(0.32, 0.72, 0, 1);
       z-index: 99998;
     `;
 
     // Click backdrop to close - just call closePanel, subscription handles the rest
-    this.backdrop.addEventListener('click', () => {
+    this.backdrop.addEventListener("click", () => {
       closePanel();
     });
 
@@ -553,18 +626,28 @@ export class Panel {
     if (!container) return;
 
     // Panel container with both internal and public classes
-    this.panelElement = document.createElement('div');
-    const manualClass = this.isManualMount ? ' _pillar-panel--manual pillar-panel--manual' : '';
+    this.panelElement = document.createElement("div");
+    const manualClass = this.isManualMount
+      ? " _pillar-panel--manual pillar-panel--manual"
+      : "";
     const positionClass = `_pillar-panel--${position.value} pillar-panel--${position.value}`;
     this.panelElement.className = `_pillar-panel pillar-panel ${positionClass}${manualClass}`;
-    this.panelElement.style.setProperty('--pillar-panel-width', `${width.value}px`);
-    this.panelElement.setAttribute('role', 'dialog');
-    this.panelElement.setAttribute('aria-modal', 'true');
-    this.panelElement.setAttribute('aria-label', 'Assistant panel');
+    this.panelElement.style.setProperty(
+      "--pillar-panel-width",
+      `${width.value}px`
+    );
+    this.panelElement.setAttribute("role", "dialog");
+    this.panelElement.setAttribute("aria-modal", "true");
+    this.panelElement.setAttribute("aria-label", "Assistant panel");
+
+    // Create mobile drag handle (visible only when in mobile sheet mode via CSS)
+    this.mobileHandle = document.createElement("div");
+    this.mobileHandle.className = "_pillar-mobile-handle pillar-mobile-handle";
+    this.panelElement.appendChild(this.mobileHandle);
 
     // Create render root for Preact with both internal and public classes
-    this.renderRoot = document.createElement('div');
-    this.renderRoot.className = '_pillar-panel-root pillar-panel-root';
+    this.renderRoot = document.createElement("div");
+    this.renderRoot.className = "_pillar-panel-root pillar-panel-root";
     this.panelElement.appendChild(this.renderRoot);
 
     container.appendChild(this.panelElement);
@@ -583,11 +666,11 @@ export class Panel {
 
   private bindEvents(): void {
     // Escape key to close
-    document.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener("keydown", this.handleKeyDown);
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && isOpen.value) {
+    if (e.key === "Escape" && isOpen.value) {
       closePanel();
     }
   };
@@ -610,15 +693,15 @@ export class Panel {
     if (!this.host) return;
 
     const themeMode = this.config.theme.mode;
-    
-    if (themeMode === 'light' || themeMode === 'dark') {
+
+    if (themeMode === "light" || themeMode === "dark") {
       // Manual light/dark mode - set data attribute
-      this.host.setAttribute('data-theme', themeMode);
+      this.host.setAttribute("data-theme", themeMode);
     } else {
       // Auto mode - detect from DOM (matches app theme, not system preference)
       // This ensures the panel matches when user sets theme manually in the app
       const detectedTheme = this.detectThemeFromDOM();
-      this.host.setAttribute('data-theme', detectedTheme);
+      this.host.setAttribute("data-theme", detectedTheme);
     }
   }
 
@@ -627,8 +710,8 @@ export class Panel {
    */
   private setupThemeObserver(): void {
     // Only needed for auto mode
-    if (this.config.theme.mode !== 'auto') return;
-    
+    if (this.config.theme.mode !== "auto") return;
+
     this.themeObserver = new MutationObserver(() => {
       // Re-apply theme when DOM theme changes
       this.applyThemeMode();
@@ -636,14 +719,14 @@ export class Panel {
 
     this.themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class', 'data-theme', 'style'],
+      attributeFilter: ["class", "data-theme", "style"],
     });
   }
 
   /**
    * Update the theme at runtime
    */
-  setTheme(themeConfig: Partial<ResolvedConfig['theme']>): void {
+  setTheme(themeConfig: Partial<ResolvedConfig["theme"]>): void {
     // Merge new theme config with existing
     this.config = {
       ...this.config,
@@ -651,7 +734,10 @@ export class Panel {
         ...this.config.theme,
         ...themeConfig,
         colors: { ...this.config.theme.colors, ...themeConfig.colors },
-        darkColors: { ...this.config.theme.darkColors, ...themeConfig.darkColors },
+        darkColors: {
+          ...this.config.theme.darkColors,
+          ...themeConfig.darkColors,
+        },
       },
     };
 
@@ -660,19 +746,21 @@ export class Panel {
 
     // Regenerate and update theme CSS
     const themeCSS = generateThemeCSS(this.config.theme);
-    
+
     if (this.shadow) {
       // Shadow DOM mode: update styles in shadow root
-      const existingThemeStyle = this.shadow.querySelector('style[data-pillar-theme]');
-      
+      const existingThemeStyle = this.shadow.querySelector(
+        "style[data-pillar-theme]"
+      );
+
       if (existingThemeStyle && themeCSS) {
         existingThemeStyle.textContent = themeCSS;
       } else if (themeCSS && !existingThemeStyle) {
-        const themeStyles = document.createElement('style');
+        const themeStyles = document.createElement("style");
         themeStyles.textContent = themeCSS;
-        themeStyles.setAttribute('data-pillar-theme', '');
+        themeStyles.setAttribute("data-pillar-theme", "");
         // Insert after base styles
-        const firstStyle = this.shadow.querySelector('style');
+        const firstStyle = this.shadow.querySelector("style");
         if (firstStyle?.nextSibling) {
           this.shadow.insertBefore(themeStyles, firstStyle.nextSibling);
         } else {
@@ -683,13 +771,13 @@ export class Panel {
       // Regular DOM mode: update styles in document head
       // Must transform :host selectors to [data-pillar-panel] attribute selectors
       const transformedThemeCSS = this.transformStylesForRegularDOM(themeCSS);
-      const existingThemeStyle = document.getElementById('pillar-sdk-theme');
-      
+      const existingThemeStyle = document.getElementById("pillar-sdk-theme");
+
       if (existingThemeStyle && transformedThemeCSS) {
         existingThemeStyle.textContent = transformedThemeCSS;
       } else if (transformedThemeCSS && !existingThemeStyle) {
-        const themeStyles = document.createElement('style');
-        themeStyles.id = 'pillar-sdk-theme';
+        const themeStyles = document.createElement("style");
+        themeStyles.id = "pillar-sdk-theme";
         themeStyles.textContent = transformedThemeCSS;
         document.head.appendChild(themeStyles);
       }

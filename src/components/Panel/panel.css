@@ -44,6 +44,55 @@
   max-width: 100vw;
 }
 
+/* ============================================================================
+   Mobile Bottom Sheet
+   When viewport < mobileBreakpoint, the panel slides up from the bottom
+   like an iOS sheet instead of from the side.
+   ============================================================================ */
+
+._pillar-panel--mobile {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 90dvh;
+  max-height: 90dvh;
+  border-left: none;
+  border-right: none;
+  border-top: 1px solid var(--pillar-border);
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  transform: translateY(100%);
+  /* iOS-style spring curve: slow start, fast middle, gentle settle */
+  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+._pillar-panel--mobile._pillar-panel--open {
+  transform: translateY(0);
+}
+
+/* Drag handle - visual indicator at top of mobile sheet */
+._pillar-mobile-handle {
+  display: none;
+}
+
+._pillar-panel--mobile ._pillar-mobile-handle {
+  display: block;
+  width: 36px;
+  height: 4px;
+  background: var(--pillar-border);
+  border-radius: 2px;
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+
+.pillar-panel--mobile {
+}
+.pillar-mobile-handle {
+}
+
 ._pillar-panel-root {
   display: flex;
   flex-direction: column;
@@ -58,9 +107,12 @@
 }
 
 /* Public override classes - empty by default */
-.pillar-panel {}
-.pillar-panel-root {}
-.pillar-panel-ui {}
+.pillar-panel {
+}
+.pillar-panel-root {
+}
+.pillar-panel-ui {
+}
 
 /* ============================================================================
    Backdrop
@@ -72,7 +124,9 @@
   background: rgba(0, 0, 0, 0.3);
   opacity: 0;
   visibility: hidden;
-  transition: opacity var(--pillar-transition-normal), visibility var(--pillar-transition-normal);
+  transition:
+    opacity var(--pillar-transition-normal),
+    visibility var(--pillar-transition-normal);
   z-index: 99998;
 }
 
@@ -81,7 +135,8 @@
   visibility: visible;
 }
 
-.pillar-backdrop {}
+.pillar-backdrop {
+}
 
 /* ============================================================================
    Content Area
@@ -95,4 +150,18 @@
   min-height: 0;
 }
 
-.pillar-content {}
+.pillar-content {
+}
+
+/* ============================================================================
+   Reduced Motion
+   Disable all panel and backdrop transitions when the user prefers reduced motion.
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  ._pillar-panel,
+  ._pillar-panel--mobile,
+  ._pillar-backdrop {
+    transition: none;
+  }
+}

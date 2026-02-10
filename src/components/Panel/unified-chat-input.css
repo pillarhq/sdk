@@ -10,7 +10,9 @@
   background: var(--pillar-bg-secondary);
   border: 1px solid var(--pillar-border);
   border-radius: var(--pillar-radius-xl);
-  transition: border-color var(--pillar-transition-fast), box-shadow var(--pillar-transition-fast);
+  transition:
+    border-color var(--pillar-transition-fast),
+    box-shadow var(--pillar-transition-fast);
 }
 
 ._pillar-unified-input-wrapper:focus-within {
@@ -85,10 +87,14 @@
   height: 16px;
 }
 
-.pillar-unified-input-wrapper {}
-.pillar-unified-input {}
-.pillar-unified-input-row {}
-.pillar-unified-send-btn {}
+.pillar-unified-input-wrapper {
+}
+.pillar-unified-input {
+}
+.pillar-unified-input-row {
+}
+.pillar-unified-send-btn {
+}
 
 ._pillar-unified-stop-btn {
   display: flex;
@@ -115,4 +121,5 @@
   height: 18px;
 }
 
-.pillar-unified-stop-btn {}
+.pillar-unified-stop-btn {
+}

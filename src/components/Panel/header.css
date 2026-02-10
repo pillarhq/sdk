@@ -14,6 +14,10 @@
   background: var(--pillar-bg);
 }
 
+._pillar-panel--mobile ._pillar-header {
+  padding-bottom: 4px;
+}
+
 ._pillar-header-left {
   display: flex;
   align-items: center;
@@ -33,11 +37,16 @@
 }
 
 /* Public override classes */
-.pillar-header {}
-.pillar-header-left {}
-.pillar-header-right {}
-.pillar-header-title {}
-.pillar-new-chat-btn {}
+.pillar-header {
+}
+.pillar-header-left {
+}
+.pillar-header-right {
+}
+.pillar-header-title {
+}
+.pillar-new-chat-btn {
+}
 
 /* ============================================================================
    Icon Buttons (back, home, close)
@@ -56,7 +65,9 @@
   border: none;
   border-radius: var(--pillar-radius-md);
   cursor: pointer;
-  transition: color var(--pillar-transition-fast), background var(--pillar-transition-fast);
+  transition:
+    color var(--pillar-transition-fast),
+    background var(--pillar-transition-fast);
 }
 
 ._pillar-icon-btn:hover {
@@ -68,10 +79,14 @@
   height: 20px;
 }
 
-.pillar-icon-btn {}
-.pillar-back-btn {}
-.pillar-home-btn {}
-.pillar-history-btn {}
+.pillar-icon-btn {
+}
+.pillar-back-btn {
+}
+.pillar-home-btn {
+}
+.pillar-history-btn {
+}
 
 /* ============================================================================
    History Dropdown
@@ -118,7 +133,9 @@
 }
 
 @keyframes pillar-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 ._pillar-history-empty {
@@ -177,10 +194,17 @@
 }
 
 /* Public override classes */
-.pillar-history-dropdown {}
-.pillar-history-menu {}
-.pillar-history-group-header {}
-.pillar-history-list {}
-.pillar-history-item {}
-.pillar-history-item-title {}
-.pillar-close-btn {}
+.pillar-history-dropdown {
+}
+.pillar-history-menu {
+}
+.pillar-history-group-header {
+}
+.pillar-history-list {
+}
+.pillar-history-item {
+}
+.pillar-history-item-title {
+}
+.pillar-close-btn {
+}
