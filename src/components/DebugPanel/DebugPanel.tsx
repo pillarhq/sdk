@@ -16,7 +16,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'preact/hooks';
 import debugPanelCSS from './debug-panel.css';
 import type { DebugEntry, DebugSource } from '../../utils/debug';
-import Pillar from '../../core/Pillar';
+import { getPillarInstance } from '../../core/instance';
 
 interface DebugPanelProps {
   /** Whether the panel is expanded */
@@ -125,14 +125,14 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
     // Capture original body padding-bottom
     originalPaddingRef.current = document.body.style.paddingBottom || '';
 
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     if (!pillar) return;
 
     // Get initial entries
     setEntries(pillar.getDebugLog());
 
     // Subscribe to updates
-    const unsubscribe = pillar.onDebugLog((newEntries) => {
+    const unsubscribe = pillar.onDebugLog((newEntries: DebugEntry[]) => {
       setEntries([...newEntries]);
     });
 
@@ -232,7 +232,7 @@ export function DebugPanel({ expanded = false, onToggle }: DebugPanelProps) {
   };
 
   const handleClear = () => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     pillar?.clearDebugLog();
   };
 

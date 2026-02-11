@@ -6,7 +6,7 @@
  * Otherwise, a default confirmation card is rendered.
  */
 
-import Pillar from '../../core/Pillar';
+import { getPillarInstance } from '../../core/instance';
 import type { CardCallbacks } from '../../core/events';
 import type { TaskButtonData } from '../Panel/TaskButton';
 import { debug } from '../../utils/debug';
@@ -162,7 +162,7 @@ export function createConfirmActionCard(
   wrapper.className = 'pillar-confirm-card-wrapper';
   
   const cardType = (action.data?.card_type as string) || action.name;
-  const pillar = Pillar.getInstance();
+  const pillar = getPillarInstance();
   const customRenderer = pillar?.getCardRenderer(cardType);
   
   const callbacks: CardCallbacks = {

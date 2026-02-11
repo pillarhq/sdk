@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import Pillar from "../../core/Pillar";
+import { getPillarInstance } from "../../core/instance";
 import {
   activeRequestId,
   addAssistantMessage,
@@ -105,7 +105,7 @@ function getCompletionText(actionName: string, success: boolean): string {
  * and merges in any user-configured excludeSelector.
  */
 function getScanOptions(): ScanOptions {
-  const pillar = Pillar.getInstance();
+  const pillar = getPillarInstance();
   const userExclude = pillar?.config?.domScanning?.excludeSelector;
   return {
     excludeSelector: userExclude
@@ -131,7 +131,7 @@ export function ChatView() {
         request.parameters,
         `at ${startTimestamp}`
       );
-      const pillar = Pillar.getInstance();
+      const pillar = getPillarInstance();
       if (pillar) {
         try {
           // Check for built-in SDK actions first
@@ -284,7 +284,7 @@ export function ChatView() {
 
   // Handle discarding an interrupted session
   const handleDiscard = useCallback(() => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     const siteId = pillar?.config?.productKey ?? "";
 
     clearInterruptedSession();
@@ -300,10 +300,10 @@ export function ChatView() {
 
   // Listen for task completion events to update action status
   useEffect(() => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     if (!pillar) return;
 
-    const unsubscribe = pillar.on("task:complete", ({ name, success }) => {
+    const unsubscribe = pillar.on("task:complete", ({ name, success }: { name: string; success: boolean }) => {
       // Update action status
       setActionComplete(name, success);
 
@@ -328,7 +328,7 @@ export function ChatView() {
    */
   const handleActionsReceived = useCallback(
     (actions: TaskButtonData[]): TaskButtonData[] => {
-      const pillar = Pillar.getInstance();
+      const pillar = getPillarInstance();
 
       debug.log(
         "[Pillar] handleActionsReceived called with",
@@ -425,7 +425,7 @@ export function ChatView() {
           addProgressEvent(progress);
         },
         onConversationStarted: () => {
-          const pillar = Pillar.getInstance();
+          const pillar = getPillarInstance();
           const siteId = pillar?.config?.productKey ?? "";
           const convId = conversationId.value;
           if (siteId && convId) {
@@ -503,7 +503,7 @@ export function ChatView() {
 
         // Clear session hint ONLY on successful completion (not on abort/error)
         {
-          const pillar = Pillar.getInstance();
+          const pillar = getPillarInstance();
           const siteId = pillar?.config?.productKey ?? "";
           if (siteId) {
             clearActiveSession(siteId);
@@ -538,7 +538,7 @@ export function ChatView() {
     const session = interruptedSession.value;
     if (!session) return;
 
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     const siteId = pillar?.config?.productKey ?? "";
     const isDOMScanningEnabled = pillar?.isDOMScanningEnabled ?? false;
 
@@ -648,7 +648,7 @@ export function ChatView() {
     const hasPartialResponse =
       lastMsg?.role === "assistant" && Boolean(lastMsg?.content?.trim());
 
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     const siteId = pillar?.config?.productKey ?? "";
 
     if (hasPartialResponse && conversationId.value) {
@@ -690,7 +690,7 @@ export function ChatView() {
     (message: string, context: UserContextItem[], images: ChatImage[]) => {
       if (isLoading.value) return;
 
-      const pillar = Pillar.getInstance();
+      const pillar = getPillarInstance();
       const isDOMScanningEnabled = pillar?.isDOMScanningEnabled ?? false;
 
       // If DOM scanning is enabled, scan the page and add to context

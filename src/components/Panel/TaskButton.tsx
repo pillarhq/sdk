@@ -9,7 +9,7 @@
  * The server only sends: name, task_type, data.
  */
 
-import Pillar from '../../core/Pillar';
+import { getPillarInstance } from '../../core/instance';
 import type { TaskExecutePayload } from '../../core/events';
 import { createConfirmActionCard } from '../Cards/ConfirmActionCard';
 import { debug } from '../../utils/debug';
@@ -134,7 +134,7 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
 
   // Add click handler
   button.addEventListener('click', () => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     
     // For inline_ui actions, toggle the confirmation card instead of executing
     if (task.taskType === 'inline_ui') {
@@ -164,7 +164,7 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
    * Creates the card lazily on first click.
    */
   function toggleInlineCard(): void {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     
     if (isCardVisible && inlineCardContainer) {
       // Hide the card

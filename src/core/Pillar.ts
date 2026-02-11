@@ -53,6 +53,7 @@ import { h, render } from "preact";
 import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
 import { RouteObserver, type RouteInfo } from "../utils/route-observer";
 import { DebugPanel } from "../components/DebugPanel";
+import { setPillarInstance } from "./instance";
 import { domReady } from "../utils/dom";
 import { buildSelectorFromRef, isValidPillarRef, isDestructiveElement } from "../utils/dom-scanner";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
@@ -230,6 +231,7 @@ export class Pillar {
     // Create singleton if doesn't exist
     if (!Pillar.instance) {
       Pillar.instance = new Pillar();
+      setPillarInstance(Pillar.instance);
     }
 
     await Pillar.instance._init(config);
@@ -250,6 +252,7 @@ export class Pillar {
     if (Pillar.instance) {
       Pillar.instance._destroy();
       Pillar.instance = null;
+      setPillarInstance(null);
     }
   }
 
@@ -2701,13 +2704,8 @@ export class Pillar {
   }
 }
 
-/**
- * Get the API client from the current Pillar instance.
- * Returns null if SDK is not initialized.
- */
-export function getApiClient(): APIClient | null {
-  return Pillar.getInstance()?.["_api"] ?? null;
-}
+// Re-export for backward compatibility (canonical source is instance.ts)
+export { getApiClient } from "./instance";
 
 // Export for script tag usage
 export default Pillar;

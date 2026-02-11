@@ -12,7 +12,7 @@ import {
   completedStepsCount,
 } from '../../store/workflow';
 import type { WorkflowStep, WorkflowStepStatus } from '../../core/workflow';
-import Pillar from '../../core/Pillar';
+import { getPillarInstance } from '../../core/instance';
 import { getWorkflowStatusIcon, getWorkflowIcon } from '../shared/icons';
 
 // ============================================================================
@@ -26,14 +26,14 @@ interface WorkflowStepItemProps {
 
 function WorkflowStepItem({ step, isCurrentStep }: WorkflowStepItemProps) {
   const handleStart = () => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     if (pillar) {
       pillar.initiateWorkflowStep(step.index);
     }
   };
 
   const handleSkip = () => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     if (pillar) {
       pillar.skipWorkflowStep(step.index);
     }
@@ -89,7 +89,7 @@ export function WorkflowChecklist() {
   }
 
   const handleCancel = () => {
-    const pillar = Pillar.getInstance();
+    const pillar = getPillarInstance();
     if (pillar) {
       pillar.cancelWorkflow();
     }

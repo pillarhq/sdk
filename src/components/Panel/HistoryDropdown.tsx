@@ -5,7 +5,7 @@
 
 import { h, Fragment } from 'preact';
 import { useState, useRef, useEffect, useMemo } from 'preact/hooks';
-import { getApiClient } from '../../core/Pillar';
+import { getApiClient } from '../../core/instance';
 import { historyInvalidationCounter, optimisticConversations } from '../../store/chat';
 import { isMobileMode } from '../../store/panel';
 import { debug } from '../../utils/debug';
