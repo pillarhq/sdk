@@ -139,6 +139,8 @@ export interface HistoryMessage {
   timestamp: string | null;
   // Display field - human-readable timeline for UI
   display_trace?: DisplayStep[];
+  // Images attached to user messages (GCS signed URLs)
+  images?: ChatImage[];
 }
 
 /**
@@ -391,21 +393,22 @@ export class APIClient {
     return this.mcpClient.uploadImage(file);
   }
 
-  async chat(
-    message: string,
-    history: ChatMessage[] = [],
-    onChunk?: (chunk: string) => void,
-    articleSlug?: string,
-    existingConversationId?: string | null,
-    onActions?: (actions: TaskButtonData[]) => void,
-    userContext?: UserContextItem[],
-    images?: ChatImage[],
-    onProgress?: (progress: ProgressEvent) => void,
-    onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void,
-    onActionRequest?: (request: ActionRequest) => Promise<void>,
-    signal?: AbortSignal,
-    onRequestId?: (requestId: number) => void
-  ): Promise<ChatResponse> {
+  async chat(opts: {
+    message: string;
+    history?: ChatMessage[];
+    onChunk?: (chunk: string) => void;
+    articleSlug?: string;
+    existingConversationId?: string | null;
+    onActions?: (actions: TaskButtonData[]) => void;
+    userContext?: UserContextItem[];
+    images?: ChatImage[];
+    onProgress?: (progress: ProgressEvent) => void;
+    onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void;
+    onActionRequest?: (request: ActionRequest) => Promise<void>;
+    signal?: AbortSignal;
+    onRequestId?: (requestId: number) => void;
+    resume?: boolean;
+  }): Promise<ChatResponse> {
     // Use MCP client for chat via the 'ask' tool
     let fullMessage = '';
     let sources: ArticleSummary[] = [];
@@ -416,28 +419,28 @@ export class APIClient {
 
     try {
       const result = await this.mcpClient.ask(
-        message,
+        opts.message,
         {
           onToken: (token) => {
             fullMessage += token;
-            onChunk?.(token);
+            opts.onChunk?.(token);
           },
           onSources: (s) => {
             sources = s;
           },
           onActions: (a: ActionData[]) => {
             actions = a.map(actionToTaskButton);
-            onActions?.(actions);
+            opts.onActions?.(actions);
           },
           onProgress: (p) => {
-            onProgress?.(p as ProgressEvent);
+            opts.onProgress?.(p as ProgressEvent);
           },
           onConversationStarted: (convId, assistantMsgId) => {
-            onConversationStarted?.(convId, assistantMsgId);
+            opts.onConversationStarted?.(convId, assistantMsgId);
           },
           onActionRequest: async (request) => {
-            if (onActionRequest) {
-              await onActionRequest(request);
+            if (opts.onActionRequest) {
+              await opts.onActionRequest(request);
             }
           },
           onRegisteredActions: (registeredActions) => {
@@ -446,7 +449,7 @@ export class APIClient {
             debug.log('[Pillar API] Stored', registeredActions.length, 'registered actions for dynamic tool calling');
           },
           onRequestId: (id) => {
-            onRequestId?.(id);
+            opts.onRequestId?.(id);
           },
           onTokenUsage: (usage) => {
             updateTokenUsage({
@@ -466,15 +469,16 @@ export class APIClient {
           },
         },
         { 
-          articleSlug, 
-          userContext, 
-          images, 
-          history,
+          articleSlug: opts.articleSlug, 
+          userContext: opts.userContext, 
+          images: opts.images, 
+          history: opts.history,
           // Pass registered actions from previous turns for dynamic action tools
           registeredActions: getRegisteredActions(),
           // Always pass conversation ID (generated client-side for new conversations)
-          conversationId: existingConversationId || undefined,
-          signal,
+          conversationId: opts.existingConversationId || undefined,
+          signal: opts.signal,
+          resume: opts.resume,
         }
       );
 
@@ -497,118 +501,6 @@ export class APIClient {
       debug.error('[Pillar API] Chat error:', error);
       throw error;
     }
-  }
-
-  /**
-   * Legacy chat method using the old /ai/chat/ endpoint.
-   * @deprecated Use chat() which uses the MCP protocol.
-   */
-  async chatLegacy(
-    message: string,
-    history: ChatMessage[] = [],
-    onChunk?: (chunk: string) => void,
-    articleSlug?: string,
-    existingConversationId?: string | null
-  ): Promise<ChatResponse> {
-    const url = `${this.baseUrl}/ai/chat/`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        message,
-        history,
-        ...(articleSlug && { article_slug: articleSlug }),
-        ...(existingConversationId && { conversation_id: existingConversationId }),
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || errorData.message || `Chat error: ${response.status}`);
-    }
-
-    // Handle streaming response
-    if (onChunk && response.headers.get('content-type')?.includes('text/event-stream')) {
-      return this.handleStreamingChat(response, onChunk);
-    }
-
-    // Handle non-streaming response
-    const data = await response.json();
-    return {
-      message: data.answer || data.message,
-      sources: data.sources,
-      workflow: data.workflow || data.structuredContent?.workflow,
-      conversationId: data.conversation_id,
-      messageId: data.message_id,
-    };
-  }
-
-  private async handleStreamingChat(
-    response: Response,
-    onChunk: (chunk: string) => void
-  ): Promise<ChatResponse> {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
-    let fullMessage = '';
-    let sources: ArticleSummary[] = [];
-    let workflow: Workflow | undefined;
-    let conversationId: string | undefined;
-    let messageId: string | undefined;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.content) {
-                fullMessage += parsed.content;
-                onChunk(parsed.content);
-              }
-              if (parsed.sources) {
-                sources = parsed.sources;
-              }
-              // Check for workflow in structured content or direct field
-              if (parsed.workflow) {
-                workflow = parsed.workflow;
-              }
-              if (parsed.structuredContent?.workflow) {
-                workflow = parsed.structuredContent.workflow;
-              }
-              // Capture conversation and message IDs from stream
-              if (parsed.conversation_id) {
-                conversationId = parsed.conversation_id;
-              }
-              if (parsed.message_id) {
-                messageId = parsed.message_id;
-              }
-            } catch {
-              // Not JSON, might be raw text
-              fullMessage += data;
-              onChunk(data);
-            }
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    return { message: fullMessage, sources, workflow, conversationId, messageId };
   }
 
   // ============================================================================
@@ -714,77 +606,6 @@ export class APIClient {
     } catch (error) {
       debug.warn('[Pillar] Failed to get suggestions:', error);
       return [];
-    }
-  }
-
-  /**
-   * Chat with enhanced context.
-   * Includes product context and user profile for better responses.
-   * 
-   * Note: Context is passed to the MCP ask tool as additional arguments.
-   */
-  async chatWithContext(
-    message: string,
-    history: ChatMessage[] = [],
-    ctx: Context,
-    userProfile: UserProfile,
-    onChunk?: (chunk: string) => void,
-    existingConversationId?: string | null,
-    onActions?: (actions: TaskButtonData[]) => void
-  ): Promise<ChatResponse> {
-    // Use MCP client for chat via the 'ask' tool with context
-    let fullMessage = '';
-    let sources: ArticleSummary[] = [];
-    let actions: TaskButtonData[] = [];
-
-    try {
-      const result = await this.mcpClient.callToolStream(
-        'ask',
-        {
-          query: message,
-          context: {
-            product: ctx,
-            user_profile: userProfile,
-          },
-          // Always pass conversation ID (generated client-side for new conversations)
-          ...(existingConversationId && { conversation_id: existingConversationId }),
-        },
-        {
-          onToken: (token) => {
-            fullMessage += token;
-            onChunk?.(token);
-          },
-          onSources: (s) => {
-            sources = s;
-          },
-          onActions: (a: ActionData[]) => {
-            actions = a.map(actionToTaskButton);
-            onActions?.(actions);
-          },
-          onError: (error) => {
-            debug.error('[Pillar API] MCP chat with context error:', error);
-          },
-        }
-      );
-
-      // If no streaming content was received, extract from result
-      if (!fullMessage && result.content[0]?.type === 'text') {
-        fullMessage = result.content[0].text || '';
-      }
-
-      // Extract conversation/message IDs from result _meta if available
-      const meta = result._meta || {};
-
-      return {
-        message: fullMessage,
-        sources,
-        actions,
-        conversationId: meta.conversation_id,
-        messageId: meta.query_log_id,
-      };
-    } catch (error) {
-      debug.error('[Pillar API] Chat with context error:', error);
-      throw error;
     }
   }
 

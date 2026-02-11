@@ -9,7 +9,7 @@ import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { UserContextItem } from '../types/user-context';
 import { debug, debugLog, type LogEntry } from '../utils/debug';
-import type { ArticleSummary } from './client';
+import type { ArticleSummary, DisplayStep } from './client';
 
 // ============================================================================
 // Types
@@ -159,11 +159,14 @@ export interface ChatImage {
   url: string;
   /** Detail level for image analysis. 'low' is faster and cheaper. */
   detail?: 'low' | 'high';
+  /** GCS storage path for URL refresh on history load */
+  path?: string;
 }
 
 /** Response from image upload endpoint */
 export interface ImageUploadResponse {
   url: string;
+  path: string;
   expires_at: string;
 }
 
@@ -707,6 +710,8 @@ export class MCPClient {
       signal?: AbortSignal;
       /** Conversation ID - generated client-side, always provided */
       conversationId?: string;
+      /** Resume an interrupted session (sends empty query, loads state server-side) */
+      resume?: boolean;
     }
   ): Promise<ToolResult> {
     const args: Record<string, unknown> = {
@@ -736,6 +741,10 @@ export class MCPClient {
     // Pass registered actions for dynamic action tools (multi-turn persistence)
     if (options?.registeredActions && options.registeredActions.length > 0) {
       args.registered_actions = options.registeredActions;
+    }
+
+    if (options?.resume) {
+      args.resume = true;
     }
 
     return this.callToolStream('ask', args, callbacks, options?.signal);
@@ -980,153 +989,6 @@ export class MCPClient {
     }
   }
 
-  /**
-   * Resume an interrupted conversation.
-   * 
-   * Returns a streaming response that continues the conversation
-   * from where it was interrupted.
-   * 
-   * @param conversationId - The conversation to resume
-   * @param userContext - Optional current page context (highlighted text, DOM snapshot, etc.)
-   * @param callbacks - Streaming callbacks
-   */
-  async resumeConversation(
-    conversationId: string,
-    userContext: UserContextItem[] | undefined,
-    callbacks: StreamCallbacks
-  ): Promise<void> {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}conversations/${conversationId}/resume/`,
-        {
-          method: 'POST',
-          headers: {
-            ...this.headers,
-            'Accept': 'text/event-stream',
-          },
-          body: JSON.stringify({ user_context: userContext }),
-        }
-      );
-
-      if (!response.ok) {
-        callbacks.onError?.(`Failed to resume conversation: ${response.status}`);
-        return;
-      }
-
-      if (!response.body) {
-        callbacks.onError?.('No response body for resume stream');
-        return;
-      }
-
-      // Process SSE stream (reuse existing streaming logic)
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data.trim()) {
-                try {
-                  const parsed = JSON.parse(data);
-                  this.handleResumeStreamEvent(parsed, callbacks);
-                } catch {
-                  // Ignore parse errors
-                }
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-
-      callbacks.onComplete?.();
-    } catch (error) {
-      callbacks.onError?.(`Resume error: ${error}`);
-    }
-  }
-
-  /**
-   * Handle events from the resume stream.
-   */
-  private handleResumeStreamEvent(
-    event: JSONRPCResponse | JSONRPCNotification,
-    callbacks: StreamCallbacks
-  ): void {
-    // Handle notifications (progress events)
-    if ('method' in event && event.method === 'notifications/progress') {
-      const progress = (event.params as { progress?: Record<string, unknown> })?.progress;
-      if (!progress) return;
-
-      const kind = progress.kind as string;
-
-      if (kind === 'token') {
-        callbacks.onToken?.(progress.token as string);
-      } else if (kind === 'token_usage') {
-        callbacks.onTokenUsage?.({
-          prompt_tokens: progress.prompt_tokens as number,
-          completion_tokens: progress.completion_tokens as number,
-          total_prompt_tokens: progress.total_prompt_tokens as number,
-          total_completion_tokens: progress.total_completion_tokens as number,
-          total_used: progress.total_used as number,
-          context_window: progress.context_window as number,
-          occupancy_pct: progress.occupancy_pct as number,
-          model_name: progress.model_name as string,
-          iteration: progress.iteration as number,
-        });
-      } else if (kind === 'action_request') {
-        callbacks.onActionRequest?.({
-          action_name: progress.action_name as string,
-          parameters: progress.parameters as Record<string, unknown>,
-          action: progress.action as ActionData | undefined,
-          tool_call_id: progress.tool_call_id as string | undefined,
-        });
-      } else {
-        callbacks.onProgress?.({
-          kind,
-          id: progress.id as string | undefined,
-          label: progress.label as string | undefined,
-          status: progress.status as 'active' | 'done' | 'error' | undefined,
-          text: progress.text as string | undefined,
-        });
-      }
-      return;
-    }
-
-    // Handle final response
-    if ('result' in event) {
-      const result = event.result as ToolResult;
-      
-      if (result.structuredContent?.registered_actions) {
-        callbacks.onRegisteredActions?.(result.structuredContent.registered_actions);
-      }
-      
-      if (result.structuredContent?.sources) {
-        callbacks.onSources?.(result.structuredContent.sources);
-      }
-      
-      if (result.structuredContent?.actions) {
-        callbacks.onActions?.(result.structuredContent.actions);
-      }
-    }
-
-    // Handle errors
-    if ('error' in event && event.error) {
-      callbacks.onError?.(event.error.message);
-    }
-  }
-
 }
 
 /**
@@ -1138,8 +1000,8 @@ export interface ConversationStatus {
   elapsed_ms?: number;
   user_message?: string;
   partial_response?: string;
-  display_trace?: any[];
-  registered_actions?: any[];
+  display_trace?: DisplayStep[];
+  registered_actions?: Record<string, unknown>[];
 }
 
 /**

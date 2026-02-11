@@ -69,7 +69,7 @@ export function MessageInputArea({
 
     try {
       const response = await api.uploadImage(file);
-      updateImageStatus(id, 'ready', response.url);
+      updateImageStatus(id, 'ready', response.url, undefined, response.path);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
       updateImageStatus(id, 'error', undefined, errorMsg);

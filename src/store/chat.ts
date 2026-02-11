@@ -106,7 +106,7 @@ export interface InterruptedSession {
   conversationId: string;
   userMessage: string;
   partialResponse: string;
-  displayTrace: any[];
+  displayTrace: DisplayStep[];
   elapsedMs: number;
 }
 
@@ -441,6 +441,7 @@ export interface PendingImage {
   status: ImageUploadStatus;
   url?: string;
   error?: string;
+  path?: string;
 }
 
 // Pending images for the current message
@@ -458,6 +459,7 @@ export const getReadyImages = (): ChatImage[] => {
     .map((img) => ({
       url: img.url!,
       detail: "low" as const,
+      path: img.path,
     }));
 };
 
@@ -472,10 +474,11 @@ export const updateImageStatus = (
   id: string,
   status: ImageUploadStatus,
   url?: string,
-  error?: string
+  error?: string,
+  path?: string
 ) => {
   pendingImages.value = pendingImages.value.map((img) =>
-    img.id === id ? { ...img, status, url, error } : img
+    img.id === id ? { ...img, status, url, error, path } : img
   );
 };
 
@@ -1026,6 +1029,7 @@ export const loadConversation = (
     segments: msg.role === 'assistant'
       ? buildSegmentsFromTrace(msg.display_trace)
       : undefined,
+    images: msg.images,
   }));
 
   // Expand chat to show messages

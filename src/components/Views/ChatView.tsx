@@ -119,81 +119,167 @@ export function ChatView() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
-  // Handle resuming an interrupted session
-  const handleResume = useCallback(async () => {
-    const session = interruptedSession.value;
-    if (!session) return;
+  // Shared action request handler — used by both handleInputSubmit and handleResume
+  const handleActionRequest = useCallback(
+    async (request: import("../../api/mcp-client").ActionRequest) => {
+      const requestStartTime = performance.now();
+      const startTimestamp = new Date().toISOString();
+      debug.log(
+        "[Pillar] Received action_request:",
+        request.action_name,
+        request.parameters,
+        `at ${startTimestamp}`
+      );
+      const pillar = Pillar.getInstance();
+      if (pillar) {
+        try {
+          // Check for built-in SDK actions first
+          if (request.action_name === "interact_with_page") {
+            const params = request.parameters as {
+              operation: "click" | "type" | "select" | "focus" | "toggle";
+              ref: string;
+              value?: string;
+            };
 
-    const pillar = Pillar.getInstance();
-    const siteId = pillar?.config?.productKey ?? "";
-    const isDOMScanningEnabled = pillar?.isDOMScanningEnabled ?? false;
-
-    // Gather user context (same logic as handleInputSubmit)
-    let resumeContext: UserContextItem[] = [...userContext.value];
-
-    if (isDOMScanningEnabled) {
-      const scanResult = scanPageDirect(getScanOptions());
-      const domContext: DOMSnapshotContext = {
-        id: generateContextId(),
-        type: "dom_snapshot",
-        url: scanResult.url,
-        title: scanResult.title,
-        content: scanResult.content,
-        interactableCount: scanResult.interactableCount,
-        timestamp: scanResult.timestamp,
-      };
-      resumeContext = [...resumeContext, domContext];
-    }
-
-    setIsResuming(true);
-    setLoading(true);
-
-    // Add placeholder assistant message for the resumed response
-    addAssistantMessage("");
-
-    try {
-      let fullResponse = "";
-
-      await api.mcp.resumeConversation(
-        session.conversationId,
-        resumeContext.length > 0 ? resumeContext : undefined,
-        {
-          onToken: (token) => {
-            fullResponse += token;
-            appendTokenToSegments(token);
-          },
-          onProgress: (progress) => {
-            addProgressEvent(progress as StoreProgressEvent);
-          },
-          onComplete: () => {
-            debug.log("[Pillar] Resume completed");
-          },
-          onError: (error) => {
-            debug.error("[Pillar] Resume error:", error);
-            updateLastAssistantMessage(
-              "Sorry, failed to resume the conversation. Please try again."
+            // Start piloting mode - shows banner
+            startPiloting(
+              params.operation as PilotOperation,
+              request.tool_call_id
             );
-          },
-          onRegisteredActions: () => {
-            // Handle registered actions if needed
-          },
-        }
-      );
 
-      // Clear interrupted session state
-      clearInterruptedSession();
-      clearActiveSession(siteId);
-    } catch (error) {
-      debug.error("[Pillar] Resume error:", error);
-      updateLastAssistantMessage(
-        "Sorry, failed to resume the conversation. Please try again."
-      );
-    } finally {
-      setIsResuming(false);
-      setLoading(false);
-      clearProgressStatus();
-    }
-  }, [api]);
+            try {
+              // Check if cancelled before executing
+              if (wasCancelled()) {
+                await api.mcp.sendActionResult(
+                  request.action_name,
+                  { success: false, error: "User cancelled action" },
+                  request.tool_call_id
+                );
+                debug.log(
+                  "[Pillar] Page interaction cancelled by user before execution"
+                );
+                return;
+              }
+
+              const interactionResult =
+                await pillar.handlePageInteraction(params);
+
+              // Check if cancelled after executing
+              if (wasCancelled()) {
+                await api.mcp.sendActionResult(
+                  request.action_name,
+                  { success: false, error: "User cancelled action" },
+                  request.tool_call_id
+                );
+                debug.log(
+                  "[Pillar] Page interaction cancelled by user after execution"
+                );
+                return;
+              }
+
+              // If action succeeded and DOM scanning is enabled, delta scan after a brief delay
+              let updatedDomSnapshot: string | null = null;
+              if (
+                interactionResult.success &&
+                pillar?.isDOMScanningEnabled
+              ) {
+                // Wait for DOM to settle (animations, async updates)
+                await new Promise((resolve) => setTimeout(resolve, 150));
+                const deltaResult = scanPageDelta(getScanOptions());
+                updatedDomSnapshot = deltaResult.content;
+                debug.log(
+                  "[Pillar] DOM delta scanned after page interaction:",
+                  deltaResult.hasChanges
+                    ? `${deltaResult.newInteractableCount} new, ${deltaResult.removedRefs.length} removed`
+                    : "no changes"
+                );
+              }
+
+              await api.mcp.sendActionResult(
+                request.action_name,
+                {
+                  ...interactionResult,
+                  dom_snapshot: updatedDomSnapshot,
+                },
+                request.tool_call_id
+              );
+
+              const elapsed = Math.round(
+                performance.now() - requestStartTime
+              );
+              debug.log(
+                `[Pillar] Page interaction "${params.operation}" completed in ${elapsed}ms:`,
+                interactionResult
+              );
+            } finally {
+              // Stop piloting mode - hides banner
+              stopPiloting();
+              resetCancellation();
+            }
+            return;
+          }
+
+          // Get handler for the action
+          const handler = pillar.getHandler(request.action_name);
+          let result: unknown = undefined;
+
+          if (handler) {
+            // Execute the registered handler with parameters
+            result = await Promise.resolve(handler(request.parameters));
+          } else {
+            // Fall back to executeTask for built-in action types
+            await pillar.executeTask({
+              id: `action-${request.action_name}`,
+              name: request.action_name,
+              data: request.parameters,
+            });
+          }
+
+          // Send success result back to agent
+          await api.mcp.sendActionResult(
+            request.action_name,
+            { success: true, result },
+            request.tool_call_id
+          );
+
+          const elapsed = Math.round(
+            performance.now() - requestStartTime
+          );
+          debug.log(
+            `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          // Send failure result back to agent
+          await api.mcp.sendActionResult(
+            request.action_name,
+            { success: false, error: errorMessage },
+            request.tool_call_id
+          );
+
+          const elapsed = Math.round(
+            performance.now() - requestStartTime
+          );
+          debug.error(
+            `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
+            error
+          );
+        }
+      } else {
+        debug.error(
+          "[Pillar] SDK not initialized, cannot execute action"
+        );
+        await api.mcp.sendActionResult(
+          request.action_name,
+          { success: false, error: "SDK not initialized" },
+          request.tool_call_id
+        );
+      }
+    },
+    [api]
+  );
 
   // Handle discarding an interrupted session
   const handleDiscard = useCallback(() => {
@@ -203,15 +289,6 @@ export function ChatView() {
     clearInterruptedSession();
     clearActiveSession(siteId);
   }, []);
-
-  // Auto-resume for quick reconnects (under 15 seconds)
-  useEffect(() => {
-    const session = interruptedSession.value;
-    if (session && session.elapsedMs < 15000) {
-      // Seamless resume - trigger automatically
-      handleResume();
-    }
-  }, [interruptedSession.value, handleResume]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -313,6 +390,60 @@ export function ChatView() {
     []
   );
 
+  /** Shared streaming chat helper — wires all callbacks identically for
+   *  both normal sends and resume. */
+  const streamChat = useCallback(
+    async (opts: {
+      message: string;
+      conversationId: string;
+      userContext?: UserContextItem[];
+      images?: ChatImage[];
+      history?: import("../../api/client").ChatMessage[];
+      resume?: boolean;
+    }) => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      let receivedActions: TaskButtonData[] = [];
+
+      const response = await api.chat({
+        message: opts.message,
+        history: opts.history,
+        existingConversationId: opts.conversationId,
+        userContext: opts.userContext,
+        images: opts.images,
+        resume: opts.resume,
+        signal: controller.signal,
+        onChunk: (chunk) => {
+          appendTokenToSegments(chunk);
+        },
+        onActions: (actions) => {
+          receivedActions = handleActionsReceived(actions);
+        },
+        onProgress: (progress: StoreProgressEvent) => {
+          addProgressEvent(progress);
+        },
+        onConversationStarted: () => {
+          const pillar = Pillar.getInstance();
+          const siteId = pillar?.config?.productKey ?? "";
+          const convId = conversationId.value;
+          if (siteId && convId) {
+            import("../../store/session-persistence").then(
+              ({ saveActiveSession }) => {
+                saveActiveSession(convId, siteId);
+              }
+            );
+          }
+        },
+        onActionRequest: handleActionRequest,
+        onRequestId: (id) => setActiveRequestId(id),
+      });
+
+      return { response, receivedActions };
+    },
+    [api, handleActionsReceived, handleActionRequest]
+  );
+
   const sendMessage = useCallback(
     async (
       message: string,
@@ -325,16 +456,10 @@ export function ChatView() {
       // Show loading state
       setLoading(true);
 
-      // Create AbortController for cancellation support
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
       // Add placeholder assistant message
       addAssistantMessage("");
 
       try {
-        let fullResponse = "";
-        let receivedActions: TaskButtonData[] = [];
         const history = messages.value.slice(0, -1); // Exclude the empty assistant message
 
         // Generate conversation_id client-side if new conversation
@@ -343,216 +468,13 @@ export function ChatView() {
           setConversationId(crypto.randomUUID());
         }
 
-        // No article context in standalone chat view
-        const response = await api.chat(
+        const { response, receivedActions } = await streamChat({
           message,
-          history,
-          // Streaming callback
-          (chunk) => {
-            fullResponse += chunk;
-            appendTokenToSegments(chunk);
-          },
-          undefined, // No article slug
-          conversationId.value, // Always set - generated client-side for new conversations
-          // Actions callback - handle auto-run actions
-          (actions) => {
-            receivedActions = handleActionsReceived(actions);
-          },
-          // User context (highlighted text, etc.)
+          conversationId: conversationId.value!,
           userContext,
-          // Images
           images,
-          // Progress callback - show what AI is doing
-          (progress: StoreProgressEvent) => {
-            // Add to progress events array for display (now markdown-based)
-            addProgressEvent(progress);
-          },
-          // Conversation started callback - save active session for recovery on page navigation
-          // (conversation ID already set client-side via crypto.randomUUID above)
-          () => {
-            const pillar = Pillar.getInstance();
-            const siteId = pillar?.config?.productKey ?? "";
-            const convId = conversationId.value;
-            if (siteId && convId) {
-              import("../../store/session-persistence").then(
-                ({ saveActiveSession }) => {
-                  saveActiveSession(convId, siteId);
-                }
-              );
-            }
-          },
-          // Unified action request callback - execute action and send result back
-          async (request) => {
-            const requestStartTime = performance.now();
-            const startTimestamp = new Date().toISOString();
-            debug.log(
-              "[Pillar] Received action_request:",
-              request.action_name,
-              request.parameters,
-              `at ${startTimestamp}`
-            );
-            const pillar = Pillar.getInstance();
-            if (pillar) {
-              try {
-                // Check for built-in SDK actions first
-                if (request.action_name === "interact_with_page") {
-                  const params = request.parameters as {
-                    operation: "click" | "type" | "select" | "focus" | "toggle";
-                    ref: string;
-                    value?: string;
-                  };
-
-                  // Start piloting mode - shows banner
-                  startPiloting(
-                    params.operation as PilotOperation,
-                    request.tool_call_id
-                  );
-
-                  try {
-                    // Check if cancelled before executing
-                    if (wasCancelled()) {
-                      await api.mcp.sendActionResult(
-                        request.action_name,
-                        { success: false, error: "User cancelled action" },
-                        request.tool_call_id
-                      );
-                      debug.log(
-                        "[Pillar] Page interaction cancelled by user before execution"
-                      );
-                      return;
-                    }
-
-                    const interactionResult =
-                      await pillar.handlePageInteraction(params);
-
-                    // Check if cancelled after executing
-                    if (wasCancelled()) {
-                      await api.mcp.sendActionResult(
-                        request.action_name,
-                        { success: false, error: "User cancelled action" },
-                        request.tool_call_id
-                      );
-                      debug.log(
-                        "[Pillar] Page interaction cancelled by user after execution"
-                      );
-                      return;
-                    }
-
-                    // If action succeeded and DOM scanning is enabled, delta scan after a brief delay
-                    let updatedDomSnapshot: string | null = null;
-                    console.log(
-                      "[PILLAR HIT]",
-                      interactionResult.success,
-                      pillar?.isDOMScanningEnabled
-                    );
-                    if (
-                      interactionResult.success &&
-                      pillar?.isDOMScanningEnabled
-                    ) {
-                      // Wait for DOM to settle (animations, async updates)
-                      await new Promise((resolve) => setTimeout(resolve, 150));
-                      const deltaResult = scanPageDelta(getScanOptions());
-                      updatedDomSnapshot = deltaResult.content;
-                      console.log(
-                        "[Pillar DOM Scanner] Delta content:\n",
-                        deltaResult.content ?? "(no changes)"
-                      );
-                      debug.log(
-                        "[Pillar] DOM delta scanned after page interaction:",
-                        deltaResult.hasChanges
-                          ? `${deltaResult.newInteractableCount} new, ${deltaResult.removedRefs.length} removed`
-                          : "no changes"
-                      );
-                    }
-
-                    await api.mcp.sendActionResult(
-                      request.action_name,
-                      {
-                        ...interactionResult,
-                        dom_snapshot: updatedDomSnapshot,
-                      },
-                      request.tool_call_id
-                    );
-
-                    const elapsed = Math.round(
-                      performance.now() - requestStartTime
-                    );
-                    debug.log(
-                      `[Pillar] Page interaction "${params.operation}" completed in ${elapsed}ms:`,
-                      interactionResult
-                    );
-                  } finally {
-                    // Stop piloting mode - hides banner
-                    stopPiloting();
-                    resetCancellation();
-                  }
-                  return;
-                }
-
-                // Get handler for the action
-                const handler = pillar.getHandler(request.action_name);
-                let result: unknown = undefined;
-
-                if (handler) {
-                  // Execute the registered handler with parameters
-                  result = await Promise.resolve(handler(request.parameters));
-                } else {
-                  // Fall back to executeTask for built-in action types
-                  await pillar.executeTask({
-                    id: `action-${request.action_name}`,
-                    name: request.action_name,
-                    data: request.parameters,
-                  });
-                }
-
-                // Send success result back to agent
-                await api.mcp.sendActionResult(
-                  request.action_name,
-                  { success: true, result },
-                  request.tool_call_id
-                );
-
-                const elapsed = Math.round(
-                  performance.now() - requestStartTime
-                );
-                debug.log(
-                  `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
-                );
-              } catch (error) {
-                const errorMessage =
-                  error instanceof Error ? error.message : String(error);
-
-                // Send failure result back to agent
-                await api.mcp.sendActionResult(
-                  request.action_name,
-                  { success: false, error: errorMessage },
-                  request.tool_call_id
-                );
-
-                const elapsed = Math.round(
-                  performance.now() - requestStartTime
-                );
-                debug.error(
-                  `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
-                  error
-                );
-              }
-            } else {
-              debug.error(
-                "[Pillar] SDK not initialized, cannot execute action"
-              );
-              await api.mcp.sendActionResult(
-                request.action_name,
-                { success: false, error: "SDK not initialized" },
-                request.tool_call_id
-              );
-            }
-          },
-          // AbortSignal for cancellation
-          controller.signal,
-          // Store request ID for server-side cancellation
-          (id) => setActiveRequestId(id)
-        );
+          history,
+        });
 
         // Collect final actions (from streaming callback or response)
         let finalActions = receivedActions;
@@ -577,6 +499,15 @@ export function ChatView() {
         if (isNewConversation && conversationId.value) {
           addOptimisticConversation(conversationId.value, message);
         }
+
+        // Clear session hint ONLY on successful completion (not on abort/error)
+        {
+          const pillar = Pillar.getInstance();
+          const siteId = pillar?.config?.productKey ?? "";
+          if (siteId) {
+            clearActiveSession(siteId);
+          }
+        }
       } catch (error) {
         if ((error as Error).name === "AbortError") {
           // User cancelled -- clean up empty placeholder if no tokens arrived
@@ -596,17 +527,96 @@ export function ChatView() {
         clearProgressStatus();
         setActiveRequestId(null);
         abortControllerRef.current = null;
-
-        // Clear session hint on successful completion
-        const pillar = Pillar.getInstance();
-        const siteId = pillar?.config?.productKey ?? "";
-        if (siteId) {
-          clearActiveSession(siteId);
-        }
       }
     },
-    [api, handleActionsReceived]
+    [api, streamChat, handleActionsReceived]
   );
+
+  // Handle resuming an interrupted session
+  const handleResume = useCallback(async () => {
+    const session = interruptedSession.value;
+    if (!session) return;
+
+    const pillar = Pillar.getInstance();
+    const siteId = pillar?.config?.productKey ?? "";
+    const isDOMScanningEnabled = pillar?.isDOMScanningEnabled ?? false;
+
+    // Gather user context (same logic as handleInputSubmit)
+    let resumeContext: UserContextItem[] = [...userContext.value];
+
+    if (isDOMScanningEnabled) {
+      const scanResult = scanPageDirect(getScanOptions());
+      const domContext: DOMSnapshotContext = {
+        id: generateContextId(),
+        type: "dom_snapshot",
+        url: scanResult.url,
+        title: scanResult.title,
+        content: scanResult.content,
+        interactableCount: scanResult.interactableCount,
+        timestamp: scanResult.timestamp,
+      };
+      resumeContext = [...resumeContext, domContext];
+    }
+
+    setIsResuming(true);
+    setLoading(true);
+
+    // Add placeholder assistant message for the resumed response
+    addAssistantMessage("");
+
+    try {
+      const { response, receivedActions } = await streamChat({
+        message: "",
+        conversationId: session.conversationId,
+        userContext: resumeContext.length > 0 ? resumeContext : undefined,
+        resume: true,
+      });
+
+      // Handle actions from response
+      let finalActions = receivedActions;
+      if (response.actions && response.actions.length > 0) {
+        finalActions = handleActionsReceived(response.actions);
+      }
+
+      updateLastAssistantMessage(
+        response.message,
+        response.messageId,
+        finalActions,
+        response.sources
+      );
+
+      // Clear interrupted session state
+      clearInterruptedSession();
+      clearActiveSession(siteId);
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        removeLastEmptyAssistantMessage();
+        return;
+      }
+      debug.error("[Pillar] Resume error:", error);
+      updateLastAssistantMessage(
+        "Sorry, failed to resume the conversation. Please try again."
+      );
+      // Clear so user isn't stuck in a resume loop
+      clearInterruptedSession();
+      clearActiveSession(siteId);
+    } finally {
+      setIsResuming(false);
+      setLoading(false);
+      clearProgressStatus();
+      setActiveRequestId(null);
+      abortControllerRef.current = null;
+    }
+  }, [streamChat, handleActionsReceived]);
+
+  // Auto-resume for quick reconnects (under 15 seconds)
+  useEffect(() => {
+    const session = interruptedSession.value;
+    if (session && session.elapsedMs < 15000) {
+      // Seamless resume - trigger automatically
+      handleResume();
+    }
+  }, [interruptedSession.value, handleResume]);
 
   // Handle stop button - cancel in-progress streaming
   const handleStop = useCallback(() => {
@@ -630,6 +640,13 @@ export function ChatView() {
 
     // 5. Finalize active progress events so thinking timers stop
     finalizeActiveProgressEvents();
+
+    // 6. Clear session hint — user explicitly stopped, not a disconnect
+    const pillar = Pillar.getInstance();
+    const siteId = pillar?.config?.productKey ?? "";
+    if (siteId) {
+      clearActiveSession(siteId);
+    }
   }, [api]);
 
   // Handle feedback submission
@@ -656,13 +673,6 @@ export function ChatView() {
       if (isDOMScanningEnabled) {
         // Use optimized single-pass scanner (no AST intermediate)
         const scanResult = scanPageDirect(getScanOptions());
-
-        // Log the compact content for debugging
-        console.log("PILLAR HIT YO");
-        console.log(
-          "[Pillar DOM Scanner] Compact content:\n",
-          scanResult.content
-        );
 
         // Add DOM context to message
         const domContext: DOMSnapshotContext = {
