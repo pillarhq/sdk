@@ -453,7 +453,7 @@ export interface ResolvedConfig {
   onError?: (error: Error) => void;
 }
 
-export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey' | 'publicKey'> = {
+export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
   platform: 'web',
   debug: false,
