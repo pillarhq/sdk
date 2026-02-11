@@ -357,12 +357,32 @@ export class Panel {
       updatePanelUI();
     });
 
+    // Subscribe to width changes (e.g. from drag-to-resize)
+    // Updates the CSS variable on the panel element and push mode padding
+    let previousWidth = width.value;
+    const unsubscribeWidth = width.subscribe((currentWidth) => {
+      if (currentWidth === previousWidth) return;
+      previousWidth = currentWidth;
+
+      // Update the CSS variable so the panel element resizes
+      this.panelElement?.style.setProperty(
+        "--pillar-panel-width",
+        `${currentWidth}px`
+      );
+
+      // Update push mode padding if panel is open
+      if (isOpen.value) {
+        updatePanelUI();
+      }
+    });
+
     // Combined cleanup
     this.unsubscribe = () => {
       unsubscribeOpen();
       unsubscribeMode();
       unsubscribeFullWidth();
       unsubscribeMobile();
+      unsubscribeWidth();
     };
   }
 

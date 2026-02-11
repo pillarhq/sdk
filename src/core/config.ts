@@ -226,6 +226,13 @@ export interface EdgeTriggerConfig {
    * @default true
    */
   enabled?: boolean;
+  /**
+   * Whether the panel can be resized by dragging the edge of the sidebar trigger.
+   * When enabled, a drag handle appears on the inner edge of the sidebar when the panel is open.
+   * The resized width is persisted to localStorage.
+   * @default true
+   */
+  resizable?: boolean;
 }
 
 export type MobileTriggerPosition = 'bottom-right' | 'bottom-left';
@@ -471,6 +478,7 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   
   edgeTrigger: {
     enabled: true,
+    resizable: true,
   },
   
   mobileTrigger: {

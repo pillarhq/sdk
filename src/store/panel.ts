@@ -11,6 +11,7 @@ import type { PanelPosition, PanelMode } from '../core/config';
 // ============================================================================
 
 const PANEL_OPEN_STORAGE_KEY = 'pillar:panel_open';
+const PANEL_WIDTH_STORAGE_KEY = 'pillar:panel_width';
 
 /**
  * Load panel open state from localStorage.
@@ -33,6 +34,34 @@ function savePanelOpenState(open: boolean): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(PANEL_OPEN_STORAGE_KEY, String(open));
+  } catch {
+    // Silently fail - localStorage may be unavailable
+  }
+}
+
+/**
+ * Load panel width from localStorage.
+ * Returns null if not set or on error.
+ */
+export function loadPanelWidth(): number | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
+    if (stored === null) return null;
+    const parsed = Number(stored);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save panel width to localStorage.
+ */
+export function savePanelWidth(w: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(w));
   } catch {
     // Silently fail - localStorage may be unavailable
   }

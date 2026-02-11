@@ -106,3 +106,55 @@
 .pillar-edge-sidebar--mounted {
   animation: pillar-sidebar-mount 0.2s ease forwards;
 }
+
+/* Resize handle - appears on the inner edge of the sidebar (content side) */
+.pillar-edge-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+  display: none;
+  touch-action: none;
+}
+
+/* Position the handle on the correct edge based on panel position */
+.pillar-edge-sidebar--right .pillar-edge-resize-handle {
+  left: -3px;
+}
+
+.pillar-edge-sidebar--left .pillar-edge-resize-handle {
+  right: -3px;
+}
+
+/* Only show when panel is open */
+.pillar-edge-sidebar--panel-open .pillar-edge-resize-handle {
+  display: block;
+}
+
+/* Visible indicator line on hover */
+.pillar-edge-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.15s ease;
+  border-radius: 1px;
+}
+
+
+/* Override cursor on the whole sidebar during resize */
+.pillar-edge-sidebar--resizing,
+.pillar-edge-sidebar--resizing * {
+  cursor: col-resize !important;
+}
+
+/* Disable sidebar transition during resize for immediate feedback */
+.pillar-edge-sidebar--resizing {
+  transition: none !important;
+}

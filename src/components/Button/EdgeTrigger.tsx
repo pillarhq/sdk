@@ -20,8 +20,15 @@ import {
   isOpen,
   width as panelWidth,
   setActiveTab,
+  setWidth,
+  loadPanelWidth,
+  savePanelWidth,
 } from "../../store/panel";
 import { injectStyles } from "../../utils/dom";
+
+// Width constraints for panel resize
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 700;
 
 // Preset icons for sidebar tabs (Lucide icon set)
 const PRESET_ICONS = {
@@ -112,6 +119,9 @@ interface EdgeTriggerContentProps {
   panelOpen: boolean;
   panelWidthPx: number;
   theme: "light" | "dark";
+  resizable: boolean;
+  isResizing: boolean;
+  onResizeStart: (e: MouseEvent | TouchEvent) => void;
 }
 
 function EdgeTriggerContent({
@@ -122,6 +132,9 @@ function EdgeTriggerContent({
   panelOpen,
   panelWidthPx,
   theme,
+  resizable,
+  isResizing,
+  onResizeStart,
 }: EdgeTriggerContentProps) {
   const handleTabClick = useCallback(
     (tabId: string) => {
@@ -135,6 +148,7 @@ function EdgeTriggerContent({
     `pillar-edge-sidebar--${position}`,
     "pillar-edge-sidebar--mounted",
     panelOpen && "pillar-edge-sidebar--panel-open",
+    isResizing && "pillar-edge-sidebar--resizing",
     // Apply explicit theme class
     theme === "light" && "pillar-edge-sidebar--light",
     theme === "dark" && "pillar-edge-sidebar--dark",
@@ -154,6 +168,13 @@ function EdgeTriggerContent({
 
   return (
     <div class={sidebarClassName} style={style}>
+      {resizable && panelOpen && (
+        <div
+          class="pillar-edge-resize-handle"
+          onMouseDown={onResizeStart as any}
+          onTouchStart={onResizeStart as any}
+        />
+      )}
       {enabledTabs.map((tab) => {
         const isActive = panelOpen && currentActiveTab === tab.id;
         const buttonClassName = [
@@ -205,6 +226,14 @@ export class EdgeTrigger {
   private unsubscribeActiveTab: (() => void) | null = null;
   private themeObserver: MutationObserver | null = null;
   private currentTheme: "light" | "dark" = "light";
+
+  // Resize state
+  private _isResizing = false;
+  private _resizeStartX = 0;
+  private _resizeStartWidth = 0;
+  private _resizeRafId: number | null = null;
+  private _boundHandleResizeMove: ((e: MouseEvent | TouchEvent) => void) | null = null;
+  private _boundHandleResizeEnd: ((e: MouseEvent | TouchEvent) => void) | null = null;
 
   constructor(
     config: ResolvedConfig,
@@ -295,6 +324,14 @@ export class EdgeTrigger {
         injectStyles(document, themeCSS, "pillar-edge-trigger-theme");
       }
       this.themeStylesInjected = true;
+    }
+
+    // Restore saved panel width from localStorage (if resizable is enabled)
+    if (this.config.edgeTrigger.resizable) {
+      const storedWidth = loadPanelWidth();
+      if (storedWidth !== null) {
+        setWidth(storedWidth);
+      }
     }
 
     // Create container and append to root container (for stacking context isolation)
@@ -459,6 +496,15 @@ export class EdgeTrigger {
    * Destroy the trigger
    */
   destroy(): void {
+    // Clean up any in-progress resize
+    if (this._isResizing) {
+      this.handleResizeEnd(new MouseEvent('mouseup'));
+    }
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
+
     this.unsubscribeOpen?.();
     this.unsubscribeOpen = null;
     this.unsubscribeWidth?.();
@@ -486,6 +532,117 @@ export class EdgeTrigger {
   }
 
   // ============================================================================
+  // Resize Methods
+  // ============================================================================
+
+  /**
+   * Handle resize start from mouse or touch event on the drag handle
+   */
+  private handleResizeStart = (e: MouseEvent | TouchEvent): void => {
+    if (!isOpen.value || !this.config.edgeTrigger.resizable) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    this._isResizing = true;
+    this._resizeStartX = clientX;
+    this._resizeStartWidth = panelWidth.value;
+
+    // Bind move/end handlers
+    this._boundHandleResizeMove = this.handleResizeMove.bind(this);
+    this._boundHandleResizeEnd = this.handleResizeEnd.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleResizeMove);
+    document.addEventListener('mouseup', this._boundHandleResizeEnd);
+    document.addEventListener('touchmove', this._boundHandleResizeMove, { passive: false });
+    document.addEventListener('touchend', this._boundHandleResizeEnd);
+    document.addEventListener('touchcancel', this._boundHandleResizeEnd);
+
+    // Prevent text selection and set cursor during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    document.documentElement.style.cursor = 'col-resize';
+
+    // Disable panel transition during resize for immediate feedback
+    document.documentElement.style.transition = 'none';
+
+    this.render();
+  };
+
+  /**
+   * Handle resize move - throttled via requestAnimationFrame
+   */
+  private handleResizeMove(e: MouseEvent | TouchEvent): void {
+    if (!this._isResizing) return;
+
+    if ('touches' in e) {
+      e.preventDefault();
+    }
+
+    // Throttle via rAF - skip if a frame is already pending
+    if (this._resizeRafId !== null) return;
+
+    this._resizeRafId = requestAnimationFrame(() => {
+      this._resizeRafId = null;
+      if (!this._isResizing) return;
+
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const delta = this._resizeStartX - clientX;
+      const position = this.getEdgePosition();
+
+      // For right-positioned panel: dragging left (negative delta from start) increases width
+      // For left-positioned panel: dragging right (positive delta from start) increases width
+      const widthDelta = position === 'right' ? delta : -delta;
+      const maxWidth = Math.min(MAX_PANEL_WIDTH, window.innerWidth - TRIGGER_WIDTH - 100);
+      const newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(maxWidth, this._resizeStartWidth + widthDelta));
+
+      setWidth(newWidth);
+    });
+  }
+
+  /**
+   * Handle resize end - save final width and clean up
+   */
+  private handleResizeEnd = (_e: MouseEvent | TouchEvent): void => {
+    if (!this._isResizing) return;
+
+    // Cancel any pending rAF
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
+
+    this._isResizing = false;
+
+    // Save final width to localStorage
+    savePanelWidth(panelWidth.value);
+
+    // Remove event listeners
+    if (this._boundHandleResizeMove) {
+      document.removeEventListener('mousemove', this._boundHandleResizeMove);
+      document.removeEventListener('touchmove', this._boundHandleResizeMove);
+    }
+    if (this._boundHandleResizeEnd) {
+      document.removeEventListener('mouseup', this._boundHandleResizeEnd);
+      document.removeEventListener('touchend', this._boundHandleResizeEnd);
+      document.removeEventListener('touchcancel', this._boundHandleResizeEnd);
+    }
+    this._boundHandleResizeMove = null;
+    this._boundHandleResizeEnd = null;
+
+    // Restore text selection and cursor
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+    document.documentElement.style.cursor = '';
+
+    // Restore transition
+    document.documentElement.style.transition = 'padding 0.3s ease';
+
+    this.render();
+  };
+
+  // ============================================================================
   // Private Methods
   // ============================================================================
 
@@ -504,6 +661,9 @@ export class EdgeTrigger {
         panelOpen={isOpen.value}
         panelWidthPx={panelWidth.value}
         theme={this.currentTheme}
+        resizable={this.config.edgeTrigger.resizable}
+        isResizing={this._isResizing}
+        onResizeStart={this.handleResizeStart}
       />,
       this.container
     );
