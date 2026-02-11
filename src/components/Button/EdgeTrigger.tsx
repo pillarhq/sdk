@@ -67,7 +67,8 @@ const TRIGGER_WIDTH = 48;
  */
 function generateEdgeTriggerThemeCSS(
   colors: ThemeColors,
-  darkColors: ThemeColors
+  darkColors: ThemeColors,
+  fontFamily?: string
 ): string {
   const generateVars = (c: ThemeColors): string => {
     const lines: string[] = [];
@@ -86,15 +87,16 @@ function generateEdgeTriggerThemeCSS(
 
   const lightVars = generateVars(colors);
   const darkVars = generateVars(darkColors);
+  const fontVar = fontFamily ? `--pillar-font-family: ${fontFamily};` : "";
 
   let css = "";
 
-  // Light mode (default)
-  if (lightVars) {
+  // Light mode (default) - includes font family since it applies to both modes
+  if (lightVars || fontVar) {
     css += `
 .pillar-edge-sidebar,
 .pillar-edge-sidebar--light {
-    ${lightVars}
+    ${[lightVars, fontVar].filter(Boolean).join("\n    ")}
 }
 `;
   }
@@ -318,7 +320,8 @@ export class EdgeTrigger {
     if (!this.themeStylesInjected) {
       const themeCSS = generateEdgeTriggerThemeCSS(
         this.config.theme.colors,
-        this.config.theme.darkColors
+        this.config.theme.darkColors,
+        this.config.theme.fontFamily
       );
       if (themeCSS) {
         injectStyles(document, themeCSS, "pillar-edge-trigger-theme");

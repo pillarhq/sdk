@@ -59,6 +59,11 @@ export interface ThemeConfig {
   colors?: ThemeColors;
   /** Custom color overrides for dark mode (when mode is 'auto' or 'dark') */
   darkColors?: ThemeColors;
+  /**
+   * Font family for all panel text.
+   * @default "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+   */
+  fontFamily?: string;
 }
 
 export interface PanelConfig {
@@ -406,6 +411,7 @@ export interface ResolvedThemeConfig {
   mode: ThemeMode;
   colors: ThemeColors;
   darkColors: ThemeColors;
+  fontFamily?: string;
 }
 
 export interface ResolvedInteractionHighlightConfig {
@@ -625,6 +631,7 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
       mode: config.theme?.mode ?? DEFAULT_CONFIG.theme.mode,
       colors: { ...config.theme?.colors },
       darkColors: { ...config.theme?.darkColors },
+      fontFamily: config.theme?.fontFamily,
     },
     
     customCSS: config.customCSS,

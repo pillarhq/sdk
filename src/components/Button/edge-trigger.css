@@ -1,5 +1,15 @@
 /* Sidebar container - always visible, shifts when panel opens */
 .pillar-edge-sidebar {
+  /* Default light mode variables (match panel's variables.css) */
+  --pillar-primary: #2563eb;
+  --pillar-primary-hover: #1d4ed8;
+  --pillar-bg: #ffffff;
+  --pillar-bg-secondary: #f9fafb;
+  --pillar-text: #1a1a1a;
+  --pillar-text-muted: #6b7280;
+  --pillar-border: #e5e7eb;
+  --pillar-border-light: #f3f4f6;
+
   position: fixed;
   top: 0;
   bottom: 0;
@@ -11,6 +21,18 @@
   background: var(--pillar-bg);
   border-left: 1px solid var(--pillar-border);
   transition: right 0.3s ease, left 0.3s ease;
+}
+
+/* Default dark mode variables (match panel's variables.css) */
+.pillar-edge-sidebar--dark {
+  --pillar-primary: #2563eb;
+  --pillar-primary-hover: #1d4ed8;
+  --pillar-bg: #1a1a1a;
+  --pillar-bg-secondary: #262626;
+  --pillar-text: #f5f5f5;
+  --pillar-text-muted: #a3a3a3;
+  --pillar-border: #404040;
+  --pillar-border-light: #333333;
 }
 
 .pillar-edge-sidebar--right {
@@ -62,7 +84,7 @@
 }
 
 .pillar-edge-trigger--active {
-  background: var(--pillar-primary-light, rgba(194, 65, 12, 0.1));
+  background: var(--pillar-bg-secondary);
   color: var(--pillar-primary);
 }
 

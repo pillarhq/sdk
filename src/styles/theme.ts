@@ -41,13 +41,18 @@ export function generateThemeCSS(theme: ResolvedThemeConfig): string {
   const lightOverrides = generateThemeVariables(theme.colors);
   const darkOverrides = generateThemeVariables(theme.darkColors);
 
+  // Font family applies to both light and dark modes
+  const fontOverride = theme.fontFamily
+    ? `--pillar-font-family: ${theme.fontFamily};`
+    : "";
+
   let css = "";
 
-  // Light mode overrides
-  if (lightOverrides) {
+  // Light mode overrides (+ font family if set)
+  if (lightOverrides || fontOverride) {
     css += `
 :host {
-    ${lightOverrides}
+    ${[lightOverrides, fontOverride].filter(Boolean).join("\n    ")}
 }
 `;
   }
