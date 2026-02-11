@@ -1026,10 +1026,10 @@ export const loadConversation = (
     role: msg.role,
     content: msg.content,
     id: msg.id,
+    images: msg.role === 'user' && msg.images?.length ? msg.images : undefined,
     segments: msg.role === 'assistant'
       ? buildSegmentsFromTrace(msg.display_trace)
       : undefined,
-    images: msg.images,
   }));
 
   // Expand chat to show messages

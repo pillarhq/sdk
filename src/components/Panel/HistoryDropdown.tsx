@@ -7,10 +7,12 @@ import { h, Fragment } from 'preact';
 import { useState, useRef, useEffect, useMemo } from 'preact/hooks';
 import { getApiClient } from '../../core/Pillar';
 import { historyInvalidationCounter, optimisticConversations } from '../../store/chat';
+import { isMobileMode } from '../../store/panel';
 import { debug } from '../../utils/debug';
 import type { ConversationSummary } from '../../api/client';
 
 const CLOCK_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>`;
+const CLOSE_ICON = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>`;
 
 interface HistoryDropdownProps {
   onSelectConversation: (conversationId: string) => void;
@@ -110,9 +112,9 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
     return unsubscribe;
   }, [lastInvalidation]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking/tapping outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
@@ -120,10 +122,12 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [isOpen]);
 
@@ -178,6 +182,49 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
     onSelectConversation(conversationId);
   };
 
+  const isMobile = isMobileMode.value;
+
+  const menuClasses = [
+    '_pillar-history-menu',
+    'pillar-history-menu',
+    isMobile ? '_pillar-history-menu--mobile' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const menuContent = isLoading ? (
+    <div class="_pillar-history-loading pillar-history-loading">
+      <div class="_pillar-history-spinner pillar-history-spinner" />
+      <span>Loading...</span>
+    </div>
+  ) : conversations.length === 0 ? (
+    <div class="_pillar-history-empty pillar-history-empty">
+      No conversations yet
+    </div>
+  ) : (
+    <div class="_pillar-history-list pillar-history-list">
+      {groupedConversations.map((group) => (
+        <Fragment key={group.label}>
+          <div class="_pillar-history-group-header pillar-history-group-header">
+            {group.label}
+          </div>
+          {group.conversations.map((conv) => (
+            <button
+              key={conv.id}
+              class="_pillar-history-item pillar-history-item"
+              onClick={() => handleSelectConversation(conv.id)}
+              type="button"
+            >
+              <span class="_pillar-history-item-title pillar-history-item-title">
+                {conv.title}
+              </span>
+            </button>
+          ))}
+        </Fragment>
+      ))}
+    </div>
+  );
+
   return (
     <div class="_pillar-history-dropdown pillar-history-dropdown" ref={dropdownRef}>
       <button
@@ -191,39 +238,20 @@ export function HistoryDropdown({ onSelectConversation }: HistoryDropdownProps) 
       />
       
       {isOpen && (
-        <div class="_pillar-history-menu pillar-history-menu">
-          {isLoading ? (
-            <div class="_pillar-history-loading pillar-history-loading">
-              <div class="_pillar-history-spinner pillar-history-spinner" />
-              <span>Loading...</span>
-            </div>
-          ) : conversations.length === 0 ? (
-            <div class="_pillar-history-empty pillar-history-empty">
-              No conversations yet
-            </div>
-          ) : (
-            <div class="_pillar-history-list pillar-history-list">
-              {groupedConversations.map((group) => (
-                <Fragment key={group.label}>
-                  <div class="_pillar-history-group-header pillar-history-group-header">
-                    {group.label}
-                  </div>
-                  {group.conversations.map((conv) => (
-                    <button
-                      key={conv.id}
-                      class="_pillar-history-item pillar-history-item"
-                      onClick={() => handleSelectConversation(conv.id)}
-                      type="button"
-                    >
-                      <span class="_pillar-history-item-title pillar-history-item-title">
-                        {conv.title}
-                      </span>
-                    </button>
-                  ))}
-                </Fragment>
-              ))}
+        <div class={menuClasses}>
+          {isMobile && (
+            <div class="_pillar-history-mobile-header">
+              <span class="_pillar-history-mobile-title">History</span>
+              <button
+                class="_pillar-history-mobile-close"
+                onClick={() => setIsOpen(false)}
+                aria-label="Close history"
+                type="button"
+                dangerouslySetInnerHTML={{ __html: CLOSE_ICON }}
+              />
             </div>
           )}
+          {menuContent}
         </div>
       )}
     </div>

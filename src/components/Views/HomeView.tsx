@@ -31,7 +31,10 @@ export function HomeView() {
 
   return (
     <div class="_pillar-home-view pillar-home-view">
-      {/* Suggested Questions */}
+      {/* Spacer pushes suggestions + input to the bottom */}
+      <div style={{ flex: 1 }} />
+
+      {/* Suggested Questions — directly above the input */}
       <div class="_pillar-home-view-questions pillar-home-view-questions">
         {isLoading.value ? (
           // Loading skeleton
@@ -52,10 +55,8 @@ export function HomeView() {
         ) : null}
       </div>
 
-      {/* Input Area - pushed to bottom with margin-top: auto */}
-      <div style={{ marginTop: 'auto' }}>
-        <UnifiedChatInput placeholder="Ask anything..." />
-      </div>
+      {/* Input Area */}
+      <UnifiedChatInput placeholder="Ask anything..." />
     </div>
   );
 }

@@ -15,8 +15,35 @@
 }
 
 ._pillar-panel--mobile ._pillar-header {
-  height: 48px;
-  padding: 8px var(--pillar-spacing-md);
+  position: relative;
+  height: auto;
+  min-height: 48px;
+  padding: 20px var(--pillar-spacing-md) 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- Drag indicator (iOS-style pill) ---- */
+
+._pillar-drag-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 0;
+  pointer-events: none;
+}
+
+._pillar-drag-indicator-pill {
+  width: 36px;
+  height: 5px;
+  border-radius: 2.5px;
+  background: var(--pillar-text-muted);
+  opacity: 0.35;
 }
 
 ._pillar-header-left {
@@ -192,6 +219,122 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+
+/* ============================================================================
+   History Dropdown – Mobile Overlay
+   When inside a mobile panel, the dropdown becomes a full-screen overlay
+   within the panel instead of a small positioned menu.
+   ============================================================================ */
+
+._pillar-history-menu--mobile {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin-top: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+
+._pillar-history-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 var(--pillar-spacing-md);
+  border-bottom: 1px solid var(--pillar-border);
+  flex-shrink: 0;
+}
+
+._pillar-history-mobile-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pillar-text);
+}
+
+._pillar-history-mobile-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--pillar-text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--pillar-radius-md);
+  cursor: pointer;
+  transition:
+    color var(--pillar-transition-fast),
+    background var(--pillar-transition-fast);
+}
+
+._pillar-history-mobile-close:hover,
+._pillar-history-mobile-close:active {
+  color: var(--pillar-text);
+  background: var(--pillar-bg-secondary);
+}
+
+._pillar-history-mobile-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Mobile: larger list area fills remaining space */
+._pillar-history-menu--mobile ._pillar-history-list {
+  flex: 1;
+  max-height: none;
+  padding: var(--pillar-spacing-sm) 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: larger group headers */
+._pillar-history-menu--mobile ._pillar-history-group-header {
+  font-size: 12px;
+  padding: var(--pillar-spacing-sm) var(--pillar-spacing-md);
+  padding-top: var(--pillar-spacing-md);
+}
+
+._pillar-history-menu--mobile ._pillar-history-group-header:first-child {
+  padding-top: var(--pillar-spacing-sm);
+}
+
+/* Mobile: larger touch targets (min 44px) */
+._pillar-history-menu--mobile ._pillar-history-item {
+  min-height: 44px;
+  padding: var(--pillar-spacing-sm) var(--pillar-spacing-md);
+  margin: 0 var(--pillar-spacing-sm);
+  width: calc(100% - var(--pillar-spacing-md));
+  border-radius: var(--pillar-radius-md);
+}
+
+._pillar-history-menu--mobile ._pillar-history-item:active {
+  background: var(--pillar-bg-secondary);
+}
+
+/* Mobile: slightly larger item text */
+._pillar-history-menu--mobile ._pillar-history-item-title {
+  font-size: 15px;
+}
+
+/* Mobile: loading / empty states get more breathing room */
+._pillar-history-menu--mobile ._pillar-history-loading,
+._pillar-history-menu--mobile ._pillar-history-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
 }
 
 /* Public override classes */
