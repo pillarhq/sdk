@@ -12,6 +12,7 @@ import {
   addProgressEvent,
   addUserMessage,
   clearInterruptedSession,
+  setInterruptedSession,
   clearPendingImagesForNavigation,
   clearPendingMessage,
   clearPendingUserContext,
@@ -290,12 +291,12 @@ export function ChatView() {
     clearActiveSession(siteId);
   }, []);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or resume prompt appears
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
-  }, [messages.value]);
+  }, [messages.value, interruptedSession.value]);
 
   // Listen for task completion events to update action status
   useEffect(() => {
@@ -641,11 +642,34 @@ export function ChatView() {
     // 5. Finalize active progress events so thinking timers stop
     finalizeActiveProgressEvents();
 
-    // 6. Clear session hint — user explicitly stopped, not a disconnect
+    // 6. Check if there's a partial response — if so, enable resume
+    const msgs = messages.value;
+    const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+    const hasPartialResponse =
+      lastMsg?.role === "assistant" && Boolean(lastMsg?.content?.trim());
+
     const pillar = Pillar.getInstance();
     const siteId = pillar?.config?.productKey ?? "";
-    if (siteId) {
-      clearActiveSession(siteId);
+
+    if (hasPartialResponse && conversationId.value) {
+      // Agent was mid-answer — set up interruptedSession so the resume
+      // prompt appears and the user can pick up where the agent left off.
+      const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user");
+
+      setInterruptedSession({
+        conversationId: conversationId.value,
+        userMessage: lastUserMsg?.content ?? "",
+        partialResponse: lastMsg.content ?? "",
+        displayTrace: [],
+        elapsedMs: 99999, // Prevent auto-resume — user explicitly stopped
+      });
+
+      // Keep localStorage session hint so page refresh also enables resume
+    } else {
+      // No partial response (early stop) — clear session hint
+      if (siteId) {
+        clearActiveSession(siteId);
+      }
     }
   }, [api]);
 
@@ -733,29 +757,6 @@ export function ChatView() {
         class="_pillar-chat-view-messages pillar-chat-view-messages"
         ref={messagesRef}
       >
-        {/* Resume prompt for interrupted sessions (only show for non-seamless disconnects) */}
-        {interruptedSession.value &&
-          interruptedSession.value.elapsedMs >= 15000 && (
-            <ResumePrompt
-              session={interruptedSession.value}
-              onResume={handleResume}
-              onDiscard={handleDiscard}
-              isResuming={isResuming}
-            />
-          )}
-
-        {/* Seamless resume indicator */}
-        {isResuming &&
-          interruptedSession.value &&
-          interruptedSession.value.elapsedMs < 15000 && (
-            <ResumePrompt
-              session={interruptedSession.value}
-              onResume={handleResume}
-              onDiscard={handleDiscard}
-              isResuming={true}
-            />
-          )}
-
         {/* Loading skeleton for history */}
         {isLoadingHistory.value && (
           <div class="_pillar-chat-history-loading pillar-chat-history-loading">
@@ -964,6 +965,30 @@ export function ChatView() {
             )}
           </div>
         ))}
+
+        {/* Resume prompt for interrupted sessions (rendered at bottom so it's
+            visible after explicit stop or reconnect without scrolling up) */}
+        {interruptedSession.value &&
+          interruptedSession.value.elapsedMs >= 15000 && (
+            <ResumePrompt
+              session={interruptedSession.value}
+              onResume={handleResume}
+              onDiscard={handleDiscard}
+              isResuming={isResuming}
+            />
+          )}
+
+        {/* Seamless resume indicator */}
+        {isResuming &&
+          interruptedSession.value &&
+          interruptedSession.value.elapsedMs < 15000 && (
+            <ResumePrompt
+              session={interruptedSession.value}
+              onResume={handleResume}
+              onDiscard={handleDiscard}
+              isResuming={true}
+            />
+          )}
       </div>
 
       {/* Input area */}
