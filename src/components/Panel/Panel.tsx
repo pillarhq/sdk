@@ -23,9 +23,11 @@ import {
   isHoverMode,
   isMobileMode,
   isOpen,
+  loadPanelWidth,
   openPanel,
   position,
   resetPanel,
+  savePanelWidth,
   setHoverBackdrop,
   setHoverBreakpoint,
   setMode,
@@ -51,9 +53,18 @@ export class Panel {
   private backdrop: HTMLElement | null = null;
   private panelElement: HTMLElement | null = null;
   private renderRoot: HTMLElement | null = null;
+  private resizeHandle: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
   private isManualMount: boolean = false;
   private themeObserver: MutationObserver | null = null;
+
+  // Resize state
+  private _isResizing = false;
+  private _resizeStartX = 0;
+  private _resizeStartWidth = 0;
+  private _resizeRafId: number | null = null;
+  private _boundHandleResizeMove: ((e: MouseEvent | TouchEvent) => void) | null = null;
+  private _boundHandleResizeEnd: ((e: MouseEvent | TouchEvent) => void) | null = null;
 
   constructor(
     config: ResolvedConfig,
@@ -104,9 +115,16 @@ export class Panel {
     // Set initial config values in store
     setPosition(this.config.panel.position);
     setMode(this.config.panel.mode);
-    setWidth(this.config.panel.width);
     setHoverBreakpoint(this.config.panel.hoverBreakpoint);
     setHoverBackdrop(this.config.panel.hoverBackdrop);
+
+    // Restore saved panel width from localStorage if resizable, otherwise use config default
+    if (this.config.panel.resizable) {
+      const storedWidth = loadPanelWidth();
+      setWidth(storedWidth !== null ? storedWidth : this.config.panel.width);
+    } else {
+      setWidth(this.config.panel.width);
+    }
 
     // Initialize viewport listener for responsive behavior
     initViewportListener();
@@ -195,6 +213,22 @@ export class Panel {
   destroy(): void {
     this.close();
 
+    // Clean up any in-progress resize
+    if (this._isResizing) {
+      this.handleResizeEnd(new MouseEvent('mouseup'));
+    }
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
+
+    // Clean up resize handle
+    if (this.resizeHandle) {
+      this.resizeHandle.removeEventListener('mousedown', this.handleResizeStart);
+      this.resizeHandle.removeEventListener('touchstart', this.handleResizeStart);
+      this.resizeHandle = null;
+    }
+
     // Clean up push mode styles (only if not manual mount)
     if (!this.isManualMount) {
       this.removePushModeStyles();
@@ -236,6 +270,122 @@ export class Panel {
     resetRouter();
     resetChat();
   }
+
+  // ============================================================================
+  // Resize Methods
+  // ============================================================================
+
+  /** Internal safety clamp -- not user-configurable */
+  private static readonly MIN_PANEL_WIDTH = 200;
+
+  /**
+   * Handle resize start from mouse or touch event on the drag handle
+   */
+  private handleResizeStart = (e: MouseEvent | TouchEvent): void => {
+    if (!isOpen.value || !this.config.panel.resizable) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    this._isResizing = true;
+    this._resizeStartX = clientX;
+    this._resizeStartWidth = width.value;
+
+    // Bind move/end handlers
+    this._boundHandleResizeMove = this.handleResizeMove.bind(this);
+    this._boundHandleResizeEnd = this.handleResizeEnd.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleResizeMove);
+    document.addEventListener('mouseup', this._boundHandleResizeEnd);
+    document.addEventListener('touchmove', this._boundHandleResizeMove, { passive: false });
+    document.addEventListener('touchend', this._boundHandleResizeEnd);
+    document.addEventListener('touchcancel', this._boundHandleResizeEnd);
+
+    // Prevent text selection and set cursor during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    document.documentElement.style.cursor = 'col-resize';
+
+    // Disable panel transition during resize for immediate feedback
+    document.documentElement.style.transition = 'none';
+
+    // Add resizing class to panel
+    this.panelElement?.classList.add('_pillar-panel--resizing', 'pillar-panel--resizing');
+  };
+
+  /**
+   * Handle resize move - throttled via requestAnimationFrame
+   */
+  private handleResizeMove(e: MouseEvent | TouchEvent): void {
+    if (!this._isResizing) return;
+
+    if ('touches' in e) {
+      e.preventDefault();
+    }
+
+    // Throttle via rAF - skip if a frame is already pending
+    if (this._resizeRafId !== null) return;
+
+    this._resizeRafId = requestAnimationFrame(() => {
+      this._resizeRafId = null;
+      if (!this._isResizing) return;
+
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const delta = this._resizeStartX - clientX;
+      const panelPosition = position.value;
+
+      // For right-positioned panel: dragging left increases width
+      // For left-positioned panel: dragging right increases width
+      const widthDelta = panelPosition === 'right' ? delta : -delta;
+      const maxWidth = window.innerWidth - 100;
+      const newWidth = Math.max(Panel.MIN_PANEL_WIDTH, Math.min(maxWidth, this._resizeStartWidth + widthDelta));
+
+      setWidth(newWidth);
+    });
+  }
+
+  /**
+   * Handle resize end - save final width and clean up
+   */
+  private handleResizeEnd = (_e: MouseEvent | TouchEvent): void => {
+    if (!this._isResizing) return;
+
+    // Cancel any pending rAF
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
+
+    this._isResizing = false;
+
+    // Save final width to localStorage
+    savePanelWidth(width.value);
+
+    // Remove event listeners
+    if (this._boundHandleResizeMove) {
+      document.removeEventListener('mousemove', this._boundHandleResizeMove);
+      document.removeEventListener('touchmove', this._boundHandleResizeMove);
+    }
+    if (this._boundHandleResizeEnd) {
+      document.removeEventListener('mouseup', this._boundHandleResizeEnd);
+      document.removeEventListener('touchend', this._boundHandleResizeEnd);
+      document.removeEventListener('touchcancel', this._boundHandleResizeEnd);
+    }
+    this._boundHandleResizeMove = null;
+    this._boundHandleResizeEnd = null;
+
+    // Restore text selection and cursor
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+    document.documentElement.style.cursor = '';
+
+    // Restore transition
+    document.documentElement.style.transition = 'padding 0.3s ease';
+
+    // Remove resizing class from panel
+    this.panelElement?.classList.remove('_pillar-panel--resizing', 'pillar-panel--resizing');
+  };
 
   // ============================================================================
   // Private Methods
@@ -662,6 +812,15 @@ export class Panel {
     this.renderRoot = document.createElement("div");
     this.renderRoot.className = "_pillar-panel-root pillar-panel-root";
     this.panelElement.appendChild(this.renderRoot);
+
+    // Create resize handle on the content-facing edge of the panel
+    if (this.config.panel.resizable && !this.isManualMount) {
+      this.resizeHandle = document.createElement("div");
+      this.resizeHandle.className = "_pillar-resize-handle pillar-resize-handle";
+      this.resizeHandle.addEventListener("mousedown", this.handleResizeStart);
+      this.resizeHandle.addEventListener("touchstart", this.handleResizeStart, { passive: false });
+      this.panelElement.appendChild(this.resizeHandle);
+    }
 
     container.appendChild(this.panelElement);
   }

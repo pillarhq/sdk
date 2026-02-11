@@ -26,9 +26,8 @@ import {
 } from "../../store/panel";
 import { injectStyles } from "../../utils/dom";
 
-// Width constraints for panel resize
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 700;
+// Internal safety clamp for panel resize (not user-configurable)
+const MIN_PANEL_WIDTH = 200;
 
 // Preset icons for sidebar tabs (Lucide icon set)
 const PRESET_ICONS = {
@@ -82,6 +81,7 @@ function generateEdgeTriggerThemeCSS(
     if (c.textMuted) lines.push(`--pillar-text-muted: ${c.textMuted};`);
     if (c.border) lines.push(`--pillar-border: ${c.border};`);
     if (c.borderLight) lines.push(`--pillar-border-light: ${c.borderLight};`);
+    if (c.outlineColor) lines.push(`--pillar-outline-color: ${c.outlineColor};`);
     return lines.join("\n    ");
   };
 
@@ -268,8 +268,15 @@ export class EdgeTrigger {
       return;
     }
 
+    // If panel is already open on this tab, close it (toggle behavior)
+    if (isOpen.value && activeTab.value === tabId) {
+      this.onClick(); // calls toggle() → closes
+      this.render();
+      return;
+    }
+
     setActiveTab(tabId);
-    // Always open panel when clicking a tab
+    // Open panel if not already open
     if (!isOpen.value) {
       this.onClick();
     }
@@ -284,11 +291,11 @@ export class EdgeTrigger {
   }
 
   /**
-   * Detect the current theme from the document
+   * Detect the current theme from the document (for auto mode)
    * Checks for .dark class (next-themes) or data-theme attribute
    * Returns explicit 'light' or 'dark' to match app theme (not system preference)
    */
-  private detectTheme(): "light" | "dark" {
+  private detectThemeFromDOM(): "light" | "dark" {
     const html = document.documentElement;
 
     // Check for .dark class (next-themes pattern - most common)
@@ -304,6 +311,22 @@ export class EdgeTrigger {
     // Default to light (web default, matches next-themes behavior where
     // dark class is added for dark mode, removed for light mode)
     return "light";
+  }
+
+  /**
+   * Apply theme mode - respects explicit config, only auto-detects when mode is 'auto'
+   * Matches Panel behavior for consistency.
+   */
+  private applyThemeMode(): void {
+    const themeMode = this.config.theme.mode;
+
+    if (themeMode === "light" || themeMode === "dark") {
+      // Manual light/dark mode - use config value directly
+      this.currentTheme = themeMode;
+    } else {
+      // Auto mode - detect from DOM (matches app theme, not system preference)
+      this.currentTheme = this.detectThemeFromDOM();
+    }
   }
 
   /**
@@ -330,7 +353,7 @@ export class EdgeTrigger {
     }
 
     // Restore saved panel width from localStorage (if resizable is enabled)
-    if (this.config.edgeTrigger.resizable) {
+    if (this.config.panel.resizable && this.config.edgeTrigger.resizable) {
       const storedWidth = loadPanelWidth();
       if (storedWidth !== null) {
         setWidth(storedWidth);
@@ -343,8 +366,8 @@ export class EdgeTrigger {
     const mountTarget = this.rootContainer || document.body;
     mountTarget.appendChild(this.container);
 
-    // Detect initial theme
-    this.currentTheme = this.detectTheme();
+    // Apply theme mode - respect explicit config, only auto-detect when mode is 'auto'
+    this.applyThemeMode();
 
     // Reserve space in the layout by adding padding (trigger width only)
     this.applyLayoutPadding();
@@ -391,19 +414,22 @@ export class EdgeTrigger {
       this.render();
     });
 
-    // Watch for theme changes on documentElement
-    this.themeObserver = new MutationObserver(() => {
-      const newTheme = this.detectTheme();
-      if (newTheme !== this.currentTheme) {
-        this.currentTheme = newTheme;
-        this.render();
-      }
-    });
+    // Only watch for theme changes when mode is 'auto'
+    // When mode is explicit 'light' or 'dark', we use the config value
+    if (this.config.theme.mode === "auto") {
+      this.themeObserver = new MutationObserver(() => {
+        const newTheme = this.detectThemeFromDOM();
+        if (newTheme !== this.currentTheme) {
+          this.currentTheme = newTheme;
+          this.render();
+        }
+      });
 
-    this.themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class", "data-theme", "style"],
-    });
+      this.themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class", "data-theme", "style"],
+      });
+    }
   }
 
   /**
@@ -542,7 +568,7 @@ export class EdgeTrigger {
    * Handle resize start from mouse or touch event on the drag handle
    */
   private handleResizeStart = (e: MouseEvent | TouchEvent): void => {
-    if (!isOpen.value || !this.config.edgeTrigger.resizable) return;
+    if (!isOpen.value || !this.config.panel.resizable || !this.config.edgeTrigger.resizable) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -597,7 +623,7 @@ export class EdgeTrigger {
       // For right-positioned panel: dragging left (negative delta from start) increases width
       // For left-positioned panel: dragging right (positive delta from start) increases width
       const widthDelta = position === 'right' ? delta : -delta;
-      const maxWidth = Math.min(MAX_PANEL_WIDTH, window.innerWidth - TRIGGER_WIDTH - 100);
+      const maxWidth = window.innerWidth - TRIGGER_WIDTH - 100;
       const newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(maxWidth, this._resizeStartWidth + widthDelta));
 
       setWidth(newWidth);
@@ -664,7 +690,7 @@ export class EdgeTrigger {
         panelOpen={isOpen.value}
         panelWidthPx={panelWidth.value}
         theme={this.currentTheme}
-        resizable={this.config.edgeTrigger.resizable}
+        resizable={this.config.panel.resizable && this.config.edgeTrigger.resizable}
         isResizing={this._isResizing}
         onResizeStart={this.handleResizeStart}
       />,

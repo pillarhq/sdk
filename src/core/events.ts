@@ -138,22 +138,34 @@ export type CardRenderer = (
 ) => (() => void) | void;
 
 export interface PillarEvents {
+  /** SDK is initialized and ready. */
   ready: void;
+  /** SDK encountered an error. */
   error: Error;
+  /** Panel was opened. */
   "panel:open": void;
+  /** Panel was closed. */
   "panel:close": void;
+  /** Panel navigated to a different view. */
   "panel:navigate": { view: string; params?: Record<string, string> };
+  /** User viewed an article. */
   "article:view": { articleSlug: string };
+  /** User performed a search. */
   "search:query": { query: string };
+  /** User sent a chat message. */
   "chat:message": { message: string };
+  /** Text selection popover was shown. */
   "textSelection:shown": { text: string };
+  /** User clicked the text selection popover. */
   "textSelection:click": { text: string };
-  // Context events
+  /** Context was updated. */
   "context:change": { context: Context };
+  /** User profile was updated. */
   "profile:change": { profile: UserProfile };
+  /** User action was reported. */
   "action:report": { action: string; metadata?: Record<string, unknown> };
 
-  // User identity events
+  /** User was identified. */
   "user:identified": {
     userId: string;
     profile?: {
@@ -162,11 +174,13 @@ export interface PillarEvents {
       metadata?: Record<string, unknown>;
     };
   };
+  /** User logged out. */
   "user:logout": Record<string, never>;
-  // Query action events - for actions that return data to the agent
+  /** Query action returned a result to the agent. */
   "action:result": { actionName: string; result: unknown; toolCallId?: string };
-  // Task events - for AI-suggested actions
+  /** AI-suggested task is being executed. */
   "task:execute": TaskExecutePayload;
+  /** Task completed. */
   "task:complete": {
     id?: string;
     name: string;
@@ -174,36 +188,41 @@ export interface PillarEvents {
     data?: Record<string, unknown>;
   };
 
-  // Workflow events - for multi-step sequences
+  /** Multi-step workflow started. */
   "workflow:start": Workflow;
+  /** Workflow step became active. */
   "workflow:step:active": { workflow: Workflow; step: WorkflowStep };
+  /** Workflow step completed. */
   "workflow:step:complete": {
     workflow: Workflow;
     step: WorkflowStep;
     success: boolean;
   };
+  /** Workflow step was skipped. */
   "workflow:step:skip": { workflow: Workflow; step: WorkflowStep };
+  /** Workflow completed all steps. */
   "workflow:complete": Workflow;
+  /** Workflow was cancelled. */
   "workflow:cancel": Workflow;
 
-  // Theme events
+  /** Theme was changed. */
   "theme:change": { theme: ResolvedThemeConfig };
 
-  // Text selection feature toggle
+  /** Text selection feature was toggled. */
   "textSelection:change": { enabled: boolean };
 
-  // DOM scanning events
+  /** DOM was scanned. */
   "dom:scanned": CompactScanResult;
+  /** DOM scanning feature was toggled. */
   "domScanning:change": { enabled: boolean };
 
-  // Suggestions events - for page-aware suggestion sorting
+  /** Page-aware suggestions were updated. */
   "suggestions:updated": {
     suggestions: Array<{ id: string; text: string }>;
     route: string;
   };
 
-  // Sidebar tab click events - for triggering custom actions on non-assistant tabs
-  // Customers use this to integrate their own support systems (Intercom, Zendesk, etc.)
+  /** Sidebar tab was clicked. Use to integrate external support systems. */
   "sidebar:click": { tabId: string; label: string };
 
   /** @deprecated Use 'sidebar:click' instead. Will be removed in next major version. */

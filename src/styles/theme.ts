@@ -30,6 +30,8 @@ export function generateThemeVariables(
   if (colors.border) lines.push(`--pillar-border${prefix}: ${colors.border};`);
   if (colors.borderLight)
     lines.push(`--pillar-border-light${prefix}: ${colors.borderLight};`);
+  if (colors.outlineColor)
+    lines.push(`--pillar-outline-color${prefix}: ${colors.outlineColor};`);
 
   return lines.join("\n    ");
 }

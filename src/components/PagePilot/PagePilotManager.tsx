@@ -10,6 +10,7 @@ import { isPiloting } from '../../store/pagePilot';
 import pagePilotCSS from './page-pilot.css';
 import { PagePilotBanner } from './PagePilotBanner';
 import { injectStyles } from '../../utils/dom';
+import type { ThemeMode } from '../../core/config';
 
 const STYLES_ID = 'pillar-page-pilot-styles';
 const CONTAINER_ID = 'pillar-page-pilot-container';
@@ -20,9 +21,10 @@ export class PagePilotManager {
   private unsubscribe: (() => void) | null = null;
   private themeObserver: MutationObserver | null = null;
   private primaryColor: string | undefined;
+  private themeMode: ThemeMode = 'auto';
 
   /**
-   * Detect the current theme from the document
+   * Detect the current theme from the document (for auto mode)
    * Checks for .dark class (next-themes) or data-theme attribute
    */
   private detectThemeFromDOM(): 'light' | 'dark' {
@@ -42,20 +44,31 @@ export class PagePilotManager {
 
   /**
    * Apply theme mode to container element
+   * Respects explicit config, only auto-detects when mode is 'auto'
    */
-  private applyTheme(): void {
+  private applyThemeMode(): void {
     if (!this.container) return;
     
-    const theme = this.detectThemeFromDOM();
-    this.container.setAttribute('data-theme', theme);
+    if (this.themeMode === 'light' || this.themeMode === 'dark') {
+      // Manual light/dark mode - use config value directly
+      this.container.setAttribute('data-theme', this.themeMode);
+    } else {
+      // Auto mode - detect from DOM
+      const theme = this.detectThemeFromDOM();
+      this.container.setAttribute('data-theme', theme);
+    }
   }
 
   /**
    * Set up observer to watch for theme changes on documentElement
+   * Only needed for auto mode
    */
   private setupThemeObserver(): void {
+    // Only needed for auto mode
+    if (this.themeMode !== 'auto') return;
+
     this.themeObserver = new MutationObserver(() => {
-      this.applyTheme();
+      this.applyThemeMode();
     });
 
     this.themeObserver.observe(document.documentElement, {
@@ -67,9 +80,12 @@ export class PagePilotManager {
   /**
    * Initialize the page pilot manager
    * @param primaryColor - Optional primary color from theme config to override the default
+   * @param themeMode - Theme mode from config ('light', 'dark', or 'auto')
    */
-  init(primaryColor?: string): void {
+  init(primaryColor?: string, themeMode: ThemeMode = 'auto'): void {
     this.primaryColor = primaryColor;
+    this.themeMode = themeMode;
+    
     // Inject styles into the document (not shadow DOM)
     if (!this.stylesInjected) {
       injectStyles(document, pagePilotCSS, STYLES_ID);
@@ -86,8 +102,8 @@ export class PagePilotManager {
       this.container.style.setProperty('--pillar-primary', this.primaryColor);
     }
 
-    // Apply initial theme and set up observer
-    this.applyTheme();
+    // Apply initial theme and set up observer (only for auto mode)
+    this.applyThemeMode();
     this.setupThemeObserver();
 
     // Subscribe to isPiloting signal changes and re-render

@@ -135,6 +135,77 @@
 }
 
 /* ============================================================================
+   Resize Handle
+   Appears on the content-facing edge of the panel for drag-to-resize.
+   Internal: _pillar-resize-handle | Public: pillar-resize-handle
+   ============================================================================ */
+
+._pillar-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+/* Right panel: handle on left edge */
+._pillar-panel--right ._pillar-resize-handle {
+  left: -3px;
+}
+
+/* Left panel: handle on right edge */
+._pillar-panel--left ._pillar-resize-handle {
+  right: -3px;
+}
+
+/* Visible indicator line on hover */
+._pillar-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.15s ease;
+  border-radius: 1.5px;
+}
+
+._pillar-resize-handle:hover::after {
+  background: var(--pillar-primary, #2563eb);
+  opacity: 0.5;
+}
+
+/* During active resize, keep indicator visible */
+._pillar-panel--resizing ._pillar-resize-handle::after {
+  background: var(--pillar-primary, #2563eb);
+  opacity: 0.7;
+}
+
+/* Override cursor on the whole panel during resize */
+._pillar-panel--resizing,
+._pillar-panel--resizing * {
+  cursor: col-resize !important;
+}
+
+/* Disable panel slide transition during resize for immediate feedback */
+._pillar-panel--resizing {
+  transition: none !important;
+}
+
+/* Hide resize handle in mobile/full-width modes */
+._pillar-panel--mobile ._pillar-resize-handle,
+._pillar-panel--full-width ._pillar-resize-handle {
+  display: none;
+}
+
+.pillar-resize-handle {
+}
+
+/* ============================================================================
    Reduced Motion
    Disable all panel and backdrop transitions when the user prefers reduced motion.
    ============================================================================ */

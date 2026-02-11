@@ -2317,7 +2317,10 @@ export class Pillar {
       // Initialize page pilot manager for "Page being piloted by Agent" banner
       // This is always initialized as it's needed for interact_with_page actions
       this._pagePilotManager = new PagePilotManager();
-      this._pagePilotManager.init(this._config.theme.colors.primary);
+      this._pagePilotManager.init(
+        this._config.theme.colors.primary,
+        this._config.theme.mode
+      );
 
       this._state = "ready";
       this._events.emit("ready");
@@ -2344,6 +2347,12 @@ export class Pillar {
       // Check URL params for auto-opening
       if (this._config.urlParams.enabled) {
         await this._handleUrlParams();
+      }
+
+      // Auto-open panel if configured (overrides persisted closed state)
+      if (this._config.panel.initialOpen && !panelIsOpen.value) {
+        this.open();
+        debug.log('[Pillar] Panel auto-opened via initialOpen config');
       }
 
       // Restore last conversation from localStorage (runs last so it's not

@@ -1,0 +1,55 @@
+---
+description: Use JSDoc comments for exported declarations so API docs generate correctly
+globs: packages/sdk/src/**/*.ts
+alwaysApply: false
+---
+
+# JSDoc Comments on Exported Declarations
+
+The SDK reference docs are auto-generated from JSDoc comments by `scripts/generate-api-docs.ts`. Single-line `//` comments are invisible to the extraction script.
+
+## Rule
+
+Use `/** JSDoc */` comments (not `//`) on:
+
+- Exported interface/type properties
+- Exported type aliases
+- Exported function/method signatures
+- Interface member descriptions inside event maps
+
+## Examples
+
+```typescript
+// ❌ BAD — invisible to docs generation
+export interface PanelConfig {
+  // Panel width in pixels
+  width?: number;
+}
+
+// ✅ GOOD — extracted into API reference docs
+export interface PanelConfig {
+  /** Panel width in pixels. @default 380 */
+  width?: number;
+}
+```
+
+```typescript
+// ❌ BAD — type alias with no JSDoc
+export type PanelMode = 'overlay' | 'push';
+
+// ✅ GOOD
+/** How the panel interacts with page content. */
+export type PanelMode = 'overlay' | 'push';
+```
+
+`//` comments are fine inside function bodies for implementation notes.
+
+## Regenerating Docs
+
+After adding or changing JSDoc, run:
+
+```bash
+npx tsx scripts/generate-api-docs.ts
+```
+
+This updates `frontend/generated/api-types.json` and `frontend/examples/generated/*.ts.txt`.

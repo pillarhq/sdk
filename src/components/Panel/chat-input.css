@@ -23,7 +23,7 @@
 
 ._pillar-search-input:focus {
   border-color: var(--pillar-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px var(--pillar-outline-color);
 }
 
 ._pillar-search-input::placeholder {
@@ -155,7 +155,7 @@
 
 ._pillar-chat-input-wrapper:focus-within {
   border-color: var(--pillar-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px var(--pillar-outline-color);
 }
 
 ._pillar-chat-input-textarea {
@@ -243,7 +243,7 @@
 
 ._pillar-chat-view-input-area--dragging {
   position: relative;
-  background: rgba(37, 99, 235, 0.05);
+  background: var(--pillar-primary-light);
 }
 
 ._pillar-chat-drop-overlay {
@@ -254,7 +254,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(37, 99, 235, 0.1);
+  background: var(--pillar-primary-light);
   border: 2px dashed var(--pillar-primary);
   border-radius: var(--pillar-radius-lg);
   color: var(--pillar-primary);

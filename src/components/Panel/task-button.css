@@ -32,65 +32,65 @@
 
 /* Primary variant (default) */
 .pillar-task-btn--primary {
-  background: #2563eb;
+  background: var(--pillar-primary);
   color: #ffffff;
-  border-color: #2563eb;
+  border-color: var(--pillar-primary);
 }
 
 .pillar-task-btn--primary:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--pillar-primary-hover);
+  border-color: var(--pillar-primary-hover);
 }
 
 /* Default variant */
 .pillar-task-btn--default {
-  background: #f3f4f6;
-  color: #1a1a1a;
-  border-color: #e5e7eb;
+  background: var(--pillar-bg-tertiary);
+  color: var(--pillar-text);
+  border-color: var(--pillar-border);
 }
 
 .pillar-task-btn--default:hover {
-  background: #e5e7eb;
+  background: var(--pillar-border);
 }
 
 /* Secondary variant */
 .pillar-task-btn--secondary {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #dbeafe;
+  background: var(--pillar-primary-light);
+  color: var(--pillar-primary);
+  border-color: var(--pillar-primary-light-hover);
 }
 
 .pillar-task-btn--secondary:hover {
-  background: #dbeafe;
+  background: var(--pillar-primary-light-hover);
 }
 
 /* Outline variant */
 .pillar-task-btn--outline {
   background: transparent;
-  color: #2563eb;
-  border-color: #2563eb;
+  color: var(--pillar-primary);
+  border-color: var(--pillar-primary);
 }
 
 .pillar-task-btn--outline:hover {
-  background: #eff6ff;
+  background: var(--pillar-primary-light);
 }
 
 /* Ghost variant */
 .pillar-task-btn--ghost {
   background: transparent;
-  color: #6b7280;
+  color: var(--pillar-text-muted);
   border-color: transparent;
 }
 
 .pillar-task-btn--ghost:hover {
-  background: #f3f4f6;
-  color: #1a1a1a;
+  background: var(--pillar-bg-tertiary);
+  color: var(--pillar-text);
 }
 
 /* Active state for inline_ui buttons with expanded card */
 .pillar-task-btn--active {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--pillar-primary-hover);
+  border-color: var(--pillar-primary-hover);
 }
 
 /* Task button group */
@@ -124,8 +124,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--pillar-bg-secondary);
+  border: 1px solid var(--pillar-border);
   border-radius: 12px;
   margin-top: 12px;
 }
@@ -138,7 +138,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #6b7280;
+  color: var(--pillar-text-muted);
 }
 
 .pillar-task-suggestion__header svg {
@@ -148,5 +148,5 @@
 
 .pillar-task-suggestion__description {
   font-size: 13px;
-  color: #374151;
+  color: var(--pillar-text-secondary);
 }

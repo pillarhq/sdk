@@ -922,7 +922,7 @@ export function ChatView() {
                     )}
                 </div>
                 {/* Feedback icons - only show for completed assistant messages with an ID */}
-                {msg.id && msg.content && (
+                {msg.role === "assistant" && msg.id && msg.content && (
                   <div class="_pillar-feedback-icons pillar-feedback-icons">
                     <button
                       class={`_pillar-feedback-btn pillar-feedback-btn ${msg.feedback === "up" ? "_pillar-feedback-btn--active pillar-feedback-btn--active" : ""}`}

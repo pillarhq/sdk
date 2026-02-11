@@ -45,7 +45,7 @@
 
 ._pillar-home-view-input-wrapper:focus-within {
   border-color: var(--pillar-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px var(--pillar-outline-color);
 }
 
 ._pillar-home-view-input {

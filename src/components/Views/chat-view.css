@@ -345,7 +345,7 @@
 
 ._pillar-chat-view-input-wrapper:focus-within {
   border-color: var(--pillar-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px var(--pillar-outline-color);
 }
 
 ._pillar-chat-view-input {
@@ -488,7 +488,7 @@
   display: flex;
   gap: 4px;
   margin-top: var(--pillar-spacing-sm);
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 ._pillar-feedback-btn {
@@ -567,11 +567,11 @@
 }
 
 ._pillar-action-status-indicator--success {
-  color: #22c55e;
+  color: var(--pillar-success, #22c55e);
 }
 
 ._pillar-action-status-indicator--failed {
-  color: #ef4444;
+  color: var(--pillar-error, #ef4444);
 }
 
 ._pillar-action-status-indicator--pending {

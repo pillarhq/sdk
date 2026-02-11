@@ -3,8 +3,11 @@
  */
 import type { Platform } from '../actions/types';
 
+/** Which side of the screen the panel appears on. */
 export type PanelPosition = 'left' | 'right';
+/** How the panel interacts with page content: 'overlay' floats over it, 'push' shifts it aside. */
 export type PanelMode = 'overlay' | 'push';
+/** Color mode for the panel theme. 'auto' follows the system preference. */
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
 /**
@@ -44,6 +47,8 @@ export interface ThemeColors {
   border?: string;
   /** Border color for subtle/light borders */
   borderLight?: string;
+  /** Outline/focus ring color for interactive elements */
+  outlineColor?: string;
 }
 
 /**
@@ -67,10 +72,25 @@ export interface ThemeConfig {
 }
 
 export interface PanelConfig {
+  /**
+   * Whether the panel is enabled.
+   * @default true
+   */
   enabled?: boolean;
+  /**
+   * Which side of the screen the panel appears on.
+   * @default 'right'
+   */
   position?: PanelPosition;
-  /** Panel mode: 'overlay' slides over content, 'push' shifts content aside */
+  /**
+   * Panel mode: 'overlay' slides over content, 'push' shifts content aside.
+   * @default 'push'
+   */
   mode?: PanelMode;
+  /**
+   * Panel width in pixels.
+   * @default 380
+   */
   width?: number;
   /** 
    * Custom mount point for the panel.
@@ -108,6 +128,19 @@ export interface PanelConfig {
    * @default 500
    */
   fullWidthBreakpoint?: number;
+  /**
+   * Whether to open the panel automatically on initialization.
+   * Takes priority over localStorage persisted state.
+   * @default false
+   */
+  initialOpen?: boolean;
+  /**
+   * Whether the panel can be resized by dragging its edge.
+   * A drag handle appears on the content-facing edge of the panel when enabled.
+   * The resized width is persisted to localStorage.
+   * @default true
+   */
+  resizable?: boolean;
 }
 
 export interface UrlParamsConfig {
@@ -240,8 +273,11 @@ export interface EdgeTriggerConfig {
   resizable?: boolean;
 }
 
+/** Position of the mobile floating trigger button. */
 export type MobileTriggerPosition = 'bottom-right' | 'bottom-left';
+/** Preset icon for the mobile floating trigger button. */
 export type MobileTriggerIcon = 'sparkle' | 'question' | 'help' | 'chat' | 'support';
+/** Size preset for the mobile floating trigger button. */
 export type MobileTriggerSize = 'small' | 'medium' | 'large';
 
 export interface MobileTriggerConfig {
@@ -331,34 +367,34 @@ export interface PillarConfig {
    */
   debug?: boolean;
   
-  // Panel settings
+  /** Panel layout and behavior settings. */
   panel?: PanelConfig;
   
-  // Edge trigger (sidebar tab that opens the panel)
+  /** Edge trigger (sidebar tab that opens the panel). */
   edgeTrigger?: EdgeTriggerConfig;
   
-  // Mobile trigger (floating button on small screens)
+  /** Mobile trigger (floating button on small screens). */
   mobileTrigger?: MobileTriggerConfig;
   
-  // URL params for auto-opening the panel
+  /** URL params for auto-opening the panel. */
   urlParams?: UrlParamsConfig;
   
-  // Text selection "Ask AI" popover
+  /** Text selection "Ask AI" popover. */
   textSelection?: TextSelectionConfig;
   
-  // DOM scanning for page context
+  /** DOM scanning for page context. */
   domScanning?: DOMScanningConfig;
   
-  // Page-aware suggestions
+  /** Page-aware suggestions. */
   suggestions?: SuggestionsConfig;
   
-  // Sidebar tabs configuration
+  /** Sidebar tabs configuration. */
   sidebarTabs?: SidebarTabConfig[];
   
-  // API base URL (defaults to production)
+  /** API base URL. Defaults to Pillar's production API. */
   apiBaseUrl?: string;
   
-  // Theme customization
+  /** Theme customization. */
   theme?: ThemeConfig;
   
   /** 
@@ -372,8 +408,9 @@ export interface PillarConfig {
    */
   customCSS?: string;
   
-  // Callbacks
+  /** Called when the SDK is initialized and ready. */
   onReady?: () => void;
+  /** Called when the SDK encounters an error. */
   onError?: (error: Error) => void;
 }
 
@@ -392,6 +429,10 @@ export interface ResolvedPanelConfig {
   hoverBackdrop: boolean;
   /** Viewport width below which panel takes full screen width */
   fullWidthBreakpoint: number;
+  /** Whether to open the panel automatically on initialization */
+  initialOpen: boolean;
+  /** Whether the panel can be resized by dragging its edge */
+  resizable: boolean;
 }
 
 export interface ResolvedMobileTriggerConfig {
@@ -480,6 +521,8 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
     hoverBreakpoint: 1200,
     hoverBackdrop: true,
     fullWidthBreakpoint: 500,
+    initialOpen: false,
+    resizable: true,
   },
   
   edgeTrigger: {
