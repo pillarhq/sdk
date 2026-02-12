@@ -1,11 +1,11 @@
 /**
  * Pillar Action Sync CLI
  *
- * Syncs action definitions to the Pillar backend.
+ * Scans for usePillarAction/defineAction calls and syncs to the Pillar backend.
  * Run this in your CI/CD pipeline after building your app.
  *
  * Usage:
- *   npx pillar-sync --actions ./path/to/actions.ts
+ *   npx pillar-sync --scan ./src
  *
  * Environment (required):
  *   PILLAR_SLUG - Your help center slug (e.g., "acme-corp")
@@ -20,7 +20,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { pathToFileURL } from 'url';
 
 // ============================================================================
 // Types (inline to make CLI self-contained)
@@ -53,23 +52,6 @@ interface ActionDataSchema {
   required?: string[];
 }
 
-interface SyncActionDefinition {
-  description: string;
-  examples?: string[];
-  type: ActionType;
-  path?: string;
-  externalUrl?: string;
-  dataSchema?: ActionDataSchema;
-  defaultData?: Record<string, unknown>;
-  requiredContext?: Record<string, unknown>;
-  autoRun?: boolean;
-  autoComplete?: boolean;
-  returns?: boolean;
-  parameterExamples?: Record<string, unknown>[];
-}
-
-type SyncActionDefinitions = Record<string, SyncActionDefinition>;
-
 interface ActionManifestEntry {
   name: string;
   description: string;
@@ -92,11 +74,6 @@ interface ActionManifest {
   gitSha?: string;
   generatedAt: string;
   actions: ActionManifestEntry[];
-  agentGuidance?: string;
-}
-
-interface LoadedModule {
-  actions: SyncActionDefinitions;
   agentGuidance?: string;
 }
 
@@ -159,17 +136,15 @@ function printUsage(): void {
   console.log(`
 Pillar Action Sync CLI
 
+Scans for usePillarAction/defineAction calls and syncs to the Pillar backend.
+
 Usage:
-  npx pillar-sync --actions <path> [--local]
   npx pillar-sync --scan <dir> [--local]
 
 Arguments:
-  --actions <path>   Path to your actions barrel file (supports .ts, .js, .mjs)
-  --scan <dir>       Scan directory for defineAction/usePillarAction calls
+  --scan <dir>       Directory to scan for usePillarAction/defineAction calls
   --local            Use localhost:8003 as the API URL (for local development)
   --help             Show this help message
-
-  One of --actions or --scan is required.
 
 Environment Variables:
   PILLAR_SLUG        Your help center slug (required)
@@ -180,191 +155,12 @@ Environment Variables:
   GIT_SHA            Git commit SHA for traceability
 
 Examples:
-  # Scan mode (recommended — auto-discovers defineAction/usePillarAction calls)
+  # Scan and sync actions
   PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --scan ./src
-
-  # Barrel file mode (legacy)
-  PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --actions ./lib/actions.ts
 
   # Local development
   PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --scan ./src --local
 `);
-}
-
-async function loadActions(actionsPath: string): Promise<LoadedModule> {
-  const absolutePath = path.resolve(process.cwd(), actionsPath);
-
-  if (!fs.existsSync(absolutePath)) {
-    throw new Error(`Actions file not found: ${absolutePath}`);
-  }
-
-  const isTypeScript = absolutePath.endsWith('.ts') || absolutePath.endsWith('.tsx');
-
-  if (isTypeScript) {
-    // For TypeScript files, use tsx to evaluate and extract the actions and agentGuidance
-    try {
-      // Create a temporary script file that imports and prints the module as JSON
-      const tempDir = path.dirname(absolutePath);
-      const tempFile = path.join(tempDir, `.pillar-sync-temp-${Date.now()}.mjs`);
-      const importPath = absolutePath.replace(/\\/g, '/');
-      
-      // Extract both actions and agentGuidance
-      // Handle both direct exports and cases where tsx wraps exports in module.default
-      const extractScript = `import * as module from '${importPath}';
-
-// Resolve actions - tsx may wrap all exports in module.default
-function resolveActions(mod) {
-  // Direct named export
-  if (mod.actions && typeof mod.actions === 'object' && !mod.actions.default) {
-    return mod.actions;
-  }
-  // Default export is the actions object directly
-  if (mod.default && typeof mod.default === 'object') {
-    // Check if default is a module namespace (has nested default or actions)
-    if (mod.default.default && typeof mod.default.default === 'object') {
-      return mod.default.default;
-    }
-    if (mod.default.actions && typeof mod.default.actions === 'object') {
-      return mod.default.actions;
-    }
-    // default is the actions object itself
-    return mod.default;
-  }
-  return null;
-}
-
-const actions = resolveActions(module);
-const agentGuidance = module.agentGuidance || module.default?.agentGuidance;
-console.log(JSON.stringify({ actions, agentGuidance }));`;
-      
-      fs.writeFileSync(tempFile, extractScript, 'utf-8');
-      
-      try {
-        const result = execSync(`npx -y tsx "${tempFile}"`, {
-          encoding: 'utf-8',
-          cwd: process.cwd(),
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-
-        const parsed = JSON.parse(result.trim());
-        const actions = parsed.actions;
-        const agentGuidance = parsed.agentGuidance;
-
-        if (!actions || typeof actions !== 'object') {
-          throw new Error(
-            'Actions file must export an actions object as default or named export "actions"'
-          );
-        }
-
-        return { actions, agentGuidance };
-      } finally {
-        // Clean up temp file
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-        }
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('tsx')) {
-        console.error('[pillar-sync] TypeScript files require tsx.');
-        console.error('[pillar-sync] Make sure tsx is installed: npm install -D tsx');
-        console.error('[pillar-sync] Then run: npx pillar-sync --actions ./actions.ts');
-      }
-      throw error;
-    }
-  }
-
-  // For JavaScript files, use dynamic import directly
-  const fileUrl = pathToFileURL(absolutePath).href;
-
-  try {
-    const module = await import(fileUrl);
-
-    // Resolve actions - handle both direct exports and wrapped module namespaces
-    function resolveActions(mod: Record<string, unknown>): SyncActionDefinitions | null {
-      // Direct named export
-      if (mod.actions && typeof mod.actions === 'object' && !(mod.actions as Record<string, unknown>).default) {
-        return mod.actions as SyncActionDefinitions;
-      }
-      // Default export is the actions object directly
-      if (mod.default && typeof mod.default === 'object') {
-        const defaultExport = mod.default as Record<string, unknown>;
-        // Check if default is a module namespace (has nested default or actions)
-        if (defaultExport.default && typeof defaultExport.default === 'object') {
-          return defaultExport.default as SyncActionDefinitions;
-        }
-        if (defaultExport.actions && typeof defaultExport.actions === 'object') {
-          return defaultExport.actions as SyncActionDefinitions;
-        }
-        // default is the actions object itself
-        return defaultExport as SyncActionDefinitions;
-      }
-      return null;
-    }
-
-    const actions = resolveActions(module);
-    const agentGuidance = module.agentGuidance || (module.default as Record<string, unknown>)?.agentGuidance;
-
-    if (!actions || typeof actions !== 'object') {
-      throw new Error(
-        'Actions file must export an actions object as default or named export "actions"'
-      );
-    }
-
-    return { actions, agentGuidance: agentGuidance as string | undefined };
-  } catch (error) {
-    throw error;
-  }
-}
-
-function buildManifest(
-  actions: SyncActionDefinitions,
-  platform: Platform,
-  version: string,
-  gitSha?: string,
-  agentGuidance?: string
-): ActionManifest {
-  const entries: ActionManifestEntry[] = [];
-
-  for (const [name, definition] of Object.entries(actions)) {
-    const entry: ActionManifestEntry = {
-      name,
-      description: definition.description,
-      type: definition.type,
-    };
-
-    // Only include optional fields if they have values
-    if (definition.examples?.length) entry.examples = definition.examples;
-    if (definition.path) entry.path = definition.path;
-    if (definition.externalUrl) entry.external_url = definition.externalUrl;
-    if (definition.autoRun) entry.auto_run = definition.autoRun;
-    if (definition.autoComplete) entry.auto_complete = definition.autoComplete;
-    // Query actions always return data (explicit returns takes precedence)
-    if (definition.returns !== undefined) {
-      entry.returns_data = definition.returns;
-    } else if (definition.type === 'query') {
-      entry.returns_data = true;
-    }
-    if (definition.dataSchema) entry.data_schema = definition.dataSchema;
-    if (definition.defaultData) entry.default_data = definition.defaultData;
-    if (definition.requiredContext) entry.required_context = definition.requiredContext;
-    if (definition.parameterExamples?.length) entry.parameter_examples = definition.parameterExamples;
-
-    entries.push(entry);
-  }
-
-  const manifest: ActionManifest = {
-    platform,
-    version,
-    gitSha,
-    generatedAt: new Date().toISOString(),
-    actions: entries,
-  };
-
-  if (agentGuidance) {
-    manifest.agentGuidance = agentGuidance;
-  }
-
-  return manifest;
 }
 
 async function pollStatus(
@@ -466,6 +262,7 @@ function getGitSha(): string | undefined {
 interface ScannedAction {
   name: string;
   description: string;
+  type?: ActionType;
   inputSchema?: ActionDataSchema;
   examples?: string[];
   autoRun?: boolean;
@@ -682,6 +479,7 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
               actions.push({
                 name: obj.name as string,
                 description: obj.description as string,
+                type: obj.type as ActionType | undefined,
                 inputSchema: obj.inputSchema as ActionDataSchema | undefined,
                 examples: obj.examples as string[] | undefined,
                 autoRun: obj.autoRun as boolean | undefined,
@@ -752,9 +550,7 @@ function buildManifestFromScan(
     const entry: ActionManifestEntry = {
       name: action.name,
       description: action.description,
-      // ActionSchema doesn't have a type field — default to trigger_action
-      // since these are general-purpose actions with handlers
-      type: 'trigger_action',
+      type: action.type || 'trigger_action',
     };
 
     if (action.examples?.length) entry.examples = action.examples;
@@ -785,19 +581,13 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // Validate arguments — need either --actions or --scan
-  const actionsPath = args.actions as string | undefined;
+  // Validate arguments — need --scan
   const scanDir = args.scan as string | undefined;
 
-  if (!actionsPath && !scanDir) {
-    console.error('[pillar-sync] Missing required argument: --actions <path> or --scan <dir>');
+  if (!scanDir) {
+    console.error('[pillar-sync] Missing required argument: --scan <dir>');
     console.error('');
     printUsage();
-    process.exit(1);
-  }
-
-  if (actionsPath && scanDir) {
-    console.error('[pillar-sync] Cannot use both --actions and --scan. Pick one.');
     process.exit(1);
   }
 
@@ -824,56 +614,26 @@ async function main(): Promise<void> {
   const platform = (process.env.PILLAR_PLATFORM || 'web') as Platform;
   const version = process.env.PILLAR_VERSION || getPackageVersion();
   const gitSha = process.env.GIT_SHA || getGitSha();
-  let manifest: ActionManifest;
-  let agentGuidance: string | undefined;
 
-  if (scanDir) {
-    // === Scan mode: discover defineAction / usePillarAction calls via AST ===
-    console.log(`[pillar-sync] Scanning for actions in: ${scanDir}`);
-    let scannedActions: ScannedAction[];
-    try {
-      scannedActions = await scanActions(scanDir);
-    } catch (error) {
-      console.error(`[pillar-sync] Failed to scan actions:`, error);
-      process.exit(1);
-    }
-
-    const actionCount = scannedActions.length;
-    console.log(`[pillar-sync] Found ${actionCount} actions via scan`);
-
-    if (actionCount === 0) {
-      console.warn('[pillar-sync] No actions found. Nothing to sync.');
-      process.exit(0);
-    }
-
-    manifest = buildManifestFromScan(scannedActions, platform, version, gitSha);
-  } else {
-    // === Barrel file mode: load from a single file ===
-    console.log(`[pillar-sync] Loading actions from: ${actionsPath}`);
-    let loadedModule: LoadedModule;
-    try {
-      loadedModule = await loadActions(actionsPath!);
-    } catch (error) {
-      console.error(`[pillar-sync] Failed to load actions:`, error);
-      process.exit(1);
-    }
-
-    const { actions } = loadedModule;
-    agentGuidance = loadedModule.agentGuidance;
-    const actionCount = Object.keys(actions).length;
-    console.log(`[pillar-sync] Found ${actionCount} actions`);
-
-    if (agentGuidance) {
-      console.log(`[pillar-sync] Found agent guidance (${agentGuidance.length} chars)`);
-    }
-
-    if (actionCount === 0) {
-      console.warn('[pillar-sync] No actions found. Nothing to sync.');
-      process.exit(0);
-    }
-
-    manifest = buildManifest(actions, platform, version, gitSha, agentGuidance);
+  // Scan for actions
+  console.log(`[pillar-sync] Scanning for actions in: ${scanDir}`);
+  let scannedActions: ScannedAction[];
+  try {
+    scannedActions = await scanActions(scanDir);
+  } catch (error) {
+    console.error(`[pillar-sync] Failed to scan actions:`, error);
+    process.exit(1);
   }
+
+  const actionCount = scannedActions.length;
+  console.log(`[pillar-sync] Found ${actionCount} actions`);
+
+  if (actionCount === 0) {
+    console.warn('[pillar-sync] No actions found. Nothing to sync.');
+    process.exit(0);
+  }
+
+  const manifest = buildManifestFromScan(scannedActions, platform, version, gitSha);
 
   console.log(`[pillar-sync] Platform: ${platform}`);
   console.log(`[pillar-sync] Version: ${version}`);
@@ -895,11 +655,6 @@ async function main(): Promise<void> {
     git_sha: gitSha,
     actions: manifest.actions,
   };
-
-  // Include agent_guidance if provided
-  if (agentGuidance) {
-    requestBody.agent_guidance = agentGuidance;
-  }
 
   const syncUrl = `${apiUrl}/api/admin/configs/${slug}/actions/sync/?async=true`;
   console.log(`[pillar-sync] POST ${syncUrl}`);
