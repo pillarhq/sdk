@@ -522,3 +522,101 @@ export interface TypedPillarMethods<
 > {
   onTask: TypedOnTask<TActions>;
 }
+
+// ============================================================================
+// Unified Action Schema (new API — co-locates metadata + handler)
+// ============================================================================
+
+/**
+ * Result returned from an action's execute function.
+ *
+ * Follows the MCP tool result format. Plain objects are also accepted
+ * by the SDK and normalized to this shape automatically.
+ */
+export interface ActionResult {
+  content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image'; data: string; mimeType: string }
+  >;
+  isError?: boolean;
+}
+
+/**
+ * Unified action definition that co-locates metadata and handler.
+ *
+ * Use with `pillar.defineAction()` or the `usePillarAction()` React hook.
+ * The CLI scanner (`npx pillar-sync --scan ./src`) discovers these
+ * definitions automatically — no barrel file needed.
+ *
+ * @template TInput - Type of the input object passed to `execute`
+ *
+ * @example
+ * ```ts
+ * pillar.defineAction({
+ *   name: 'add_to_cart',
+ *   description: 'Add a product to the shopping cart',
+ *   inputSchema: {
+ *     type: 'object',
+ *     properties: {
+ *       productId: { type: 'string', description: 'Product ID' },
+ *       quantity: { type: 'number', description: 'Quantity to add' },
+ *     },
+ *     required: ['productId', 'quantity'],
+ *   },
+ *   execute: async ({ productId, quantity }) => {
+ *     await cartApi.add(productId, quantity);
+ *     return { content: [{ type: 'text', text: 'Added to cart' }] };
+ *   },
+ * });
+ * ```
+ */
+export interface ActionSchema<TInput = Record<string, unknown>> {
+  /** Unique action name (e.g., 'add_to_cart') */
+  name: string;
+
+  /** Human-readable description for AI matching */
+  description: string;
+
+  /**
+   * Type of action - determines how the SDK handles it and organizes it in the UI.
+   */
+  type?: ActionType;
+
+  /**
+   * JSON Schema describing the input parameters.
+   * The AI extracts structured data from the conversation to populate these.
+   */
+  inputSchema?: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+
+  /**
+   * Example user queries that should trigger this action.
+   * Used for semantic matching alongside the description.
+   */
+  examples?: string[];
+
+  /**
+   * Whether to auto-execute without user confirmation.
+   * @default false
+   */
+  autoRun?: boolean;
+
+  /**
+   * Whether the action completes immediately after execution.
+   * @default true
+   */
+  autoComplete?: boolean;
+
+  /**
+   * Handler function executed when the AI invokes this action.
+   *
+   * Can return:
+   * - An `ActionResult` with MCP-style content blocks
+   * - A plain object (SDK normalizes it for the agent)
+   * - `void` if the action has no return value
+   */
+  execute: (input: TInput) => Promise<ActionResult | unknown | void> | ActionResult | unknown | void;
+}

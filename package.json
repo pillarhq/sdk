@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "build": "rollup -c && npm run build:cli && npm run build:types",
-    "build:cli": "npx esbuild src/cli/sync.ts --bundle --platform=node --target=node18 --outfile=dist/cli/sync.js --format=esm --banner:js='#!/usr/bin/env node'",
+    "build:cli": "npx esbuild src/cli/sync.ts --bundle --platform=node --target=node18 --outfile=dist/cli/sync.js --format=esm --external:typescript --banner:js='#!/usr/bin/env node'",
     "build:types": "tsc --emitDeclarationOnly --outDir dist",
     "dev": "rollup -c -w",
     "clean": "rm -rf dist",
@@ -55,6 +55,14 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.7.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@preact/signals": "^1.3.1",

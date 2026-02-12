@@ -54,6 +54,9 @@ export type {
   TypedTaskHandler,
   TypedOnTask,
   TypedPillarMethods,
+  // Unified action schema (new API)
+  ActionResult,
+  ActionSchema,
 } from './types';
 
 // Registry

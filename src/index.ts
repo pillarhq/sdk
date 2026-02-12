@@ -100,6 +100,9 @@ export {
   type TypedOnTask,
   type TypedPillarMethods,
   type TypedTaskHandler,
+  // Unified action schema (new API)
+  type ActionResult,
+  type ActionSchema,
 } from "./actions";
 
 // API

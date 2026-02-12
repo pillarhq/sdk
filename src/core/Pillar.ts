@@ -3,7 +3,7 @@
  * Entry point for all SDK functionality
  */
 
-import { getActionDefinition, hasAction, setClientInfo } from "../actions";
+import { getActionDefinition, hasAction, setClientInfo, type ActionSchema } from "../actions";
 import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
@@ -154,6 +154,10 @@ export class Pillar {
   // Registered actions (for demos and runtime registration)
   // Public property for demos to access (e.g., window.Pillar._registeredActions)
   public _registeredActions: Map<string, Record<string, unknown>> = new Map();
+
+  // Unified action schemas (registered via defineAction / usePillarAction)
+  // Co-locates metadata + handler in a single definition
+  private _definedActions: Map<string, ActionSchema> = new Map();
 
   // Card renderers for inline_ui type actions
   private _cardRenderers: Map<string, CardRenderer> = new Map();
@@ -1347,7 +1351,58 @@ export class Pillar {
   }
 
   /**
+   * Define an action with co-located metadata and handler.
+   *
+   * This is the recommended way to register actions. The metadata
+   * (name, description, inputSchema) is discoverable by the CLI scanner
+   * (`npx pillar-sync --scan ./src`) and the handler runs client-side.
+   *
+   * If `execute` returns a value, it is automatically sent back to the
+   * agent — no explicit `returns: true` flag needed.
+   *
+   * @param schema - Action schema with metadata and execute handler
+   * @returns Unsubscribe function that removes the action
+   *
+   * @example
+   * const unsub = pillar.defineAction({
+   *   name: 'add_to_cart',
+   *   description: 'Add a product to the shopping cart',
+   *   inputSchema: {
+   *     type: 'object',
+   *     properties: {
+   *       productId: { type: 'string' },
+   *       quantity: { type: 'number' },
+   *     },
+   *     required: ['productId', 'quantity'],
+   *   },
+   *   execute: async ({ productId, quantity }) => {
+   *     await cartApi.add(productId, quantity);
+   *     return { content: [{ type: 'text', text: 'Added to cart' }] };
+   *   },
+   * });
+   *
+   * // Later: unsub() to remove the action
+   */
+  defineAction<TInput = Record<string, unknown>>(
+    schema: ActionSchema<TInput>
+  ): () => void {
+    if (!schema.name) {
+      debug.warn("[Pillar] defineAction called without a name");
+      return () => {};
+    }
+
+    this._definedActions.set(schema.name, schema as ActionSchema);
+    debug.log(`[Pillar] Defined action: ${schema.name}`);
+
+    return () => {
+      this._definedActions.delete(schema.name);
+    };
+  }
+
+  /**
    * Register an action definition at runtime.
+   *
+   * @deprecated Use `defineAction()` instead, which co-locates metadata and handler.
    *
    * This is primarily for demos and development. In production, actions
    * should be synced via the `pillar-sync` CLI during CI/CD.
@@ -1420,7 +1475,13 @@ export class Pillar {
   getHandler(
     actionName: string
   ): ((data: Record<string, unknown>) => unknown) | undefined {
-    // 1. Check code-first action registry (synced via CLI)
+    // 1. Check unified action schemas (registered via defineAction)
+    const definedAction = this._definedActions.get(actionName);
+    if (definedAction?.execute) {
+      return definedAction.execute as (data: Record<string, unknown>) => unknown;
+    }
+
+    // 2. Check code-first action registry (synced via CLI)
     const actionDefinition = hasAction(actionName)
       ? getActionDefinition(actionName)
       : undefined;
@@ -1428,7 +1489,7 @@ export class Pillar {
       return actionDefinition.handler;
     }
 
-    // 2. Check task handlers (registered via onTask)
+    // 3. Check task handlers (registered via onTask)
     const taskHandler = this._taskHandlers.get(actionName);
     if (taskHandler) {
       return taskHandler;
@@ -1490,10 +1551,13 @@ export class Pillar {
     }
 
     // Look for handlers in this order:
+    // 0. Unified action schemas (registered via defineAction / usePillarAction)
     // 1. Code-first action registry (synced via pillar-sync CLI)
     // 2. Specific handler by action name (via onTask)
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
+    const definedAction = this._definedActions.get(name);
+    const definedHandler = definedAction?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
     const actionDefinition = hasAction(name)
       ? getActionDefinition(name)
       : undefined;
@@ -1501,11 +1565,12 @@ export class Pillar {
     const registryHandler = actionDefinition?.handler;
     const specificHandler = this._taskHandlers.get(name);
     const typeHandler = taskType ? this._taskHandlers.get(taskType) : undefined;
-    const handler = registryHandler || specificHandler || typeHandler;
+    const handler = definedHandler || registryHandler || specificHandler || typeHandler;
 
-    // Check if action returns data (from code-first registry or runtime registration)
+    // Check if action returns data
+    // Unified actions (defineAction) always return data when execute returns a value (auto-detect)
     const actionReturnsData =
-      actionDefinition?.returns || runtimeAction?.returns;
+      !!definedAction || actionDefinition?.returns || runtimeAction?.returns;
 
     if (handler) {
       const handlerStartTime = performance.now();
@@ -2058,7 +2123,9 @@ export class Pillar {
       }
     }
 
-    // Look for handlers
+    // Look for handlers (unified actions first, then legacy systems)
+    const definedAction = this._definedActions.get(actionName);
+    const definedHandler = definedAction?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
     const actionDefinition = hasAction(actionName)
       ? getActionDefinition(actionName)
       : undefined;
@@ -2066,7 +2133,7 @@ export class Pillar {
     const registryHandler = actionDefinition?.handler;
     const specificHandler = this._taskHandlers.get(actionName);
     const queryTypeHandler = this._taskHandlers.get("query");
-    const handler = registryHandler || specificHandler || queryTypeHandler;
+    const handler = definedHandler || registryHandler || specificHandler || queryTypeHandler;
 
     if (!handler) {
       debug.error(

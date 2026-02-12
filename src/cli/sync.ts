@@ -161,12 +161,15 @@ Pillar Action Sync CLI
 
 Usage:
   npx pillar-sync --actions <path> [--local]
+  npx pillar-sync --scan <dir> [--local]
 
 Arguments:
-  --actions <path>   Path to your actions definition file (required)
-                     Supports .ts, .js, .mjs files
+  --actions <path>   Path to your actions barrel file (supports .ts, .js, .mjs)
+  --scan <dir>       Scan directory for defineAction/usePillarAction calls
   --local            Use localhost:8003 as the API URL (for local development)
   --help             Show this help message
+
+  One of --actions or --scan is required.
 
 Environment Variables:
   PILLAR_SLUG        Your help center slug (required)
@@ -177,11 +180,14 @@ Environment Variables:
   GIT_SHA            Git commit SHA for traceability
 
 Examples:
-  # Production
+  # Scan mode (recommended — auto-discovers defineAction/usePillarAction calls)
+  PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --scan ./src
+
+  # Barrel file mode (legacy)
   PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --actions ./lib/actions.ts
 
   # Local development
-  PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --actions ./lib/actions.ts --local
+  PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --scan ./src --local
 `);
 }
 
@@ -451,6 +457,325 @@ function getGitSha(): string | undefined {
   }
 }
 
+// ============================================================================
+// AST-based Scanner (--scan mode)
+// Discovers defineAction / usePillarAction calls without a barrel file.
+// Uses TypeScript's compiler API for parse-only AST extraction.
+// ============================================================================
+
+interface ScannedAction {
+  name: string;
+  description: string;
+  inputSchema?: ActionDataSchema;
+  examples?: string[];
+  autoRun?: boolean;
+  autoComplete?: boolean;
+  sourceFile: string;
+  line: number;
+}
+
+/**
+ * Recursively glob for .ts and .tsx files under a directory,
+ * skipping node_modules and hidden directories.
+ */
+function globFiles(dir: string, extensions: string[]): string[] {
+  const results: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    // Skip node_modules, hidden dirs, and dist/build outputs
+    if (
+      entry.name.startsWith('.') ||
+      entry.name === 'node_modules' ||
+      entry.name === 'dist' ||
+      entry.name === 'build' ||
+      entry.name === '.next'
+    ) {
+      continue;
+    }
+
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      results.push(...globFiles(fullPath, extensions));
+    } else if (extensions.some((ext) => entry.name.endsWith(ext))) {
+      results.push(fullPath);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Evaluate a TypeScript AST node to a JavaScript value.
+ * Handles string literals, numeric literals, booleans, arrays, objects,
+ * template literals (without expressions), and `as const` assertions.
+ * Returns undefined for anything it can't statically resolve.
+ */
+function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
+  const n = node as import('typescript').Node;
+
+  // String literal
+  if (ts.isStringLiteral(n)) {
+    return (n as import('typescript').StringLiteral).text;
+  }
+
+  // No-substitution template literal (backtick string with no ${})
+  if (ts.isNoSubstitutionTemplateLiteral(n)) {
+    return (n as import('typescript').NoSubstitutionTemplateLiteral).text;
+  }
+
+  // Numeric literal
+  if (ts.isNumericLiteral(n)) {
+    return Number((n as import('typescript').NumericLiteral).text);
+  }
+
+  // Boolean / null / undefined keywords
+  if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (n.kind === ts.SyntaxKind.NullKeyword) return null;
+
+  // Prefix unary expression (negative numbers like -1)
+  if (ts.isPrefixUnaryExpression(n)) {
+    const expr = n as import('typescript').PrefixUnaryExpression;
+    if (expr.operator === ts.SyntaxKind.MinusToken) {
+      const operand = evaluateNode(expr.operand, ts);
+      if (typeof operand === 'number') return -operand;
+    }
+  }
+
+  // Array literal
+  if (ts.isArrayLiteralExpression(n)) {
+    const arr = n as import('typescript').ArrayLiteralExpression;
+    const result: unknown[] = [];
+    for (const elem of arr.elements) {
+      const val = evaluateNode(elem, ts);
+      if (val === undefined) return undefined; // Can't resolve element
+      result.push(val);
+    }
+    return result;
+  }
+
+  // Object literal
+  if (ts.isObjectLiteralExpression(n)) {
+    const obj = n as import('typescript').ObjectLiteralExpression;
+    const result: Record<string, unknown> = {};
+    for (const prop of obj.properties) {
+      if (ts.isPropertyAssignment(prop)) {
+        const key = prop.name
+          ? ts.isIdentifier(prop.name)
+            ? prop.name.text
+            : ts.isStringLiteral(prop.name)
+              ? prop.name.text
+              : undefined
+          : undefined;
+        if (!key) continue;
+        const val = evaluateNode(prop.initializer, ts);
+        // Skip properties we can't resolve (like execute functions)
+        if (val !== undefined) {
+          result[key] = val;
+        }
+      }
+      if (ts.isShorthandPropertyAssignment(prop)) {
+        // Can't resolve shorthand (variable reference)
+        continue;
+      }
+    }
+    return result;
+  }
+
+  // Type assertion (e.g., 'navigate' as const, { ... } as const)
+  if (ts.isAsExpression(n)) {
+    return evaluateNode((n as import('typescript').AsExpression).expression, ts);
+  }
+
+  // Parenthesized expression
+  if (ts.isParenthesizedExpression(n)) {
+    return evaluateNode((n as import('typescript').ParenthesizedExpression).expression, ts);
+  }
+
+  // Binary expression for string concatenation (description: "foo " + "bar")
+  if (ts.isBinaryExpression(n)) {
+    const bin = n as import('typescript').BinaryExpression;
+    if (bin.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const left = evaluateNode(bin.left, ts);
+      const right = evaluateNode(bin.right, ts);
+      if (typeof left === 'string' && typeof right === 'string') {
+        return left + right;
+      }
+    }
+  }
+
+  // Can't resolve this node (function, variable reference, etc.)
+  return undefined;
+}
+
+/**
+ * Scan a directory for defineAction / usePillarAction calls and extract metadata.
+ */
+async function scanActions(scanDir: string): Promise<ScannedAction[]> {
+  const absoluteDir = path.resolve(process.cwd(), scanDir);
+
+  if (!fs.existsSync(absoluteDir)) {
+    throw new Error(`Scan directory not found: ${absoluteDir}`);
+  }
+
+  // Dynamically import TypeScript (available as devDependency)
+  let ts: typeof import('typescript');
+  try {
+    ts = await import('typescript');
+  } catch {
+    console.error('[pillar-sync] TypeScript is required for --scan mode.');
+    console.error('[pillar-sync] Install it: npm install -D typescript');
+    process.exit(1);
+  }
+
+  // 1. Find all .ts and .tsx files
+  const files = globFiles(absoluteDir, ['.ts', '.tsx']);
+  console.log(`[pillar-sync] Scanning ${files.length} files in ${scanDir}`);
+
+  // 2. Quick filter: only parse files that mention defineAction or usePillarAction
+  const PATTERNS = ['defineAction', 'usePillarAction'];
+  const candidateFiles = files.filter((file) => {
+    const content = fs.readFileSync(file, 'utf-8');
+    return PATTERNS.some((p) => content.includes(p));
+  });
+
+  console.log(`[pillar-sync] Found ${candidateFiles.length} files with action definitions`);
+
+  // 3. Parse each candidate and extract action metadata
+  const actions: ScannedAction[] = [];
+
+  for (const filePath of candidateFiles) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      content,
+      ts.ScriptTarget.Latest,
+      true, // setParentNodes
+      filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    );
+
+    // Walk the AST looking for call expressions
+    function visit(node: import('typescript').Node): void {
+      if (ts.isCallExpression(node)) {
+        const callee = node.expression;
+        let isTargetCall = false;
+
+        // Match: defineAction(...), usePillarAction(...)
+        if (ts.isIdentifier(callee)) {
+          isTargetCall = PATTERNS.includes(callee.text);
+        }
+        // Match: pillar.defineAction(...), something.defineAction(...)
+        else if (ts.isPropertyAccessExpression(callee)) {
+          isTargetCall = callee.name.text === 'defineAction';
+        }
+
+        if (isTargetCall && node.arguments.length > 0) {
+          const arg = node.arguments[0];
+          const lineNumber = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+          const relativePath = path.relative(process.cwd(), filePath);
+
+          // Helper to process a single action object
+          const processActionObject = (obj: Record<string, unknown> | undefined, line: number) => {
+            if (obj && typeof obj.name === 'string' && typeof obj.description === 'string') {
+              actions.push({
+                name: obj.name as string,
+                description: obj.description as string,
+                inputSchema: obj.inputSchema as ActionDataSchema | undefined,
+                examples: obj.examples as string[] | undefined,
+                autoRun: obj.autoRun as boolean | undefined,
+                autoComplete: obj.autoComplete as boolean | undefined,
+                sourceFile: relativePath,
+                line,
+              });
+
+              console.log(`[pillar-sync]   ${obj.name} (${relativePath}:${line})`);
+            } else if (obj) {
+              console.warn(
+                `[pillar-sync] ⚠ Skipping action at ${relativePath}:${line} — missing name or description`
+              );
+            }
+          };
+
+          if (ts.isObjectLiteralExpression(arg)) {
+            // Single action: usePillarAction({ name: '...', ... })
+            const obj = evaluateNode(arg, ts) as Record<string, unknown> | undefined;
+            processActionObject(obj, lineNumber);
+          } else if (ts.isArrayLiteralExpression(arg)) {
+            // Multiple actions: usePillarAction([{ name: '...', ... }, { name: '...', ... }])
+            for (const element of arg.elements) {
+              if (ts.isObjectLiteralExpression(element)) {
+                const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
+                const obj = evaluateNode(element, ts) as Record<string, unknown> | undefined;
+                processActionObject(obj, elementLine);
+              } else {
+                const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
+                console.warn(
+                  `[pillar-sync] ⚠ Skipping action at ${relativePath}:${elementLine} — ` +
+                  `array element is not an inline object literal`
+                );
+              }
+            }
+          } else {
+            // Argument is a variable reference — can't resolve statically
+            console.warn(
+              `[pillar-sync] ⚠ Skipping action at ${relativePath}:${lineNumber} — ` +
+              `argument is not an inline object literal or array (variable reference can't be resolved statically)`
+            );
+          }
+        }
+      }
+
+      ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+  }
+
+  return actions;
+}
+
+/**
+ * Build a manifest from scanned ActionSchema definitions.
+ * Similar to buildManifest but works with the scanned action shape.
+ */
+function buildManifestFromScan(
+  actions: ScannedAction[],
+  platform: Platform,
+  version: string,
+  gitSha?: string
+): ActionManifest {
+  const entries: ActionManifestEntry[] = [];
+
+  for (const action of actions) {
+    const entry: ActionManifestEntry = {
+      name: action.name,
+      description: action.description,
+      // ActionSchema doesn't have a type field — default to trigger_action
+      // since these are general-purpose actions with handlers
+      type: 'trigger_action',
+    };
+
+    if (action.examples?.length) entry.examples = action.examples;
+    if (action.autoRun) entry.auto_run = action.autoRun;
+    if (action.autoComplete !== undefined) entry.auto_complete = action.autoComplete;
+    // Unified actions always return data (the handler return value goes to the agent)
+    entry.returns_data = true;
+    if (action.inputSchema) entry.data_schema = action.inputSchema;
+
+    entries.push(entry);
+  }
+
+  return {
+    platform,
+    version,
+    gitSha,
+    generatedAt: new Date().toISOString(),
+    actions: entries,
+  };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
@@ -460,12 +785,19 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // Validate --actions argument
+  // Validate arguments — need either --actions or --scan
   const actionsPath = args.actions as string | undefined;
-  if (!actionsPath) {
-    console.error('[pillar-sync] Missing required --actions argument');
+  const scanDir = args.scan as string | undefined;
+
+  if (!actionsPath && !scanDir) {
+    console.error('[pillar-sync] Missing required argument: --actions <path> or --scan <dir>');
     console.error('');
     printUsage();
+    process.exit(1);
+  }
+
+  if (actionsPath && scanDir) {
+    console.error('[pillar-sync] Cannot use both --actions and --scan. Pick one.');
     process.exit(1);
   }
 
@@ -488,40 +820,64 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Load actions from user's file
-  console.log(`[pillar-sync] Loading actions from: ${actionsPath}`);
-  let loadedModule: LoadedModule;
-  try {
-    loadedModule = await loadActions(actionsPath);
-  } catch (error) {
-    console.error(`[pillar-sync] Failed to load actions:`, error);
-    process.exit(1);
-  }
-
-  const { actions, agentGuidance } = loadedModule;
-  const actionCount = Object.keys(actions).length;
-  console.log(`[pillar-sync] Found ${actionCount} actions`);
-
-  if (agentGuidance) {
-    console.log(`[pillar-sync] Found agent guidance (${agentGuidance.length} chars)`);
-  }
-
-  if (actionCount === 0) {
-    console.warn('[pillar-sync] No actions found. Nothing to sync.');
-    process.exit(0);
-  }
-
   // Build configuration
   const platform = (process.env.PILLAR_PLATFORM || 'web') as Platform;
   const version = process.env.PILLAR_VERSION || getPackageVersion();
   const gitSha = process.env.GIT_SHA || getGitSha();
+  let manifest: ActionManifest;
+  let agentGuidance: string | undefined;
+
+  if (scanDir) {
+    // === Scan mode: discover defineAction / usePillarAction calls via AST ===
+    console.log(`[pillar-sync] Scanning for actions in: ${scanDir}`);
+    let scannedActions: ScannedAction[];
+    try {
+      scannedActions = await scanActions(scanDir);
+    } catch (error) {
+      console.error(`[pillar-sync] Failed to scan actions:`, error);
+      process.exit(1);
+    }
+
+    const actionCount = scannedActions.length;
+    console.log(`[pillar-sync] Found ${actionCount} actions via scan`);
+
+    if (actionCount === 0) {
+      console.warn('[pillar-sync] No actions found. Nothing to sync.');
+      process.exit(0);
+    }
+
+    manifest = buildManifestFromScan(scannedActions, platform, version, gitSha);
+  } else {
+    // === Barrel file mode: load from a single file ===
+    console.log(`[pillar-sync] Loading actions from: ${actionsPath}`);
+    let loadedModule: LoadedModule;
+    try {
+      loadedModule = await loadActions(actionsPath!);
+    } catch (error) {
+      console.error(`[pillar-sync] Failed to load actions:`, error);
+      process.exit(1);
+    }
+
+    const { actions } = loadedModule;
+    agentGuidance = loadedModule.agentGuidance;
+    const actionCount = Object.keys(actions).length;
+    console.log(`[pillar-sync] Found ${actionCount} actions`);
+
+    if (agentGuidance) {
+      console.log(`[pillar-sync] Found agent guidance (${agentGuidance.length} chars)`);
+    }
+
+    if (actionCount === 0) {
+      console.warn('[pillar-sync] No actions found. Nothing to sync.');
+      process.exit(0);
+    }
+
+    manifest = buildManifest(actions, platform, version, gitSha, agentGuidance);
+  }
 
   console.log(`[pillar-sync] Platform: ${platform}`);
   console.log(`[pillar-sync] Version: ${version}`);
   console.log(`[pillar-sync] Git SHA: ${gitSha || 'not available'}`);
-
-  // Generate manifest
-  const manifest = buildManifest(actions, platform, version, gitSha, agentGuidance);
 
   // Optionally write manifest to disk for debugging
   if (process.env.PILLAR_DEBUG) {
