@@ -9,6 +9,7 @@ import type { TaskButtonData } from '../components/Panel/TaskButton';
 import type { ResolvedConfig } from '../core/config';
 import type { UserContextItem } from '../types/user-context';
 import { debug, debugLog, type LogEntry } from '../utils/debug';
+import { resilientFetch } from '../utils/resilient-fetch';
 import type { ArticleSummary, DisplayStep } from './client';
 
 // ============================================================================
@@ -322,10 +323,14 @@ export class MCPClient {
       level: 'info',
     });
 
-    const response = await fetch(this.baseUrl, {
+    const response = await resilientFetch(this.baseUrl, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(request),
+      maxRetries: 3,
+      onRetry: (attempt, delay) => {
+        debug.log(`[MCPClient] Retrying callTool "${name}" (attempt ${attempt + 1}) after ${delay}ms...`);
+      },
     });
 
     const duration = Math.round(performance.now() - startTime);
@@ -395,7 +400,7 @@ export class MCPClient {
       level: 'info',
     });
 
-    const response = await fetch(this.baseUrl, {
+    const response = await resilientFetch(this.baseUrl, {
       method: 'POST',
       headers: {
         ...this.headers,
@@ -403,6 +408,10 @@ export class MCPClient {
       },
       body: JSON.stringify(request),
       signal,
+      maxRetries: 3,
+      onRetry: (attempt, delay) => {
+        debug.log(`[MCPClient] Retrying stream connection for "${name}" (attempt ${attempt + 1}) after ${delay}ms...`);
+      },
     });
 
     const connectionTime = Math.round(performance.now() - startTime);
@@ -691,12 +700,16 @@ export class MCPClient {
     const formData = new FormData();
     formData.append('image', file);
 
-    const response = await fetch(uploadUrl, {
+    const response = await resilientFetch(uploadUrl, {
       method: 'POST',
       headers: {
         'x-customer-id': this.config.productKey,
       },
       body: formData,
+      maxRetries: 3,
+      onRetry: (attempt, delay) => {
+        debug.log(`[MCPClient] Retrying image upload (attempt ${attempt + 1}) after ${delay}ms...`);
+      },
     });
 
     if (!response.ok) {
@@ -797,11 +810,15 @@ export class MCPClient {
     debug.log(`[MCPClient] Cancelling stream request_id=${requestId}`);
 
     try {
-      await fetch(this.baseUrl, {
+      await resilientFetch(this.baseUrl, {
         method: 'POST',
         headers: this.headers,
         body: JSON.stringify(request),
         keepalive: true,
+        maxRetries: 3,
+        onRetry: (attempt, delay) => {
+          debug.log(`[MCPClient] Retrying cancel request (attempt ${attempt + 1}) after ${delay}ms...`);
+        },
       });
     } catch (error) {
       // Best-effort -- don't throw if cancel request fails
@@ -851,22 +868,31 @@ export class MCPClient {
       level: 'info',
     });
 
+    debug.log(`[MCPClient] Sending tool result for "${toolName}"...`);
+
+    // Yield to event loop before fetch to ensure other async operations can complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     try {
-      debug.log(`[MCPClient] Sending tool result for "${toolName}"...`);
-      
-      // Yield to event loop before fetch to ensure other async operations can complete
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
-      const response = await fetch(this.baseUrl, {
+      const response = await resilientFetch(this.baseUrl, {
         method: 'POST',
         headers: this.headers,
         body: JSON.stringify(request),
-        // Use keepalive to ensure request completes even if page unloads
         keepalive: true,
+        maxRetries: 6,
+        onRetry: (attempt, delay) => {
+          debug.log(`[MCPClient] Retrying tool result for "${toolName}" (attempt ${attempt + 1}) after ${delay}ms...`);
+          debugLog.add({
+            event: 'network:retry',
+            data: { method: 'action/result', action: toolName, attempt: attempt + 1, delay },
+            source: 'network',
+            level: 'warn',
+          });
+        },
       });
-      
+
       const elapsed = Math.round(performance.now() - startTime);
-      
+
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         debugLog.add({
@@ -881,7 +907,7 @@ export class MCPClient {
         );
         throw new Error(`Failed to send tool result: ${response.status}`);
       }
-      
+
       debugLog.add({
         event: 'network:response',
         data: { status: response.status, duration: elapsed, tool: toolName },
@@ -997,11 +1023,15 @@ export class MCPClient {
    */
   async getConversationStatus(conversationId: string): Promise<ConversationStatus | null> {
     try {
-      const response = await fetch(
+      const response = await resilientFetch(
         `${this.baseUrl}conversations/${conversationId}/status/`,
         {
           method: 'GET',
           headers: this.headers,
+          maxRetries: 3,
+          onRetry: (attempt, delay) => {
+            debug.log(`[MCPClient] Retrying conversation status check (attempt ${attempt + 1}) after ${delay}ms...`);
+          },
         }
       );
 

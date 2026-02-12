@@ -446,8 +446,8 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
     process.exit(1);
   }
 
-  // 1. Find all .ts and .tsx files
-  const files = globFiles(absoluteDir, ['.ts', '.tsx']);
+  // 1. Find all .ts, .tsx, .js, .jsx, and .mjs files
+  const files = globFiles(absoluteDir, ['.ts', '.tsx', '.js', '.jsx', '.mjs']);
   console.log(`[pillar-sync] Scanning ${files.length} files in ${scanDir}`);
 
   // 2. Quick filter: only parse files that mention tool/action patterns
@@ -471,7 +471,10 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
       content,
       ts.ScriptTarget.Latest,
       true, // setParentNodes
-      filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+      filePath.endsWith('.tsx') ? ts.ScriptKind.TSX
+        : filePath.endsWith('.jsx') ? ts.ScriptKind.JSX
+        : /\.m?js$/.test(filePath) ? ts.ScriptKind.JS
+        : ts.ScriptKind.TS
     );
 
     // Walk the AST looking for call expressions

@@ -9,6 +9,7 @@ import type { Context, Suggestion, UserProfile } from "../core/context";
 import type { Workflow } from "../core/workflow";
 import type { UserContextItem } from "../types/user-context";
 import { debug } from "../utils/debug";
+import { resilientFetch } from "../utils/resilient-fetch";
 import type {
   ActionData,
   ActionRequest,
@@ -303,11 +304,15 @@ export class APIClient {
     const url = `${this.baseUrl}${endpoint}`;
 
     try {
-      const response = await fetch(url, {
+      const response = await resilientFetch(url, {
         ...options,
         headers: {
           ...this.headers,
           ...options.headers,
+        },
+        maxRetries: 3,
+        onRetry: (attempt, delay) => {
+          debug.log(`[Pillar API] Retrying ${endpoint} (attempt ${attempt + 1}) after ${delay}ms...`);
         },
       });
 
@@ -346,12 +351,16 @@ export class APIClient {
    */
   async fetchEmbedConfig(): Promise<ServerEmbedConfig | null> {
     try {
-      const response = await fetch(
+      const response = await resilientFetch(
         `${this.config.apiBaseUrl}/api/public/products/${this.config.productKey}/embed-config/`,
         {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
+          },
+          maxRetries: 3,
+          onRetry: (attempt, delay) => {
+            debug.log(`[Pillar] Retrying embed config fetch (attempt ${attempt + 1}) after ${delay}ms...`);
           },
         }
       );
@@ -656,7 +665,7 @@ export class APIClient {
   ): Promise<void> {
     const url = `${this.config.apiBaseUrl}/mcp/identify/`;
 
-    const response = await fetch(url, {
+    const response = await resilientFetch(url, {
       method: "POST",
       headers: this.headers,
       body: JSON.stringify({
@@ -665,6 +674,10 @@ export class APIClient {
         email: profile?.email,
         metadata: profile?.metadata,
       }),
+      maxRetries: 3,
+      onRetry: (attempt, delay) => {
+        debug.log(`[Pillar] Retrying identify (attempt ${attempt + 1}) after ${delay}ms...`);
+      },
     });
 
     if (!response.ok) {
