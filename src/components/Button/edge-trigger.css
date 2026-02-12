@@ -45,8 +45,8 @@
 
 .pillar-edge-sidebar--left {
   left: 0;
-  border-right: 1px solid var(--pillar-border);
   border-left: none;
+  border-right: 1px solid var(--pillar-border);
 }
 
 /* When panel is open, shift the trigger to sit at the panel's outer edge */

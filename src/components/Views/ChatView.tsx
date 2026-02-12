@@ -11,6 +11,8 @@ import {
   addOptimisticConversation,
   addProgressEvent,
   addUserMessage,
+  chatError,
+  clearChatError,
   clearInterruptedSession,
   setInterruptedSession,
   clearPendingImagesForNavigation,
@@ -30,6 +32,7 @@ import {
   setActionComplete,
   setActionPending,
   setActiveRequestId,
+  setChatError,
   setConversationId,
   setLoading,
   setMessageFeedback,
@@ -63,7 +66,7 @@ import { useAPI } from "../context";
 import { ContextTagList } from "../Panel/ContextTag";
 import { type TaskButtonData } from "../Panel/TaskButton";
 import { UnifiedChatInput } from "../Panel/UnifiedChatInput";
-import { ProgressStack } from "../Progress";
+import { ErrorRow, ProgressStack } from "../Progress";
 import { QuestionChip, QuestionChipSkeleton } from "../shared";
 import { ResumePrompt } from "./ResumePrompt";
 
@@ -451,6 +454,9 @@ export function ChatView() {
       userContext?: UserContextItem[],
       images?: ChatImage[]
     ) => {
+      // Clear any previous error
+      clearChatError();
+
       // Add user message with context and images
       addUserMessage(message, userContext, images);
 
@@ -517,12 +523,14 @@ export function ChatView() {
           return;
         }
         debug.error("[Pillar] Chat error:", error);
-        const errorDetail = error instanceof Error ? error.message : "";
-        updateLastAssistantMessage(
-          errorDetail
-            ? `Sorry, something went wrong: ${errorDetail}`
-            : "Sorry, I encountered an error. Please try again."
-        );
+        // Remove the empty assistant placeholder and show a subtle error row instead
+        removeLastEmptyAssistantMessage();
+        setChatError({
+          message: "Something went wrong. Please try again.",
+          retryMessage: message,
+          retryContext: userContext,
+          retryImages: images,
+        });
       } finally {
         setLoading(false);
         clearProgressStatus();
@@ -595,9 +603,11 @@ export function ChatView() {
         return;
       }
       debug.error("[Pillar] Resume error:", error);
-      updateLastAssistantMessage(
-        "Sorry, failed to resume the conversation. Please try again."
-      );
+      removeLastEmptyAssistantMessage();
+      setChatError({
+        message: "Failed to resume. Please try again.",
+        retryMessage: session.userMessage,
+      });
       // Clear so user isn't stuck in a resume loop
       clearInterruptedSession();
       clearActiveSession(siteId);
@@ -672,6 +682,19 @@ export function ChatView() {
       }
     }
   }, [api]);
+
+  // Handle retry after error - resends the last failed message
+  const handleRetry = useCallback(() => {
+    const error = chatError.value;
+    if (!error) return;
+    clearChatError();
+    // Remove the user message that was already added (sendMessage will re-add it)
+    const msgs = messages.value;
+    if (msgs.length > 0 && msgs[msgs.length - 1].role === "user") {
+      messages.value = msgs.slice(0, -1);
+    }
+    sendMessage(error.retryMessage, error.retryContext, error.retryImages);
+  }, [sendMessage]);
 
   // Handle feedback submission
   const handleFeedback = useCallback(
@@ -965,6 +988,11 @@ export function ChatView() {
             )}
           </div>
         ))}
+
+        {/* Error row - shown when MCP request fails */}
+        {chatError.value && (
+          <ErrorRow error={chatError.value} onRetry={handleRetry} />
+        )}
 
         {/* Resume prompt for interrupted sessions (rendered at bottom so it's
             visible after explicit stop or reconnect without scrolling up) */}

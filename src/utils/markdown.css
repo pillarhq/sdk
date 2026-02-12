@@ -27,7 +27,7 @@
 }
 
 ._pillar-collapsible-header:hover {
-  background: var(--pillar-bg-hover, rgba(0, 0, 0, 0.05));
+  background: var(--pillar-bg-hover);
 }
 
 ._pillar-collapsible-icon {
@@ -81,7 +81,7 @@
 }
 
 ._pillar-source-item:hover {
-  background: var(--pillar-bg-hover, rgba(0, 0, 0, 0.05));
+  background: var(--pillar-bg-hover);
   text-decoration: underline;
 }
 
@@ -301,7 +301,7 @@
   padding: 2px 6px;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   font-size: 0.9em;
-  background: var(--pillar-bg-code-inline, #f3f4f6);
+  background: var(--pillar-bg-tertiary);
   border-radius: 4px;
 }
 

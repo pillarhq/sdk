@@ -101,6 +101,25 @@ export const setActiveRequestId = (id: number | null) => {
 // Whether chat is loading a conversation from history
 export const isLoadingHistory = signal(false);
 
+// Chat error state - shown as a subtle error row with retry
+export interface ChatError {
+  message: string;
+  /** The user message that triggered the error (for retry) */
+  retryMessage: string;
+  retryContext?: UserContextItem[];
+  retryImages?: ChatImage[];
+}
+
+export const chatError = signal<ChatError | null>(null);
+
+export const setChatError = (error: ChatError) => {
+  chatError.value = error;
+};
+
+export const clearChatError = () => {
+  chatError.value = null;
+};
+
 // Session resumption - tracks if there's an interrupted session to resume
 export interface InterruptedSession {
   conversationId: string;

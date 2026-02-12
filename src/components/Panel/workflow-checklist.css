@@ -116,12 +116,12 @@
 }
 
 .pillar-workflow-step--awaiting_initiation {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--pillar-warning-light);
+  border-color: var(--pillar-warning-border);
 }
 
 .pillar-workflow-step--awaiting_initiation .pillar-workflow-step__icon {
-  color: #d97706;
+  color: var(--pillar-warning);
 }
 
 .pillar-workflow-step--active {
@@ -134,7 +134,7 @@
 }
 
 .pillar-workflow-step--completed .pillar-workflow-step__icon {
-  color: #059669;
+  color: var(--pillar-success);
 }
 
 .pillar-workflow-step--completed .pillar-workflow-step__label {
@@ -156,12 +156,12 @@
 }
 
 .pillar-workflow-step--failed {
-  background: #fef2f2;
-  border-color: #fca5a5;
+  background: var(--pillar-error-light);
+  border-color: var(--pillar-error-border);
 }
 
 .pillar-workflow-step--failed .pillar-workflow-step__icon {
-  color: #dc2626;
+  color: var(--pillar-error);
 }
 
 /* Start Button */
@@ -240,5 +240,5 @@
 }
 
 .pillar-workflow__cancel-btn:hover {
-  color: #dc2626;
+  color: var(--pillar-error);
 }

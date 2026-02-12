@@ -110,7 +110,7 @@
   justify-content: center;
   gap: 8px;
   padding: 16px;
-  color: var(--pillar-success, #059669);
+  color: var(--pillar-success);
   font-weight: 500;
 }
 
@@ -120,12 +120,12 @@
 }
 
 .pillar-confirm-card__error {
-  background: var(--pillar-error-light, #fef2f2);
-  border: 1px solid var(--pillar-error-border, #fecaca);
+  background: var(--pillar-error-light);
+  border: 1px solid var(--pillar-error-border);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
-  color: var(--pillar-error, #dc2626);
+  color: var(--pillar-error);
   font-size: 13px;
 }
 

@@ -234,7 +234,7 @@ console.log(JSON.stringify({ actions, agentGuidance }));`;
       fs.writeFileSync(tempFile, extractScript, 'utf-8');
       
       try {
-        const result = execSync(`npx tsx "${tempFile}"`, {
+        const result = execSync(`npx -y tsx "${tempFile}"`, {
           encoding: 'utf-8',
           cwd: process.cwd(),
           stdio: ['pipe', 'pipe', 'pipe'],

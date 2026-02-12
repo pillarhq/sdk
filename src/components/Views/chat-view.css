@@ -567,11 +567,11 @@
 }
 
 ._pillar-action-status-indicator--success {
-  color: var(--pillar-success, #22c55e);
+  color: var(--pillar-success);
 }
 
 ._pillar-action-status-indicator--failed {
-  color: var(--pillar-error, #ef4444);
+  color: var(--pillar-error);
 }
 
 ._pillar-action-status-indicator--pending {

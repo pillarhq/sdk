@@ -33,6 +33,22 @@
   --pillar-code-bg: #1f2937;
   --pillar-code-text: #e5e7eb;
   
+  /* Status colors */
+  --pillar-success: #059669;
+  --pillar-error: #dc2626;
+  --pillar-warning: #d97706;
+  
+  /* Status backgrounds (light tints) */
+  --pillar-success-light: #ecfdf5;
+  --pillar-success-border: #6ee7b7;
+  --pillar-error-light: #fef2f2;
+  --pillar-error-border: #fca5a5;
+  --pillar-warning-light: #fef3c7;
+  --pillar-warning-border: #fcd34d;
+  
+  /* Hover */
+  --pillar-bg-hover: rgba(0, 0, 0, 0.05);
+  
   /* Scrollbar */
   --pillar-scrollbar-track: transparent;
   --pillar-scrollbar-thumb: #d1d5db;
@@ -98,6 +114,19 @@
     --pillar-code-bg: #0d0d0d;
     --pillar-code-text: #e5e7eb;
     
+    --pillar-success: #34d399;
+    --pillar-error: #f87171;
+    --pillar-warning: #fbbf24;
+    
+    --pillar-success-light: rgba(52, 211, 153, 0.1);
+    --pillar-success-border: rgba(52, 211, 153, 0.3);
+    --pillar-error-light: rgba(248, 113, 113, 0.1);
+    --pillar-error-border: rgba(248, 113, 113, 0.3);
+    --pillar-warning-light: rgba(251, 191, 36, 0.1);
+    --pillar-warning-border: rgba(251, 191, 36, 0.3);
+    
+    --pillar-bg-hover: rgba(255, 255, 255, 0.05);
+    
     --pillar-scrollbar-thumb: #525252;
     --pillar-scrollbar-thumb-hover: #737373;
   }
@@ -129,6 +158,19 @@
   
   --pillar-code-bg: #0d0d0d;
   --pillar-code-text: #e5e7eb;
+  
+  --pillar-success: #34d399;
+  --pillar-error: #f87171;
+  --pillar-warning: #fbbf24;
+  
+  --pillar-success-light: rgba(52, 211, 153, 0.1);
+  --pillar-success-border: rgba(52, 211, 153, 0.3);
+  --pillar-error-light: rgba(248, 113, 113, 0.1);
+  --pillar-error-border: rgba(248, 113, 113, 0.3);
+  --pillar-warning-light: rgba(251, 191, 36, 0.1);
+  --pillar-warning-border: rgba(251, 191, 36, 0.3);
+  
+  --pillar-bg-hover: rgba(255, 255, 255, 0.05);
   
   --pillar-scrollbar-thumb: #525252;
   --pillar-scrollbar-thumb-hover: #737373;
