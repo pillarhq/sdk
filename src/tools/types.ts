@@ -1,48 +1,48 @@
 /**
- * Action Types - Type definitions for code-first action definitions.
+ * Tool Types - Type definitions for code-first tool definitions.
  *
- * These types enable developers to define actions in their application code
+ * These types enable developers to define tools in their application code
  * rather than in the admin UI, with full TypeScript support.
  *
  * @example
  * ```ts
- * // lib/pillar/actions/index.ts
- * import type { SyncActionDefinitions } from '@pillar-ai/sdk';
+ * // lib/pillar/tools/index.ts
+ * import type { SyncToolDefinitions } from '@pillar-ai/sdk';
  *
- * export const actions = {
+ * export const tools = {
  *   open_settings: {
  *     description: 'Navigate to the settings page',
  *     type: 'navigate' as const,
  *     path: '/settings',
  *     autoRun: true,
  *   },
- * } as const satisfies SyncActionDefinitions;
+ * } as const satisfies SyncToolDefinitions;
  *
- * export default actions;
+ * export default tools;
  *
- * // Sync via CI/CD: npx pillar-sync --actions ./lib/pillar/actions/index.ts
+ * // Sync via CI/CD: npx pillar-sync --scan ./src
  * // Register handlers at runtime: pillar.onTask('open_settings', () => router.push('/settings'));
  * ```
  */
 
 /**
- * Supported action types.
+ * Supported tool types.
  *
  * - navigate: Navigate to a page within the app
  * - open_modal: Open a modal or dialog
  * - fill_form: Fill form fields with data
- * - trigger_action: Trigger a custom action
+ * - trigger_tool: Trigger a custom tool
  * - query: Fetch data from the client and return to the agent (implies returns: true)
  * - copy_text: Copy text to clipboard
  * - external_link: Open an external URL
  * - start_tutorial: Start a tutorial/walkthrough
  * - inline_ui: Display inline UI card in chat
  */
-export type ActionType =
+export type ToolType =
   | 'navigate'
   | 'open_modal'
   | 'fill_form'
-  | 'trigger_action'
+  | 'trigger_tool'
   | 'query'
   | 'copy_text'
   | 'external_link'
@@ -50,7 +50,7 @@ export type ActionType =
   | 'inline_ui';
 
 /**
- * Supported platforms for action deployments.
+ * Supported platforms for tool deployments.
  */
 export type Platform = 'web' | 'ios' | 'android' | 'desktop';
 
@@ -58,52 +58,52 @@ export type Platform = 'web' | 'ios' | 'android' | 'desktop';
  * Schema property definition for a single field.
  * Supports nested objects and arrays with items.
  */
-export interface ActionDataSchemaProperty {
+export interface ToolDataSchemaProperty {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description?: string;
   enum?: string[];
   default?: unknown;
   /** Items schema for array types */
-  items?: ActionDataSchemaProperty;
+  items?: ToolDataSchemaProperty;
   /** Nested properties for object types */
-  properties?: Record<string, ActionDataSchemaProperty>;
+  properties?: Record<string, ToolDataSchemaProperty>;
   /** Required fields for nested object types */
   required?: string[];
 }
 
 /**
- * JSON Schema definition for action data.
+ * JSON Schema definition for tool data.
  *
  * When provided, the AI will extract data from the user's query
- * and populate the action's data field before execution.
+ * and populate the tool's data field before execution.
  */
-export interface ActionDataSchema {
+export interface ToolDataSchema {
   type: 'object';
-  properties: Record<string, ActionDataSchemaProperty>;
+  properties: Record<string, ToolDataSchemaProperty>;
   required?: string[];
 }
 
 /**
- * Definition for a single action.
+ * Definition for a single tool.
  *
- * Actions are defined in code and synced to the server during CI/CD.
+ * Tools are defined in code and synced to the server during CI/CD.
  * The server stores the metadata, and the SDK executes the handler locally.
  *
  * @template TData - Type for the data passed to the handler
  */
-export interface ActionDefinition<TData = Record<string, unknown>> {
+export interface ToolDefinition<TData = Record<string, unknown>> {
   /**
    * Human-readable description for AI matching.
    *
    * The AI uses semantic similarity to match user queries to this description.
-   * Be specific about when this action should be suggested.
+   * Be specific about when this tool should be suggested.
    *
    * @example "Navigate to the billing page. Suggest when user asks about payments, invoices, or subscription."
    */
   description: string;
 
   /**
-   * Example user queries that should trigger this action.
+   * Example user queries that should trigger this tool.
    *
    * Provide 3-5 natural phrasings users might say:
    * - Imperative: "open settings", "go to billing"
@@ -115,19 +115,19 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   examples?: string[];
 
   /**
-   * Type of action - determines how the SDK handles it.
+   * Type of tool - determines how the SDK handles it.
    */
-  type: ActionType;
+  type: ToolType;
 
   /**
-   * Path for navigate actions.
+   * Path for navigate tools.
    *
    * Can include template variables like `/users/{userId}`.
    */
   path?: string;
 
   /**
-   * External URL for external_link actions.
+   * External URL for external_link tools.
    */
   externalUrl?: string;
 
@@ -135,9 +135,9 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
    * JSON Schema for data extraction from user query.
    *
    * When provided, the AI will attempt to extract structured data
-   * from the conversation before executing the action.
+   * from the conversation before executing the tool.
    */
-  dataSchema?: ActionDataSchema;
+  dataSchema?: ToolDataSchema;
 
   /**
    * Default data to pass to the handler.
@@ -145,16 +145,16 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   defaultData?: TData;
 
   /**
-   * Context required for this action to be available.
+   * Context required for this tool to be available.
    *
    * @example { loggedIn: true, plan: 'pro' }
    */
   requiredContext?: Record<string, unknown>;
 
   /**
-   * Whether to auto-run this action without user confirmation.
+   * Whether to auto-run this tool without user confirmation.
    *
-   * Only the highest-scoring action can auto-run.
+   * Only the highest-scoring tool can auto-run.
    * Use for simple navigations where user intent is clear.
    *
    * @default false
@@ -162,7 +162,7 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   autoRun?: boolean;
 
   /**
-   * Whether the action completes immediately after execution.
+   * Whether the tool completes immediately after execution.
    *
    * If false, the SDK waits for host app confirmation.
    * Use true for simple navigations and clipboard operations.
@@ -172,10 +172,10 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   autoComplete?: boolean;
 
   /**
-   * Whether this action returns data for the agent.
+   * Whether this tool returns data for the agent.
    *
    * If true, the handler's return value is sent back to the agent
-   * for further reasoning. Use for query/lookup actions that inform
+   * for further reasoning. Use for query/lookup tools that inform
    * the agent's next decision.
    *
    * @default false
@@ -196,7 +196,7 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
   }>;
 
   /**
-   * Handler function executed when the action is triggered.
+   * Handler function executed when the tool is triggered.
    *
    * This runs in the client - the server only stores metadata.
    * If `returns: true`, the return value is sent to the agent.
@@ -205,28 +205,28 @@ export interface ActionDefinition<TData = Record<string, unknown>> {
 }
 
 /**
- * Map of action name to definition.
+ * Map of tool name to definition.
  *
- * Action names should be snake_case identifiers.
+ * Tool names should be snake_case identifiers.
  */
-export type ActionDefinitions = Record<string, ActionDefinition<unknown>>;
+export type ToolDefinitions = Record<string, ToolDefinition<unknown>>;
 
 /**
- * Metadata for a single action in the manifest (no handler).
+ * Metadata for a single tool in the manifest (no handler).
  *
  * This is what gets synced to the server.
  */
-export interface ActionManifestEntry {
+export interface ToolManifestEntry {
   name: string;
   description: string;
   examples?: string[];
-  type: ActionType;
+  type: ToolType;
   path?: string;
   external_url?: string;
   auto_run?: boolean;
   auto_complete?: boolean;
   returns_data?: boolean;
-  data_schema?: ActionDataSchema;
+  data_schema?: ToolDataSchema;
   default_data?: Record<string, unknown>;
   required_context?: Record<string, unknown>;
   parameter_examples?: Array<{
@@ -236,11 +236,11 @@ export interface ActionManifestEntry {
 }
 
 /**
- * Action manifest - synced to server during CI/CD.
+ * Tool manifest - synced to server during CI/CD.
  *
- * Contains all action metadata without handlers.
+ * Contains all tool metadata without handlers.
  */
-export interface ActionManifest {
+export interface ToolManifest {
   /**
    * Platform this manifest is for.
    */
@@ -262,12 +262,12 @@ export interface ActionManifest {
   generatedAt: string;
 
   /**
-   * Action definitions (without handlers).
+   * Tool definitions (without handlers).
    */
-  actions: ActionManifestEntry[];
+  tools: ToolManifestEntry[];
 
   /**
-   * Custom agent guidance synced alongside actions.
+   * Custom agent guidance synced alongside tools.
    * Injected into the AI agent's prompt as product_guidance.
    */
   agentGuidance?: string;
@@ -282,16 +282,16 @@ export interface ClientInfo {
 }
 
 /**
- * Action definition for syncing (without handler).
+ * Tool definition for syncing (without handler).
  *
- * Use this type when defining actions for CI/CD sync.
+ * Use this type when defining tools for CI/CD sync.
  * Handlers are registered separately at runtime via pillar.onTask().
  *
  * @example
  * ```ts
- * import type { SyncActionDefinitions } from '@pillar-ai/sdk';
+ * import type { SyncToolDefinitions } from '@pillar-ai/sdk';
  *
- * export const actions: SyncActionDefinitions = {
+ * export const tools: SyncToolDefinitions = {
  *   open_settings: {
  *     description: 'Navigate to settings page',
  *     type: 'navigate',
@@ -301,39 +301,39 @@ export interface ClientInfo {
  * };
  * ```
  */
-export interface SyncActionDefinition<TData = Record<string, unknown>> {
+export interface SyncToolDefinition<TData = Record<string, unknown>> {
   /** Human-readable description for AI matching */
   description: string;
 
-  /** Example user queries that should trigger this action */
+  /** Example user queries that should trigger this tool */
   examples?: string[];
 
-  /** Type of action */
-  type: ActionType;
+  /** Type of tool */
+  type: ToolType;
 
-  /** Path for navigate actions */
+  /** Path for navigate tools */
   path?: string;
 
-  /** External URL for external_link actions */
+  /** External URL for external_link tools */
   externalUrl?: string;
 
   /** JSON Schema for data extraction from user query */
-  dataSchema?: ActionDataSchema;
+  dataSchema?: ToolDataSchema;
 
   /** Default data to pass to the handler */
   defaultData?: TData;
 
-  /** Context required for this action to be available */
+  /** Context required for this tool to be available */
   requiredContext?: Record<string, unknown>;
 
-  /** Whether to auto-run this action without user confirmation */
+  /** Whether to auto-run this tool without user confirmation */
   autoRun?: boolean;
 
-  /** Whether the action completes immediately after execution */
+  /** Whether the tool completes immediately after execution */
   autoComplete?: boolean;
 
   /**
-   * Whether this action returns data for the agent.
+   * Whether this tool returns data for the agent.
    * If true, the handler's return value is sent back to the agent.
    */
   returns?: boolean;
@@ -350,31 +350,31 @@ export interface SyncActionDefinition<TData = Record<string, unknown>> {
 }
 
 /**
- * Map of action name to sync definition (no handlers).
+ * Map of tool name to sync definition (no handlers).
  *
- * Use this type for your actions file that gets synced via CI/CD.
+ * Use this type for your tools file that gets synced via CI/CD.
  */
-export type SyncActionDefinitions = Record<string, SyncActionDefinition<unknown>>;
+export type SyncToolDefinitions = Record<string, SyncToolDefinition<unknown>>;
 
 // ============================================================================
 // Type Utilities for Type-Safe onTask
 // ============================================================================
 
 /**
- * Base data types for each action type.
- * These are automatically inferred from the action's `type` field.
+ * Base data types for each tool type.
+ * These are automatically inferred from the tool's `type` field.
  */
-export interface NavigateActionData {
+export interface NavigateToolData {
   /** CSS selector to highlight after navigation */
   highlight_selector?: string;
   /** Path that was navigated to (injected by SDK) */
   path?: string;
 }
 
-export interface TriggerActionData {
-  /** The action being triggered */
-  action?: string;
-  /** Additional action parameters */
+export interface TriggerToolData {
+  /** The tool being triggered */
+  tool?: string;
+  /** Additional tool parameters */
   [key: string]: unknown;
 }
 
@@ -395,19 +395,19 @@ export interface CopyTextData {
   text?: string;
 }
 
-export interface QueryActionData {
+export interface QueryToolData {
   /** Query parameters passed to the handler */
   [key: string]: unknown;
 }
 
 /**
- * Maps action types to their default data shapes.
+ * Maps tool types to their default data shapes.
  * Used for automatic type inference in onTask handlers.
  */
-export interface ActionTypeDataMap {
-  navigate: NavigateActionData;
-  trigger_action: TriggerActionData;
-  query: QueryActionData;
+export interface ToolTypeDataMap {
+  navigate: NavigateToolData;
+  trigger_tool: TriggerToolData;
+  query: QueryToolData;
   inline_ui: InlineUIData;
   external_link: ExternalLinkData;
   copy_text: CopyTextData;
@@ -417,17 +417,17 @@ export interface ActionTypeDataMap {
 }
 
 /**
- * Extract the data type for a specific action from an ActionDefinitions map.
+ * Extract the data type for a specific tool from a ToolDefinitions map.
  *
  * Type inference priority:
  * 1. If `defaultData` is defined, use that type (for custom fields)
- * 2. Otherwise, infer from the action's `type` field using ActionTypeDataMap
+ * 2. Otherwise, infer from the tool's `type` field using ToolTypeDataMap
  * 3. Fall back to Record<string, unknown>
  *
  * @example
  * ```ts
- * const actions = {
- *   // Inferred from type: "navigate" → NavigateActionData
+ * const tools = {
+ *   // Inferred from type: "navigate" → NavigateToolData
  *   open_settings: {
  *     description: '...',
  *     type: 'navigate',
@@ -439,38 +439,38 @@ export interface ActionTypeDataMap {
  *     type: 'navigate',
  *     defaultData: { type: '', url: '', name: '' },
  *   },
- * } as const satisfies SyncActionDefinitions;
+ * } as const satisfies SyncToolDefinitions;
  * ```
  */
-export type ActionDataType<
-  TActions extends SyncActionDefinitions | ActionDefinitions,
-  TName extends keyof TActions,
-> = TActions[TName] extends { defaultData: infer D }
+export type ToolDataType<
+  TTools extends SyncToolDefinitions | ToolDefinitions,
+  TName extends keyof TTools,
+> = TTools[TName] extends { defaultData: infer D }
   ? D extends Record<string, unknown>
     ? D
     : Record<string, unknown>
-  : TActions[TName] extends { type: infer T }
-    ? T extends keyof ActionTypeDataMap
-      ? ActionTypeDataMap[T]
+  : TTools[TName] extends { type: infer T }
+    ? T extends keyof ToolTypeDataMap
+      ? ToolTypeDataMap[T]
       : Record<string, unknown>
     : Record<string, unknown>;
 
 /**
- * Extract all action names from an ActionDefinitions map.
+ * Extract all tool names from a ToolDefinitions map.
  *
  * @example
  * ```ts
- * const actions = { open_settings: {...}, add_source: {...} };
- * type Names = ActionNames<typeof actions>; // 'open_settings' | 'add_source'
+ * const tools = { open_settings: {...}, add_source: {...} };
+ * type Names = ToolNames<typeof tools>; // 'open_settings' | 'add_source'
  * ```
  */
-export type ActionNames<T extends SyncActionDefinitions | ActionDefinitions> =
+export type ToolNames<T extends SyncToolDefinitions | ToolDefinitions> =
   Extract<keyof T, string>;
 
 /**
  * Typed task handler function.
  *
- * @template TData - The data type for this action
+ * @template TData - The data type for this tool
  */
 export type TypedTaskHandler<TData = Record<string, unknown>> = (
   data: TData
@@ -479,17 +479,17 @@ export type TypedTaskHandler<TData = Record<string, unknown>> = (
 /**
  * Type-safe onTask method signature.
  *
- * When actions are provided to PillarProvider, this type enables
- * TypeScript to infer the correct data type for each action handler.
+ * When tools are provided to PillarProvider, this type enables
+ * TypeScript to infer the correct data type for each tool handler.
  *
- * @template TActions - The action definitions map
+ * @template TTools - The tool definitions map
  */
 export interface TypedOnTask<
-  TActions extends SyncActionDefinitions | ActionDefinitions,
+  TTools extends SyncToolDefinitions | ToolDefinitions,
 > {
-  <TName extends ActionNames<TActions>>(
+  <TName extends ToolNames<TTools>>(
     taskName: TName,
-    handler: TypedTaskHandler<ActionDataType<TActions, TName>>
+    handler: TypedTaskHandler<ToolDataType<TTools, TName>>
   ): () => void;
 
   // Fallback overload for arbitrary string keys (runtime-only tasks)
@@ -500,16 +500,16 @@ export interface TypedOnTask<
  * Extended Pillar interface with type-safe onTask.
  *
  * Use this when you want strongly typed task handlers based on
- * your action definitions.
+ * your tool definitions.
  *
- * @template TActions - The action definitions map
+ * @template TTools - The tool definitions map
  *
  * @example
  * ```ts
  * import type { TypedPillar } from '@pillar-ai/sdk';
- * import type { actions } from './actions';
+ * import type { tools } from './tools';
  *
- * const pillar = usePillar<typeof actions>();
+ * const pillar = usePillar<typeof tools>();
  *
  * // TypeScript knows `data` has { type, url, name }
  * pillar.onTask('add_source', (data) => {
@@ -518,22 +518,22 @@ export interface TypedOnTask<
  * ```
  */
 export interface TypedPillarMethods<
-  TActions extends SyncActionDefinitions | ActionDefinitions,
+  TTools extends SyncToolDefinitions | ToolDefinitions,
 > {
-  onTask: TypedOnTask<TActions>;
+  onTask: TypedOnTask<TTools>;
 }
 
 // ============================================================================
-// Unified Action Schema (new API — co-locates metadata + handler)
+// Unified Tool Schema (new API — co-locates metadata + handler)
 // ============================================================================
 
 /**
- * Result returned from an action's execute function.
+ * Result returned from a tool's execute function.
  *
  * Follows the MCP tool result format. Plain objects are also accepted
  * by the SDK and normalized to this shape automatically.
  */
-export interface ActionResult {
+export interface ToolExecuteResult {
   content: Array<
     | { type: 'text'; text: string }
     | { type: 'image'; data: string; mimeType: string }
@@ -542,9 +542,9 @@ export interface ActionResult {
 }
 
 /**
- * Unified action definition that co-locates metadata and handler.
+ * Unified tool definition that co-locates metadata and handler.
  *
- * Use with `pillar.defineAction()` or the `usePillarAction()` React hook.
+ * Use with `pillar.defineTool()` or the `usePillarTool()` React hook.
  * The CLI scanner (`npx pillar-sync --scan ./src`) discovers these
  * definitions automatically — no barrel file needed.
  *
@@ -552,7 +552,7 @@ export interface ActionResult {
  *
  * @example
  * ```ts
- * pillar.defineAction({
+ * pillar.defineTool({
  *   name: 'add_to_cart',
  *   description: 'Add a product to the shopping cart',
  *   inputSchema: {
@@ -570,17 +570,17 @@ export interface ActionResult {
  * });
  * ```
  */
-export interface ActionSchema<TInput = Record<string, unknown>> {
-  /** Unique action name (e.g., 'add_to_cart') */
+export interface ToolSchema<TInput = Record<string, unknown>> {
+  /** Unique tool name (e.g., 'add_to_cart') */
   name: string;
 
   /** Human-readable description for AI matching */
   description: string;
 
   /**
-   * Type of action - determines how the SDK handles it and organizes it in the UI.
+   * Type of tool - determines how the SDK handles it and organizes it in the UI.
    */
-  type?: ActionType;
+  type?: ToolType;
 
   /**
    * JSON Schema describing the input parameters.
@@ -593,7 +593,7 @@ export interface ActionSchema<TInput = Record<string, unknown>> {
   };
 
   /**
-   * Example user queries that should trigger this action.
+   * Example user queries that should trigger this tool.
    * Used for semantic matching alongside the description.
    */
   examples?: string[];
@@ -605,18 +605,76 @@ export interface ActionSchema<TInput = Record<string, unknown>> {
   autoRun?: boolean;
 
   /**
-   * Whether the action completes immediately after execution.
+   * Whether the tool completes immediately after execution.
    * @default true
    */
   autoComplete?: boolean;
 
   /**
-   * Handler function executed when the AI invokes this action.
+   * Handler function executed when the AI invokes this tool.
    *
    * Can return:
-   * - An `ActionResult` with MCP-style content blocks
+   * - A `ToolExecuteResult` with MCP-style content blocks
    * - A plain object (SDK normalizes it for the agent)
-   * - `void` if the action has no return value
+   * - `void` if the tool has no return value
    */
-  execute: (input: TInput) => Promise<ActionResult | unknown | void> | ActionResult | unknown | void;
+  execute: (input: TInput) => Promise<ToolExecuteResult | unknown | void> | ToolExecuteResult | unknown | void;
 }
+
+// ============================================================================
+// Backwards Compatibility Aliases (deprecated)
+// ============================================================================
+
+/** @deprecated Use ToolType instead */
+export type ActionType = ToolType;
+
+/** @deprecated Use ToolDataSchemaProperty instead */
+export type ActionDataSchemaProperty = ToolDataSchemaProperty;
+
+/** @deprecated Use ToolDataSchema instead */
+export type ActionDataSchema = ToolDataSchema;
+
+/** @deprecated Use ToolDefinition instead */
+export type ActionDefinition<TData = Record<string, unknown>> = ToolDefinition<TData>;
+
+/** @deprecated Use ToolDefinitions instead */
+export type ActionDefinitions = ToolDefinitions;
+
+/** @deprecated Use ToolManifestEntry instead */
+export type ActionManifestEntry = ToolManifestEntry;
+
+/** @deprecated Use ToolManifest instead */
+export type ActionManifest = ToolManifest;
+
+/** @deprecated Use SyncToolDefinition instead */
+export type SyncActionDefinition<TData = Record<string, unknown>> = SyncToolDefinition<TData>;
+
+/** @deprecated Use SyncToolDefinitions instead */
+export type SyncActionDefinitions = SyncToolDefinitions;
+
+/** @deprecated Use NavigateToolData instead */
+export type NavigateActionData = NavigateToolData;
+
+/** @deprecated Use TriggerToolData instead */
+export type TriggerActionData = TriggerToolData;
+
+/** @deprecated Use QueryToolData instead */
+export type QueryActionData = QueryToolData;
+
+/** @deprecated Use ToolTypeDataMap instead */
+export type ActionTypeDataMap = ToolTypeDataMap;
+
+/** @deprecated Use ToolDataType instead */
+export type ActionDataType<
+  TTools extends SyncToolDefinitions | ToolDefinitions,
+  TName extends keyof TTools,
+> = ToolDataType<TTools, TName>;
+
+/** @deprecated Use ToolNames instead */
+export type ActionNames<T extends SyncToolDefinitions | ToolDefinitions> = ToolNames<T>;
+
+/** @deprecated Use ToolExecuteResult instead */
+export type ActionResult = ToolExecuteResult;
+
+/** @deprecated Use ToolSchema instead */
+export type ActionSchema<TInput = Record<string, unknown>> = ToolSchema<TInput>;

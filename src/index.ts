@@ -67,18 +67,51 @@ export {
   type UserProfile,
 } from "./core/context";
 
-// Actions (code-first action definitions)
+// Tools (code-first tool definitions)
 export {
   clearRegistry,
-  getActionCount,
-  getActionDefinition,
-  getActionNames,
+  getToolCount,
+  getToolDefinition,
+  getToolNames,
   getClientInfo,
   getHandler,
   getManifest,
-  hasAction,
+  hasTool,
   setClientInfo,
+  // New tool types
+  type ToolDataSchema,
+  type ToolDataSchemaProperty,
+  type ToolDataType,
+  type ToolDefinition,
+  type ToolDefinitions,
+  type ToolManifest,
+  type ToolManifestEntry,
+  type ToolNames,
+  type ToolType,
+  type ToolTypeDataMap,
+  type ToolExecuteResult,
+  type ToolSchema,
+  // Type utilities for typed onTask
+  type ClientInfo,
+  type CopyTextData,
+  type ExternalLinkData,
+  type InlineUIData,
+  type NavigateToolData,
+  type TriggerToolData,
+  type QueryToolData,
+  type Platform,
+  type SyncToolDefinition,
+  type SyncToolDefinitions,
+  type TypedOnTask,
+  type TypedPillarMethods,
+  type TypedTaskHandler,
+  // Backwards compatibility aliases (deprecated)
+  getActionCount,
+  getActionDefinition,
+  getActionNames,
+  hasAction,
   type ActionDataSchema,
+  type ActionDataSchemaProperty,
   type ActionDataType,
   type ActionDefinition,
   type ActionDefinitions,
@@ -86,24 +119,15 @@ export {
   type ActionManifestEntry,
   type ActionNames,
   type ActionType,
-  // Type utilities for typed onTask
   type ActionTypeDataMap,
-  type ClientInfo,
-  type CopyTextData,
-  type ExternalLinkData,
-  type InlineUIData,
-  type NavigateActionData,
-  type Platform,
-  type SyncActionDefinition,
-  type SyncActionDefinitions,
-  type TriggerActionData,
-  type TypedOnTask,
-  type TypedPillarMethods,
-  type TypedTaskHandler,
-  // Unified action schema (new API)
   type ActionResult,
   type ActionSchema,
-} from "./actions";
+  type NavigateActionData,
+  type TriggerActionData,
+  type QueryActionData,
+  type SyncActionDefinition,
+  type SyncActionDefinitions,
+} from "./tools";
 
 // API
 export {
@@ -114,12 +138,18 @@ export {
   type ProgressEvent,
 } from "./api/client";
 
-// MCP Client types (for image upload, action requests, token usage)
+// MCP Client types (for image upload, tool requests, token usage)
 export {
-  type ActionRequest,
+  type ToolRequest,
+  type ToolData,
   type ChatImage,
   type ImageUploadResponse,
   type TokenUsage,
+  toolToTaskButton,
+  // Backwards compatibility aliases (deprecated)
+  type ActionRequest,
+  type ActionData,
+  actionToTaskButton,
 } from "./api/mcp-client";
 
 // DOM Scanner types

@@ -1,7 +1,7 @@
 /**
  * Pillar SDK Configuration Types
  */
-import type { Platform } from '../actions/types';
+import type { Platform } from '../tools/types';
 
 /** Which side of the screen the panel appears on. */
 export type PanelPosition = 'left' | 'right';

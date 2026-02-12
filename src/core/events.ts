@@ -176,7 +176,9 @@ export interface PillarEvents {
   };
   /** User logged out. */
   "user:logout": Record<string, never>;
-  /** Query action returned a result to the agent. */
+  /** Query tool returned a result to the agent. */
+  "tool:result": { toolName: string; result: unknown; toolCallId?: string };
+  /** @deprecated Use tool:result instead */
   "action:result": { actionName: string; result: unknown; toolCallId?: string };
   /** AI-suggested task is being executed. */
   "task:execute": TaskExecutePayload;

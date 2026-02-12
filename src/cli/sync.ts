@@ -1,8 +1,10 @@
 /**
- * Pillar Action Sync CLI
+ * Pillar Tool Sync CLI
  *
- * Scans for usePillarAction/defineAction calls and syncs to the Pillar backend.
+ * Scans for usePillarTool/defineTool calls and syncs to the Pillar backend.
  * Run this in your CI/CD pipeline after building your app.
+ *
+ * Also supports legacy usePillarAction/defineAction calls for backwards compatibility.
  *
  * Usage:
  *   npx pillar-sync --scan ./src
@@ -25,16 +27,20 @@ import { execSync } from 'child_process';
 // Types (inline to make CLI self-contained)
 // ============================================================================
 
-type ActionType =
+type ToolType =
   | 'navigate'
   | 'open_modal'
   | 'fill_form'
-  | 'trigger_action'
+  | 'trigger_tool'
+  | 'trigger_action' // Backwards compat alias
   | 'query'
   | 'copy_text'
   | 'external_link'
   | 'start_tutorial'
   | 'inline_ui';
+
+// Backwards compat alias
+type ActionType = ToolType;
 
 type Platform = 'web' | 'ios' | 'android' | 'desktop';
 
@@ -52,11 +58,11 @@ interface ActionDataSchema {
   required?: string[];
 }
 
-interface ActionManifestEntry {
+interface ToolManifestEntry {
   name: string;
   description: string;
   examples?: string[];
-  type: ActionType;
+  type: ToolType;
   path?: string;
   external_url?: string;
   auto_run?: boolean;
@@ -68,14 +74,21 @@ interface ActionManifestEntry {
   parameter_examples?: Record<string, unknown>[];
 }
 
-interface ActionManifest {
+// Backwards compat alias
+type ActionManifestEntry = ToolManifestEntry;
+
+interface ToolManifest {
   platform: Platform;
   version: string;
   gitSha?: string;
   generatedAt: string;
-  actions: ActionManifestEntry[];
+  /** Tool definitions (uses 'actions' key for backend API compat) */
+  actions: ToolManifestEntry[];
   agentGuidance?: string;
 }
+
+// Backwards compat alias
+type ActionManifest = ToolManifest;
 
 interface SyncResponse {
   status: 'created' | 'unchanged' | 'accepted';
@@ -134,15 +147,16 @@ function parseArgs(args: string[]): Record<string, string | boolean> {
 
 function printUsage(): void {
   console.log(`
-Pillar Action Sync CLI
+Pillar Tool Sync CLI
 
-Scans for usePillarAction/defineAction calls and syncs to the Pillar backend.
+Scans for usePillarTool/defineTool calls and syncs to the Pillar backend.
+Also supports legacy usePillarAction/defineAction calls.
 
 Usage:
   npx pillar-sync --scan <dir> [--local]
 
 Arguments:
-  --scan <dir>       Directory to scan for usePillarAction/defineAction calls
+  --scan <dir>       Directory to scan for usePillarTool/defineTool calls
   --local            Use localhost:8003 as the API URL (for local development)
   --help             Show this help message
 
@@ -155,7 +169,7 @@ Environment Variables:
   GIT_SHA            Git commit SHA for traceability
 
 Examples:
-  # Scan and sync actions
+  # Scan and sync tools
   PILLAR_SLUG=my-app PILLAR_SECRET=xxx npx pillar-sync --scan ./src
 
   # Local development
@@ -255,14 +269,15 @@ function getGitSha(): string | undefined {
 
 // ============================================================================
 // AST-based Scanner (--scan mode)
-// Discovers defineAction / usePillarAction calls without a barrel file.
+// Discovers defineTool / usePillarTool calls without a barrel file.
+// Also supports legacy defineAction / usePillarAction for backwards compat.
 // Uses TypeScript's compiler API for parse-only AST extraction.
 // ============================================================================
 
-interface ScannedAction {
+interface ScannedTool {
   name: string;
   description: string;
-  type?: ActionType;
+  type?: ToolType;
   inputSchema?: ActionDataSchema;
   examples?: string[];
   autoRun?: boolean;
@@ -270,6 +285,9 @@ interface ScannedAction {
   sourceFile: string;
   line: number;
 }
+
+// Backwards compat alias
+type ScannedAction = ScannedTool;
 
 /**
  * Recursively glob for .ts and .tsx files under a directory,
@@ -408,9 +426,10 @@ function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
 }
 
 /**
- * Scan a directory for defineAction / usePillarAction calls and extract metadata.
+ * Scan a directory for defineTool / usePillarTool calls and extract metadata.
+ * Also supports legacy defineAction / usePillarAction for backwards compatibility.
  */
-async function scanActions(scanDir: string): Promise<ScannedAction[]> {
+async function scanTools(scanDir: string): Promise<ScannedTool[]> {
   const absoluteDir = path.resolve(process.cwd(), scanDir);
 
   if (!fs.existsSync(absoluteDir)) {
@@ -431,17 +450,19 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
   const files = globFiles(absoluteDir, ['.ts', '.tsx']);
   console.log(`[pillar-sync] Scanning ${files.length} files in ${scanDir}`);
 
-  // 2. Quick filter: only parse files that mention defineAction or usePillarAction
-  const PATTERNS = ['defineAction', 'usePillarAction'];
+  // 2. Quick filter: only parse files that mention tool/action patterns
+  // New patterns: defineTool, usePillarTool
+  // Legacy patterns: defineAction, usePillarAction (for backwards compat)
+  const PATTERNS = ['defineTool', 'usePillarTool', 'defineAction', 'usePillarAction'];
   const candidateFiles = files.filter((file) => {
     const content = fs.readFileSync(file, 'utf-8');
     return PATTERNS.some((p) => content.includes(p));
   });
 
-  console.log(`[pillar-sync] Found ${candidateFiles.length} files with action definitions`);
+  console.log(`[pillar-sync] Found ${candidateFiles.length} files with tool definitions`);
 
-  // 3. Parse each candidate and extract action metadata
-  const actions: ScannedAction[] = [];
+  // 3. Parse each candidate and extract tool metadata
+  const tools: ScannedTool[] = [];
 
   for (const filePath of candidateFiles) {
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -459,13 +480,13 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
         const callee = node.expression;
         let isTargetCall = false;
 
-        // Match: defineAction(...), usePillarAction(...)
+        // Match: defineTool(...), usePillarTool(...), defineAction(...), usePillarAction(...)
         if (ts.isIdentifier(callee)) {
           isTargetCall = PATTERNS.includes(callee.text);
         }
-        // Match: pillar.defineAction(...), something.defineAction(...)
+        // Match: pillar.defineTool(...), pillar.defineAction(...), etc.
         else if (ts.isPropertyAccessExpression(callee)) {
-          isTargetCall = callee.name.text === 'defineAction';
+          isTargetCall = callee.name.text === 'defineTool' || callee.name.text === 'defineAction';
         }
 
         if (isTargetCall && node.arguments.length > 0) {
@@ -473,13 +494,19 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
           const lineNumber = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
           const relativePath = path.relative(process.cwd(), filePath);
 
-          // Helper to process a single action object
-          const processActionObject = (obj: Record<string, unknown> | undefined, line: number) => {
+          // Helper to process a single tool object
+          const processToolObject = (obj: Record<string, unknown> | undefined, line: number) => {
             if (obj && typeof obj.name === 'string' && typeof obj.description === 'string') {
-              actions.push({
+              // Normalize type: trigger_action -> trigger_tool for backwards compat
+              let toolType = obj.type as ToolType | undefined;
+              if (toolType === 'trigger_action') {
+                toolType = 'trigger_tool';
+              }
+
+              tools.push({
                 name: obj.name as string,
                 description: obj.description as string,
-                type: obj.type as ActionType | undefined,
+                type: toolType,
                 inputSchema: obj.inputSchema as ActionDataSchema | undefined,
                 examples: obj.examples as string[] | undefined,
                 autoRun: obj.autoRun as boolean | undefined,
@@ -491,26 +518,26 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
               console.log(`[pillar-sync]   ${obj.name} (${relativePath}:${line})`);
             } else if (obj) {
               console.warn(
-                `[pillar-sync] ⚠ Skipping action at ${relativePath}:${line} — missing name or description`
+                `[pillar-sync] ⚠ Skipping tool at ${relativePath}:${line} — missing name or description`
               );
             }
           };
 
           if (ts.isObjectLiteralExpression(arg)) {
-            // Single action: usePillarAction({ name: '...', ... })
+            // Single tool: usePillarTool({ name: '...', ... })
             const obj = evaluateNode(arg, ts) as Record<string, unknown> | undefined;
-            processActionObject(obj, lineNumber);
+            processToolObject(obj, lineNumber);
           } else if (ts.isArrayLiteralExpression(arg)) {
-            // Multiple actions: usePillarAction([{ name: '...', ... }, { name: '...', ... }])
+            // Multiple tools: usePillarTool([{ name: '...', ... }, { name: '...', ... }])
             for (const element of arg.elements) {
               if (ts.isObjectLiteralExpression(element)) {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
                 const obj = evaluateNode(element, ts) as Record<string, unknown> | undefined;
-                processActionObject(obj, elementLine);
+                processToolObject(obj, elementLine);
               } else {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
                 console.warn(
-                  `[pillar-sync] ⚠ Skipping action at ${relativePath}:${elementLine} — ` +
+                  `[pillar-sync] ⚠ Skipping tool at ${relativePath}:${elementLine} — ` +
                   `array element is not an inline object literal`
                 );
               }
@@ -518,7 +545,7 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
           } else {
             // Argument is a variable reference — can't resolve statically
             console.warn(
-              `[pillar-sync] ⚠ Skipping action at ${relativePath}:${lineNumber} — ` +
+              `[pillar-sync] ⚠ Skipping tool at ${relativePath}:${lineNumber} — ` +
               `argument is not an inline object literal or array (variable reference can't be resolved statically)`
             );
           }
@@ -531,34 +558,50 @@ async function scanActions(scanDir: string): Promise<ScannedAction[]> {
     visit(sourceFile);
   }
 
-  return actions;
+  return tools;
+}
+
+// Backwards compat alias
+const scanActions = scanTools;
+
+/**
+ * Normalize tool type for backend API compatibility.
+ * The SDK uses 'trigger_tool' but the backend API still expects 'trigger_action'.
+ */
+function normalizeTypeForBackend(type: string | undefined): ToolType {
+  // Map trigger_tool to trigger_action for backend compatibility
+  if (type === 'trigger_tool') {
+    return 'trigger_action' as ToolType;
+  }
+  return (type || 'trigger_action') as ToolType;
 }
 
 /**
- * Build a manifest from scanned ActionSchema definitions.
- * Similar to buildManifest but works with the scanned action shape.
+ * Build a manifest from scanned ToolSchema definitions.
+ * Similar to buildManifest but works with the scanned tool shape.
  */
 function buildManifestFromScan(
-  actions: ScannedAction[],
+  tools: ScannedTool[],
   platform: Platform,
   version: string,
   gitSha?: string
-): ActionManifest {
-  const entries: ActionManifestEntry[] = [];
+): ToolManifest {
+  const entries: ToolManifestEntry[] = [];
 
-  for (const action of actions) {
-    const entry: ActionManifestEntry = {
-      name: action.name,
-      description: action.description,
-      type: action.type || 'trigger_action',
+  for (const tool of tools) {
+    const entry: ToolManifestEntry = {
+      name: tool.name,
+      description: tool.description,
+      // Normalize trigger_tool → trigger_action for backend API compatibility
+      type: normalizeTypeForBackend(tool.type),
     };
 
-    if (action.examples?.length) entry.examples = action.examples;
-    if (action.autoRun) entry.auto_run = action.autoRun;
-    if (action.autoComplete !== undefined) entry.auto_complete = action.autoComplete;
-    // Unified actions always return data (the handler return value goes to the agent)
+    if (tool.examples?.length) entry.examples = tool.examples;
+    if (tool.autoRun) entry.auto_run = tool.autoRun;
+    if (tool.autoComplete !== undefined) entry.auto_complete = tool.autoComplete;
+    // Unified tools always return data (the handler return value goes to the agent)
     entry.returns_data = true;
-    if (action.inputSchema) entry.data_schema = action.inputSchema;
+    if (tool.inputSchema) entry.data_schema = tool.inputSchema;
 
     entries.push(entry);
   }
@@ -568,7 +611,7 @@ function buildManifestFromScan(
     version,
     gitSha,
     generatedAt: new Date().toISOString(),
-    actions: entries,
+    actions: entries, // Keep 'actions' key for backend API compatibility
   };
 }
 
@@ -615,25 +658,25 @@ async function main(): Promise<void> {
   const version = process.env.PILLAR_VERSION || getPackageVersion();
   const gitSha = process.env.GIT_SHA || getGitSha();
 
-  // Scan for actions
-  console.log(`[pillar-sync] Scanning for actions in: ${scanDir}`);
-  let scannedActions: ScannedAction[];
+  // Scan for tools
+  console.log(`[pillar-sync] Scanning for tools in: ${scanDir}`);
+  let scannedTools: ScannedTool[];
   try {
-    scannedActions = await scanActions(scanDir);
+    scannedTools = await scanTools(scanDir);
   } catch (error) {
-    console.error(`[pillar-sync] Failed to scan actions:`, error);
+    console.error(`[pillar-sync] Failed to scan tools:`, error);
     process.exit(1);
   }
 
-  const actionCount = scannedActions.length;
-  console.log(`[pillar-sync] Found ${actionCount} actions`);
+  const toolCount = scannedTools.length;
+  console.log(`[pillar-sync] Found ${toolCount} tools`);
 
-  if (actionCount === 0) {
-    console.warn('[pillar-sync] No actions found. Nothing to sync.');
+  if (toolCount === 0) {
+    console.warn('[pillar-sync] No tools found. Nothing to sync.');
     process.exit(0);
   }
 
-  const manifest = buildManifestFromScan(scannedActions, platform, version, gitSha);
+  const manifest = buildManifestFromScan(scannedTools, platform, version, gitSha);
 
   console.log(`[pillar-sync] Platform: ${platform}`);
   console.log(`[pillar-sync] Version: ${version}`);

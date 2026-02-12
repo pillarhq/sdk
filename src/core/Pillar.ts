@@ -3,7 +3,7 @@
  * Entry point for all SDK functionality
  */
 
-import { getActionDefinition, hasAction, setClientInfo, type ActionSchema } from "../actions";
+import { getToolDefinition, hasTool, setClientInfo, type ToolSchema } from "../tools";
 import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
@@ -151,13 +151,18 @@ export class Pillar {
     | ((name: string, data: Record<string, unknown>) => void)
     | null = null;
 
-  // Registered actions (for demos and runtime registration)
-  // Public property for demos to access (e.g., window.Pillar._registeredActions)
-  public _registeredActions: Map<string, Record<string, unknown>> = new Map();
+  // Registered tools (for demos and runtime registration)
+  // Public property for demos to access (e.g., window.Pillar._registeredTools)
+  public _registeredTools: Map<string, Record<string, unknown>> = new Map();
 
-  // Unified action schemas (registered via defineAction / usePillarAction)
+  /** @deprecated Use _registeredTools instead */
+  public get _registeredActions(): Map<string, Record<string, unknown>> {
+    return this._registeredTools;
+  }
+
+  // Unified tool schemas (registered via defineTool / usePillarTool)
   // Co-locates metadata + handler in a single definition
-  private _definedActions: Map<string, ActionSchema> = new Map();
+  private _definedTools: Map<string, ToolSchema> = new Map();
 
   // Card renderers for inline_ui type actions
   private _cardRenderers: Map<string, CardRenderer> = new Map();
@@ -1351,20 +1356,20 @@ export class Pillar {
   }
 
   /**
-   * Define an action with co-located metadata and handler.
+   * Define a tool with co-located metadata and handler.
    *
-   * This is the recommended way to register actions. The metadata
+   * This is the recommended way to register tools. The metadata
    * (name, description, inputSchema) is discoverable by the CLI scanner
    * (`npx pillar-sync --scan ./src`) and the handler runs client-side.
    *
    * If `execute` returns a value, it is automatically sent back to the
    * agent — no explicit `returns: true` flag needed.
    *
-   * @param schema - Action schema with metadata and execute handler
-   * @returns Unsubscribe function that removes the action
+   * @param schema - Tool schema with metadata and execute handler
+   * @returns Unsubscribe function that removes the tool
    *
    * @example
-   * const unsub = pillar.defineAction({
+   * const unsub = pillar.defineTool({
    *   name: 'add_to_cart',
    *   description: 'Add a product to the shopping cart',
    *   inputSchema: {
@@ -1381,56 +1386,63 @@ export class Pillar {
    *   },
    * });
    *
-   * // Later: unsub() to remove the action
+   * // Later: unsub() to remove the tool
    */
-  defineAction<TInput = Record<string, unknown>>(
-    schema: ActionSchema<TInput>
+  defineTool<TInput = Record<string, unknown>>(
+    schema: ToolSchema<TInput>
   ): () => void {
     if (!schema.name) {
-      debug.warn("[Pillar] defineAction called without a name");
+      debug.warn("[Pillar] defineTool called without a name");
       return () => {};
     }
 
-    this._definedActions.set(schema.name, schema as ActionSchema);
-    debug.log(`[Pillar] Defined action: ${schema.name}`);
+    this._definedTools.set(schema.name, schema as ToolSchema);
+    debug.log(`[Pillar] Defined tool: ${schema.name}`);
 
     return () => {
-      this._definedActions.delete(schema.name);
+      this._definedTools.delete(schema.name);
     };
   }
 
+  /** @deprecated Use defineTool instead */
+  defineAction<TInput = Record<string, unknown>>(
+    schema: ToolSchema<TInput>
+  ): () => void {
+    return this.defineTool(schema);
+  }
+
   /**
-   * Register an action definition at runtime.
+   * Register a tool definition at runtime.
    *
-   * @deprecated Use `defineAction()` instead, which co-locates metadata and handler.
+   * @deprecated Use `defineTool()` instead, which co-locates metadata and handler.
    *
-   * This is primarily for demos and development. In production, actions
+   * This is primarily for demos and development. In production, tools
    * should be synced via the `pillar-sync` CLI during CI/CD.
    *
-   * The action definition is stored locally and can be used by `onTask`
-   * handlers. For actions with `returnsData: true`, the handler's return
+   * The tool definition is stored locally and can be used by `onTask`
+   * handlers. For tools with `returnsData: true`, the handler's return
    * value is sent back to the agent.
    *
-   * @param action - Action definition with name and properties
+   * @param tool - Tool definition with name and properties
    *
    * @example
-   * pillar.registerAction({
+   * pillar.registerTool({
    *   name: 'list_datasets',
    *   description: 'List available datasets',
    *   type: 'query',
    *   returnsData: true,
    * });
    */
-  registerAction(action: { name: string } & Record<string, unknown>): void {
-    const { name, ...definition } = action;
+  registerTool(tool: { name: string } & Record<string, unknown>): void {
+    const { name, ...definition } = tool;
 
     if (!name) {
-      debug.warn("[Pillar] registerAction called without a name");
+      debug.warn("[Pillar] registerTool called without a name");
       return;
     }
 
-    // Store the action definition
-    this._registeredActions.set(name, {
+    // Store the tool definition
+    this._registeredTools.set(name, {
       name,
       ...definition,
       // Normalize property names for consistency
@@ -1439,31 +1451,41 @@ export class Pillar {
       autoComplete: definition.autoComplete ?? definition.auto_complete ?? true,
     });
 
-    debug.log(`[Pillar] Registered action: ${name}`);
+    debug.log(`[Pillar] Registered tool: ${name}`);
+  }
+
+  /** @deprecated Use registerTool instead */
+  registerAction(action: { name: string } & Record<string, unknown>): void {
+    this.registerTool(action);
   }
 
   /**
-   * Get a registered action definition by name.
+   * Get a registered tool definition by name.
    *
-   * @param name - Action name
-   * @returns Action definition or undefined
+   * @param name - Tool name
+   * @returns Tool definition or undefined
    */
+  getRegisteredTool(name: string): Record<string, unknown> | undefined {
+    return this._registeredTools.get(name);
+  }
+
+  /** @deprecated Use getRegisteredTool instead */
   getRegisteredAction(name: string): Record<string, unknown> | undefined {
-    return this._registeredActions.get(name);
+    return this.getRegisteredTool(name);
   }
 
   /**
-   * Get handler for an action, checking all registration systems.
+   * Get handler for a tool, checking all registration systems.
    *
    * Lookup order:
-   * 1. Code-first action registry (synced via pillar-sync CLI) - handler in definition
+   * 1. Code-first tool registry (synced via pillar-sync CLI) - handler in definition
    * 2. Task handlers (registered via onTask at runtime)
    *
    * This is the recommended pattern:
-   * - Action definitions synced to server via CLI (so AI knows what's possible)
+   * - Tool definitions synced to server via CLI (so AI knows what's possible)
    * - Handlers registered at runtime via onTask (client-side execution)
    *
-   * @param actionName - Action name to look up
+   * @param toolName - Tool name to look up
    * @returns Handler function or undefined if not found
    *
    * @example
@@ -1473,24 +1495,24 @@ export class Pillar {
    * }
    */
   getHandler(
-    actionName: string
+    toolName: string
   ): ((data: Record<string, unknown>) => unknown) | undefined {
-    // 1. Check unified action schemas (registered via defineAction)
-    const definedAction = this._definedActions.get(actionName);
-    if (definedAction?.execute) {
-      return definedAction.execute as (data: Record<string, unknown>) => unknown;
+    // 1. Check unified tool schemas (registered via defineTool)
+    const definedTool = this._definedTools.get(toolName);
+    if (definedTool?.execute) {
+      return definedTool.execute as (data: Record<string, unknown>) => unknown;
     }
 
-    // 2. Check code-first action registry (synced via CLI)
-    const actionDefinition = hasAction(actionName)
-      ? getActionDefinition(actionName)
+    // 2. Check code-first tool registry (synced via CLI)
+    const toolDefinition = hasTool(toolName)
+      ? getToolDefinition(toolName)
       : undefined;
-    if (actionDefinition?.handler) {
-      return actionDefinition.handler;
+    if (toolDefinition?.handler) {
+      return toolDefinition.handler;
     }
 
     // 3. Check task handlers (registered via onTask)
-    const taskHandler = this._taskHandlers.get(actionName);
+    const taskHandler = this._taskHandlers.get(toolName);
     if (taskHandler) {
       return taskHandler;
     }
@@ -1551,26 +1573,26 @@ export class Pillar {
     }
 
     // Look for handlers in this order:
-    // 0. Unified action schemas (registered via defineAction / usePillarAction)
-    // 1. Code-first action registry (synced via pillar-sync CLI)
-    // 2. Specific handler by action name (via onTask)
+    // 0. Unified tool schemas (registered via defineTool / usePillarTool)
+    // 1. Code-first tool registry (synced via pillar-sync CLI)
+    // 2. Specific handler by tool name (via onTask)
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
-    const definedAction = this._definedActions.get(name);
-    const definedHandler = definedAction?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
-    const actionDefinition = hasAction(name)
-      ? getActionDefinition(name)
+    const definedTool = this._definedTools.get(name);
+    const definedHandler = definedTool?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
+    const toolDefinition = hasTool(name)
+      ? getToolDefinition(name)
       : undefined;
-    const runtimeAction = this._registeredActions.get(name);
-    const registryHandler = actionDefinition?.handler;
+    const runtimeTool = this._registeredTools.get(name);
+    const registryHandler = toolDefinition?.handler;
     const specificHandler = this._taskHandlers.get(name);
     const typeHandler = taskType ? this._taskHandlers.get(taskType) : undefined;
     const handler = definedHandler || registryHandler || specificHandler || typeHandler;
 
-    // Check if action returns data
-    // Unified actions (defineAction) always return data when execute returns a value (auto-detect)
-    const actionReturnsData =
-      !!definedAction || actionDefinition?.returns || runtimeAction?.returns;
+    // Check if tool returns data
+    // Unified tools (defineTool) always return data when execute returns a value (auto-detect)
+    const toolReturnsData =
+      !!definedTool || toolDefinition?.returns || runtimeTool?.returns;
 
     if (handler) {
       const handlerStartTime = performance.now();
@@ -1587,14 +1609,14 @@ export class Pillar {
           taskType === "navigate" && path ? { ...data, path } : data;
         const result = handler(handlerData);
 
-        // If action returns data, send it back to the agent
-        if (actionReturnsData && result !== undefined) {
+        // If tool returns data, send it back to the agent
+        if (toolReturnsData && result !== undefined) {
           // Handle both sync and async handlers
           Promise.resolve(result)
             .then(async (resolvedResult) => {
               const duration = Math.round(performance.now() - handlerStartTime);
               if (resolvedResult !== undefined) {
-                await this.sendActionResult(name, resolvedResult);
+                await this.sendToolResult(name, resolvedResult);
 
                 // Check if result indicates failure (e.g., {success: false, message: "..."})
                 // and emit task:complete with correct success status
@@ -1745,27 +1767,36 @@ export class Pillar {
   }
 
   /**
-   * Signal that an action has completed.
+   * Signal that a tool has completed.
    *
-   * For simple actions, this emits the completion event.
-   * For wizard actions (modals, multi-step flows), call this when the user
+   * For simple tools, this emits the completion event.
+   * For wizard tools (modals, multi-step flows), call this when the user
    * finishes the flow.
    *
-   * @param actionName - The action identifier
-   * @param success - Whether the action completed successfully (default: true)
+   * @param toolName - The tool identifier
+   * @param success - Whether the tool completed successfully (default: true)
    * @param data - Optional result data
    *
    * @example
    * // In your wizard completion handler:
-   * pillar.completeAction('add_source', true, { sourceId: source.id });
+   * pillar.completeTool('add_source', true, { sourceId: source.id });
    */
+  async completeTool(
+    toolName: string,
+    success: boolean = true,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    // Emit the task:complete event for standalone tool tracking
+    this._events.emit("task:complete", { name: toolName, success, data });
+  }
+
+  /** @deprecated Use completeTool instead */
   async completeAction(
     actionName: string,
     success: boolean = true,
     data?: Record<string, unknown>
   ): Promise<void> {
-    // Emit the task:complete event for standalone action tracking
-    this._events.emit("task:complete", { name: actionName, success, data });
+    return this.completeTool(actionName, success, data);
   }
 
   /**
@@ -2061,61 +2092,68 @@ export class Pillar {
   // ============================================================================
 
   /**
-   * Send action result back to the agent.
+   * Send tool result back to the agent.
    *
-   * Called automatically for actions with `returns: true` after their
+   * Called automatically for tools with `returns: true` after their
    * handler completes. The result is sent to the agent for further reasoning.
    *
-   * @param actionName - The name of the action that was executed
+   * @param toolName - The name of the tool that was executed
    * @param result - The result data to send back to the agent
    * @param toolCallId - Unique ID for this specific tool invocation (for result correlation)
    * @returns Promise that resolves when the result is delivered
    * @internal
    */
-  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
+  async sendToolResult(toolName: string, result: unknown, toolCallId?: string): Promise<void> {
     if (!this._api) {
-      debug.warn("[Pillar] SDK not initialized, cannot send action result");
+      debug.warn("[Pillar] SDK not initialized, cannot send tool result");
       return;
     }
 
-    debug.log(`[Pillar] Sending action result for "${actionName}" (tool_call_id: ${toolCallId}):`, result);
-    await this._api.mcp.sendActionResult(actionName, result, toolCallId);
-    this._events.emit("action:result", { actionName, result, toolCallId });
+    debug.log(`[Pillar] Sending tool result for "${toolName}" (tool_call_id: ${toolCallId}):`, result);
+    await this._api.mcp.sendToolResult(toolName, result, toolCallId);
+    this._events.emit("tool:result", { toolName, result, toolCallId });
+    // Backwards compatibility: also emit action:result
+    this._events.emit("action:result", { actionName: toolName, result, toolCallId });
+  }
+
+  /** @deprecated Use sendToolResult instead */
+  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
+    return this.sendToolResult(actionName, result, toolCallId);
   }
 
   /**
-   * Execute a query action and send the result back to the agent.
+   * Execute a query tool and send the result back to the agent.
    *
    * This is called when the agent sends a `query_request` event.
-   * Query actions are expected to return data that the agent can use
+   * Query tools are expected to return data that the agent can use
    * for further reasoning.
    *
-   * @param actionName - The name of the action to execute
-   * @param args - Arguments for the action
+   * @param toolName - The name of the tool to execute
+   * @param args - Arguments for the tool
    * @param schema - Optional schema for parameter validation
    */
-  async executeQueryAction(
-    actionName: string,
+  async executeQueryTool(
+    toolName: string,
     args: Record<string, unknown> = {},
     schema?: { properties?: Record<string, unknown>; required?: string[] }
   ): Promise<void> {
     const startTime = performance.now();
     
-    // Defensive validation: ensure actionName is valid
-    if (!actionName || typeof actionName !== 'string' || actionName.trim() === '') {
-      debug.error('[Pillar] executeQueryAction called with missing or invalid actionName:', actionName);
-      // Cannot send result back without a valid actionName
+    // Defensive validation: ensure toolName is valid
+    if (!toolName || typeof toolName !== 'string' || toolName.trim() === '') {
+      debug.error('[Pillar] executeQueryTool called with missing or invalid toolName:', toolName);
+      // Cannot send result back without a valid toolName
       return;
     }
 
-    debug.log(`[Pillar] Starting query action "${actionName}"`, args);
+    debug.log(`[Pillar] Starting query tool "${toolName}"`, args);
 
     // Validate parameters against schema if provided
     if (schema?.properties) {
       const validationError = this._validateQueryParams(args, schema);
       if (validationError) {
         debug.error(`[Pillar] Query param validation failed: ${validationError}`);
-        await this.sendActionResult(actionName, {
+        await this.sendToolResult(toolName, {
           success: false,
           error: validationError,
         });
@@ -2123,26 +2161,26 @@ export class Pillar {
       }
     }
 
-    // Look for handlers (unified actions first, then legacy systems)
-    const definedAction = this._definedActions.get(actionName);
-    const definedHandler = definedAction?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
-    const actionDefinition = hasAction(actionName)
-      ? getActionDefinition(actionName)
+    // Look for handlers (unified tools first, then legacy systems)
+    const definedTool = this._definedTools.get(toolName);
+    const definedHandler = definedTool?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
+    const toolDefinition = hasTool(toolName)
+      ? getToolDefinition(toolName)
       : undefined;
-    const runtimeAction = this._registeredActions.get(actionName);
-    const registryHandler = actionDefinition?.handler;
-    const specificHandler = this._taskHandlers.get(actionName);
+    const runtimeTool = this._registeredTools.get(toolName);
+    const registryHandler = toolDefinition?.handler;
+    const specificHandler = this._taskHandlers.get(toolName);
     const queryTypeHandler = this._taskHandlers.get("query");
     const handler = definedHandler || registryHandler || specificHandler || queryTypeHandler;
 
     if (!handler) {
       debug.error(
-        `[Pillar] No handler registered for query action "${actionName}". ` +
-          `Register one with: pillar.onTask('${actionName}', async (data) => { ... return result; })`
+        `[Pillar] No handler registered for query tool "${toolName}". ` +
+          `Register one with: pillar.onTask('${toolName}', async (data) => { ... return result; })`
       );
       // Send error result back to agent so it doesn't hang
-      await this.sendActionResult(actionName, {
-        error: `No handler registered for action "${actionName}"`,
+      await this.sendToolResult(toolName, {
+        error: `No handler registered for tool "${toolName}"`,
         success: false,
       });
       return;
@@ -2150,7 +2188,7 @@ export class Pillar {
 
     debugLog.add({
       event: 'handler:execute',
-      data: { action: actionName, type: 'query', params: args },
+      data: { tool: toolName, type: 'query', params: args },
       source: 'handler',
       level: 'info',
     });
@@ -2161,32 +2199,32 @@ export class Pillar {
       const handlerElapsed = Math.round(performance.now() - handlerStart);
       
       debug.log(
-        `[Pillar] Query action "${actionName}" handler completed in ${handlerElapsed}ms`,
+        `[Pillar] Query tool "${toolName}" handler completed in ${handlerElapsed}ms`,
         result
       );
 
       if (result !== undefined) {
         debugLog.add({
           event: 'handler:complete',
-          data: { action: actionName, duration: handlerElapsed, success: true, returnsData: true },
+          data: { tool: toolName, duration: handlerElapsed, success: true, returnsData: true },
           source: 'handler',
           level: 'info',
         });
-        await this.sendActionResult(actionName, result);
+        await this.sendToolResult(toolName, result);
         const totalElapsed = Math.round(performance.now() - startTime);
-        debug.log(`[Pillar] Query action "${actionName}" total time: ${totalElapsed}ms`);
+        debug.log(`[Pillar] Query tool "${toolName}" total time: ${totalElapsed}ms`);
       } else {
         debugLog.add({
           event: 'handler:complete',
-          data: { action: actionName, duration: handlerElapsed, success: false, error: 'returned undefined' },
+          data: { tool: toolName, duration: handlerElapsed, success: false, error: 'returned undefined' },
           source: 'handler',
           level: 'warn',
         });
         debug.warn(
-          `[Pillar] Query action "${actionName}" returned undefined. ` +
+          `[Pillar] Query tool "${toolName}" returned undefined. ` +
             `Make sure your handler returns data for the agent.`
         );
-        await this.sendActionResult(actionName, {
+        await this.sendToolResult(toolName, {
           error: `Handler returned undefined`,
           success: false,
         });
@@ -2195,19 +2233,28 @@ export class Pillar {
       const elapsed = Math.round(performance.now() - startTime);
       debugLog.add({
         event: 'handler:error',
-        data: { action: actionName, duration: elapsed, error: error instanceof Error ? error.message : String(error) },
+        data: { tool: toolName, duration: elapsed, error: error instanceof Error ? error.message : String(error) },
         source: 'handler',
         level: 'error',
       });
       debug.error(
-        `[Pillar] Error executing query action "${actionName}" after ${elapsed}ms:`,
+        `[Pillar] Error executing query tool "${toolName}" after ${elapsed}ms:`,
         error
       );
-      await this.sendActionResult(actionName, {
+      await this.sendToolResult(toolName, {
         error: error instanceof Error ? error.message : String(error),
         success: false,
       });
     }
+  }
+
+  /** @deprecated Use executeQueryTool instead */
+  async executeQueryAction(
+    actionName: string,
+    args: Record<string, unknown> = {},
+    schema?: { properties?: Record<string, unknown>; required?: string[] }
+  ): Promise<void> {
+    return this.executeQueryTool(actionName, args, schema);
   }
 
   /**

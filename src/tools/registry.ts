@@ -1,37 +1,37 @@
 /**
- * Action Registry - Manages code-defined action handlers.
+ * Tool Registry - Manages code-defined tool handlers.
  *
  * This module provides the registration and lookup mechanism for
- * actions defined in code. Actions are registered at runtime via
+ * tools defined in code. Tools are registered at runtime via
  * `pillar.onTask()` and can be looked up by name using `getHandler()`.
  *
- * Action metadata is synced to the server during CI/CD builds using
- * the `pillar-sync` CLI with a barrel file export pattern:
+ * Tool metadata is synced to the server during CI/CD builds using
+ * the `pillar-sync` CLI with a scan pattern:
  *
  * @example
  * ```ts
- * // lib/pillar/actions/index.ts
- * import type { SyncActionDefinitions } from '@pillar-ai/sdk';
+ * // lib/pillar/tools/index.ts
+ * import type { SyncToolDefinitions } from '@pillar-ai/sdk';
  *
- * export const actions = {
+ * export const tools = {
  *   open_settings: {
  *     description: 'Navigate to the settings page',
  *     type: 'navigate' as const,
  *     path: '/settings',
  *     autoRun: true,
  *   },
- * } as const satisfies SyncActionDefinitions;
+ * } as const satisfies SyncToolDefinitions;
  *
- * export default actions;
+ * export default tools;
  *
  * // Sync via CI/CD:
- * // npx pillar-sync --actions ./lib/pillar/actions/index.ts
+ * // npx pillar-sync --scan ./src
  * ```
  */
 import type {
-  ActionDefinition,
-  ActionManifest,
-  ActionManifestEntry,
+  ToolDefinition,
+  ToolManifest,
+  ToolManifestEntry,
   ClientInfo,
   Platform,
 } from './types';
@@ -40,12 +40,12 @@ import type {
  * Internal registry state.
  */
 interface RegistryState {
-  actions: Map<string, ActionDefinition>;
+  tools: Map<string, ToolDefinition>;
   clientInfo: ClientInfo | null;
 }
 
 const state: RegistryState = {
-  actions: new Map(),
+  tools: new Map(),
   clientInfo: null,
 };
 
@@ -72,69 +72,69 @@ export function getClientInfo(): ClientInfo | null {
 }
 
 /**
- * Get a registered action handler by name.
+ * Get a registered tool handler by name.
  *
- * @param name - Action name (e.g., "open_settings")
+ * @param name - Tool name (e.g., "open_settings")
  * @returns Handler function or undefined if not found
  */
 export function getHandler(
   name: string
-): ActionDefinition['handler'] | undefined {
-  const action = state.actions.get(name);
-  return action?.handler;
+): ToolDefinition['handler'] | undefined {
+  const tool = state.tools.get(name);
+  return tool?.handler;
 }
 
 /**
- * Get a registered action definition by name.
+ * Get a registered tool definition by name.
  *
- * @param name - Action name
- * @returns Action definition or undefined if not found
+ * @param name - Tool name
+ * @returns Tool definition or undefined if not found
  */
-export function getActionDefinition(
+export function getToolDefinition(
   name: string
-): ActionDefinition | undefined {
-  return state.actions.get(name);
+): ToolDefinition | undefined {
+  return state.tools.get(name);
 }
 
 /**
- * Check if an action is registered.
+ * Check if a tool is registered.
  *
- * @param name - Action name
+ * @param name - Tool name
  * @returns True if registered
  */
-export function hasAction(name: string): boolean {
-  return state.actions.has(name);
+export function hasTool(name: string): boolean {
+  return state.tools.has(name);
 }
 
 /**
- * Get all registered action names.
+ * Get all registered tool names.
  *
- * @returns Array of action names
+ * @returns Array of tool names
  */
-export function getActionNames(): string[] {
-  return Array.from(state.actions.keys());
+export function getToolNames(): string[] {
+  return Array.from(state.tools.keys());
 }
 
 /**
- * Get the action manifest for syncing to the server.
+ * Get the tool manifest for syncing to the server.
  *
- * Extracts metadata from all registered actions (without handlers)
+ * Extracts metadata from all registered tools (without handlers)
  * for sending to the Pillar server during CI/CD.
  *
  * @param platform - Platform to include in manifest
  * @param version - Version to include in manifest
  * @param gitSha - Optional git commit SHA
- * @returns Action manifest object
+ * @returns Tool manifest object
  */
 export function getManifest(
   platform: Platform,
   version: string,
   gitSha?: string
-): ActionManifest {
-  const actions: ActionManifestEntry[] = [];
+): ToolManifest {
+  const tools: ToolManifestEntry[] = [];
 
-  for (const [name, definition] of state.actions) {
-    const entry: ActionManifestEntry = {
+  for (const [name, definition] of state.tools) {
+    const entry: ToolManifestEntry = {
       name,
       description: definition.description,
       type: definition.type,
@@ -151,7 +151,7 @@ export function getManifest(
     if (definition.defaultData) entry.default_data = definition.defaultData;
     if (definition.requiredContext) entry.required_context = definition.requiredContext;
 
-    actions.push(entry);
+    tools.push(entry);
   }
 
   return {
@@ -159,25 +159,41 @@ export function getManifest(
     version,
     gitSha,
     generatedAt: new Date().toISOString(),
-    actions,
+    tools,
   };
 }
 
 /**
- * Clear all registered actions.
+ * Clear all registered tools.
  *
  * Primarily for testing purposes.
  */
 export function clearRegistry(): void {
-  state.actions.clear();
+  state.tools.clear();
   state.clientInfo = null;
 }
 
 /**
- * Get the count of registered actions.
+ * Get the count of registered tools.
  *
- * @returns Number of registered actions
+ * @returns Number of registered tools
  */
-export function getActionCount(): number {
-  return state.actions.size;
+export function getToolCount(): number {
+  return state.tools.size;
 }
+
+// ============================================================================
+// Backwards Compatibility Aliases (deprecated)
+// ============================================================================
+
+/** @deprecated Use getToolDefinition instead */
+export const getActionDefinition = getToolDefinition;
+
+/** @deprecated Use hasTool instead */
+export const hasAction = hasTool;
+
+/** @deprecated Use getToolNames instead */
+export const getActionNames = getToolNames;
+
+/** @deprecated Use getToolCount instead */
+export const getActionCount = getToolCount;

@@ -56,8 +56,12 @@ export interface ToolResult {
   isError?: boolean;
   structuredContent?: {
     sources?: ArticleSummary[];
-    actions?: ActionData[];
-    /** Registered actions for dynamic action tools (persisted across turns) */
+    tools?: ToolData[];
+    /** @deprecated Use tools instead */
+    actions?: ToolData[];
+    /** Registered tools for dynamic tool invocations (persisted across turns) */
+    registered_tools?: Record<string, unknown>[];
+    /** @deprecated Use registered_tools instead */
     registered_actions?: Record<string, unknown>[];
   };
   _meta?: {
@@ -66,33 +70,39 @@ export interface ToolResult {
   };
 }
 
-/** Action data from MCP server */
-export interface ActionData {
+/** Tool data from MCP server */
+export interface ToolData {
   id: string;
   name: string;
   description: string;
   action_type: string;
-  /** If true, action executes immediately without user clicking */
+  /** If true, tool executes immediately without user clicking */
   auto_run: boolean;
-  /** If true, action completes without waiting for host confirmation */
+  /** If true, tool completes without waiting for host confirmation */
   auto_complete: boolean;
-  /** If true, action returns data for agent reasoning */
+  /** If true, tool returns data for agent reasoning */
   returns_data: boolean;
   score: number;
   data: Record<string, unknown>;
 }
 
-/** Action request from agent (unified for all action execution) */
-export interface ActionRequest {
-  /** Action name to execute */
+/** @deprecated Use ToolData instead */
+export type ActionData = ToolData;
+
+/** Tool request from agent (unified for all tool execution) */
+export interface ToolRequest {
+  /** Tool name to execute */
   action_name: string;
-  /** Parameters for the action */
+  /** Parameters for the tool */
   parameters: Record<string, unknown>;
-  /** Full action definition (optional, for handler lookup) */
-  action?: ActionData;
+  /** Full tool definition (optional, for handler lookup) */
+  action?: ToolData;
   /** Unique ID for this specific tool invocation (for result correlation) */
   tool_call_id?: string;
 }
+
+/** @deprecated Use ToolRequest instead */
+export type ActionRequest = ToolRequest;
 
 /** Token usage data from the agentic loop (sent after each LLM iteration) */
 export interface TokenUsage {
@@ -122,9 +132,13 @@ export interface StreamCallbacks {
   onToken?: (token: string) => void;
   /** Called when sources are available */
   onSources?: (sources: ArticleSummary[]) => void;
-  /** Called when actions are available */
-  onActions?: (actions: ActionData[]) => void;
-  /** Called when registered actions are received (for dynamic action tools) */
+  /** Called when tools are available */
+  onTools?: (tools: ToolData[]) => void;
+  /** @deprecated Use onTools instead */
+  onActions?: (actions: ToolData[]) => void;
+  /** Called when registered tools are received (for dynamic tool invocations) */
+  onRegisteredTools?: (tools: Record<string, unknown>[]) => void;
+  /** @deprecated Use onRegisteredTools instead */
   onRegisteredActions?: (actions: Record<string, unknown>[]) => void;
   /** Called on error */
   onError?: (error: string) => void;
@@ -147,8 +161,10 @@ export interface StreamCallbacks {
   }) => void;
   /** Called immediately with the request ID (for cancellation support) */
   onRequestId?: (requestId: number) => void;
-  /** Called when agent requests action execution (unified handler) */
-  onActionRequest?: (request: ActionRequest) => Promise<void>;
+  /** Called when agent requests tool execution (unified handler) */
+  onToolRequest?: (request: ToolRequest) => Promise<void>;
+  /** @deprecated Use onToolRequest instead */
+  onActionRequest?: (request: ToolRequest) => Promise<void>;
   /** Called when token usage is updated (after each LLM iteration) */
   onTokenUsage?: (usage: TokenUsage) => void;
 }
@@ -519,28 +535,29 @@ export class MCPClient {
                       // Stream was cancelled
                       break;
                     } else if (progress.kind === 'action_request' || progress.type === 'action_request') {
-                      // Unified action request - agent wants to execute any action
+                      // Unified tool request - agent wants to execute any tool
                       // Note: backend sends "type" but we also check "kind" for consistency
-                      console.log('[MCPClient] *** RECEIVED action_request ***', progress.action_name, progress.parameters);
-                      debug.log('[MCPClient] Received action_request:', progress.action_name, progress.parameters);
+                      console.log('[MCPClient] *** RECEIVED tool_request ***', progress.action_name, progress.parameters);
+                      debug.log('[MCPClient] Received tool_request:', progress.action_name, progress.parameters);
                       
                       // Validate required fields
                       if (!progress.action_name || typeof progress.action_name !== 'string' || progress.action_name.trim() === '') {
-                        console.error('[MCPClient] action_request INVALID - missing action_name:', progress);
-                        debug.error('[MCPClient] Received action_request with missing or invalid action_name:', progress);
+                        console.error('[MCPClient] tool_request INVALID - missing action_name:', progress);
+                        debug.error('[MCPClient] Received tool_request with missing or invalid action_name:', progress);
                         continue;
                       }
                       
-                      if (callbacks.onActionRequest) {
-                        console.log('[MCPClient] *** CALLING onActionRequest handler ***');
+                      const handler = callbacks.onToolRequest || callbacks.onActionRequest;
+                      if (handler) {
+                        console.log('[MCPClient] *** CALLING tool request handler ***');
                         
                         // Validate tool_call_id is present - critical for result correlation
                         if (!progress.tool_call_id) {
-                          console.warn('[MCPClient] action_request missing tool_call_id - result correlation may fail');
-                          debug.warn('[MCPClient] action_request missing tool_call_id for action:', progress.action_name);
+                          console.warn('[MCPClient] tool_request missing tool_call_id - result correlation may fail');
+                          debug.warn('[MCPClient] tool_request missing tool_call_id for tool:', progress.action_name);
                         }
                         
-                        const actionRequest: ActionRequest = {
+                        const toolRequest: ToolRequest = {
                           action_name: progress.action_name,
                           parameters: progress.parameters || {},
                           action: progress.action,
@@ -548,13 +565,13 @@ export class MCPClient {
                         };
                         
                         // Execute async but don't await - let the stream continue
-                        callbacks.onActionRequest(actionRequest).catch((error) => {
-                          console.error('[MCPClient] Action request handler FAILED:', error);
-                          debug.error('[MCPClient] Action request handler failed:', error);
+                        handler(toolRequest).catch((error) => {
+                          console.error('[MCPClient] Tool request handler FAILED:', error);
+                          debug.error('[MCPClient] Tool request handler failed:', error);
                         });
                       } else {
-                        console.warn('[MCPClient] action_request received but NO HANDLER registered');
-                        debug.warn('[MCPClient] Received action_request but no handler registered');
+                        console.warn('[MCPClient] tool_request received but NO HANDLER registered');
+                        debug.warn('[MCPClient] Received tool_request but no handler registered');
                       }
                     } else {
                       // Progress types - pass through all fields from server
@@ -590,14 +607,18 @@ export class MCPClient {
                     callbacks.onSources?.(finalResult.structuredContent.sources);
                   }
 
-                  // Extract actions
-                  if (finalResult.structuredContent?.actions) {
-                    callbacks.onActions?.(finalResult.structuredContent.actions);
+                  // Extract tools (with backwards compat for actions)
+                  const tools = finalResult.structuredContent?.tools || finalResult.structuredContent?.actions;
+                  if (tools) {
+                    callbacks.onTools?.(tools);
+                    callbacks.onActions?.(tools); // Backwards compat
                   }
 
-                  // Extract registered actions (for dynamic action tools)
-                  if (finalResult.structuredContent?.registered_actions) {
-                    callbacks.onRegisteredActions?.(finalResult.structuredContent.registered_actions);
+                  // Extract registered tools (with backwards compat for registered_actions)
+                  const registeredTools = finalResult.structuredContent?.registered_tools || finalResult.structuredContent?.registered_actions;
+                  if (registeredTools) {
+                    callbacks.onRegisteredTools?.(registeredTools);
+                    callbacks.onRegisteredActions?.(registeredTools); // Backwards compat
                   }
 
                   // Extract metadata
@@ -705,7 +726,9 @@ export class MCPClient {
       userContext?: UserContextItem[];
       images?: ChatImage[];
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
-      /** Registered actions from previous turns (for dynamic action tools) */
+      /** Registered tools from previous turns (for dynamic tool invocations) */
+      registeredTools?: Record<string, unknown>[];
+      /** @deprecated Use registeredTools instead */
       registeredActions?: Record<string, unknown>[];
       signal?: AbortSignal;
       /** Conversation ID - generated client-side, always provided */
@@ -738,9 +761,10 @@ export class MCPClient {
       args.history = options.history;
     }
 
-    // Pass registered actions for dynamic action tools (multi-turn persistence)
-    if (options?.registeredActions && options.registeredActions.length > 0) {
-      args.registered_actions = options.registeredActions;
+    // Pass registered tools for dynamic tool invocations (multi-turn persistence)
+    const registeredTools = options?.registeredTools || options?.registeredActions;
+    if (registeredTools && registeredTools.length > 0) {
+      args.registered_actions = registeredTools; // Keep wire format as registered_actions for backend compat
     }
 
     if (options?.resume) {
@@ -786,27 +810,27 @@ export class MCPClient {
   }
 
   // ============================================================================
-  // Query Action Methods
+  // Query Tool Methods
   // ============================================================================
 
   /**
-   * Send action result back to the agent.
+   * Send tool result back to the agent.
    * 
-   * Called after executing a query action (returns_data=true).
+   * Called after executing a query tool (returns_data=true).
    * The result is sent to the agent for further reasoning in the ReAct loop.
    * 
-   * @param actionName - The name of the action that was executed
+   * @param toolName - The name of the tool that was executed
    * @param result - The result data to send back to the agent
    * @param toolCallId - Unique ID for this specific tool invocation (for result correlation)
    * @returns Promise that resolves when the result is delivered, or rejects on error
    */
-  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
+  async sendToolResult(toolName: string, result: unknown, toolCallId?: string): Promise<void> {
     const startTime = performance.now();
     
     // Warn if tool_call_id is missing - will cause result correlation to fail on server
     if (!toolCallId) {
-      console.warn(`[MCPClient] sendActionResult called without toolCallId for action "${actionName}" - server will not be able to correlate result`);
-      debug.warn('[MCPClient] Missing toolCallId in sendActionResult for:', actionName);
+      console.warn(`[MCPClient] sendToolResult called without toolCallId for tool "${toolName}" - server will not be able to correlate result`);
+      debug.warn('[MCPClient] Missing toolCallId in sendToolResult for:', toolName);
     }
     
     const request: JSONRPCRequest = {
@@ -814,7 +838,7 @@ export class MCPClient {
       id: this.nextId(),
       method: 'action/result',
       params: {
-        action_name: actionName,
+        action_name: toolName,
         result,
         tool_call_id: toolCallId,
       },
@@ -822,13 +846,13 @@ export class MCPClient {
 
     debugLog.add({
       event: 'network:request',
-      data: { method: 'action/result', action: actionName, tool_call_id: toolCallId, url: this.baseUrl },
+      data: { method: 'action/result', tool: toolName, tool_call_id: toolCallId, url: this.baseUrl },
       source: 'network',
       level: 'info',
     });
 
     try {
-      debug.log(`[MCPClient] Sending action result for "${actionName}"...`);
+      debug.log(`[MCPClient] Sending tool result for "${toolName}"...`);
       
       // Yield to event loop before fetch to ensure other async operations can complete
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -847,32 +871,37 @@ export class MCPClient {
         const errorText = await response.text().catch(() => '');
         debugLog.add({
           event: 'network:response',
-          data: { status: response.status, duration: elapsed, action: actionName, error: errorText },
+          data: { status: response.status, duration: elapsed, tool: toolName, error: errorText },
           source: 'network',
           level: 'error',
         });
         debug.error(
-          `[MCPClient] Action result delivery failed: ${response.status} ${response.statusText}`,
+          `[MCPClient] Tool result delivery failed: ${response.status} ${response.statusText}`,
           errorText
         );
-        throw new Error(`Failed to send action result: ${response.status}`);
+        throw new Error(`Failed to send tool result: ${response.status}`);
       }
       
       debugLog.add({
         event: 'network:response',
-        data: { status: response.status, duration: elapsed, action: actionName },
+        data: { status: response.status, duration: elapsed, tool: toolName },
         source: 'network',
         level: 'info',
       });
-      debug.log(`[MCPClient] Action result for "${actionName}" delivered in ${elapsed}ms`);
+      debug.log(`[MCPClient] Tool result for "${toolName}" delivered in ${elapsed}ms`);
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
       debug.error(
-        `[MCPClient] Failed to send action result for "${actionName}" after ${elapsed}ms:`,
+        `[MCPClient] Failed to send tool result for "${toolName}" after ${elapsed}ms:`,
         error
       );
       throw error;
     }
+  }
+
+  /** @deprecated Use sendToolResult instead */
+  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
+    return this.sendToolResult(actionName, result, toolCallId);
   }
 
   // ============================================================================
@@ -1001,19 +1030,24 @@ export interface ConversationStatus {
   user_message?: string;
   partial_response?: string;
   display_trace?: DisplayStep[];
+  registered_tools?: Record<string, unknown>[];
+  /** @deprecated Use registered_tools instead */
   registered_actions?: Record<string, unknown>[];
 }
 
 /**
- * Convert ActionData from MCP response to TaskButtonData for UI rendering.
+ * Convert ToolData from MCP response to TaskButtonData for UI rendering.
  */
-export function actionToTaskButton(action: ActionData): TaskButtonData {
+export function toolToTaskButton(tool: ToolData): TaskButtonData {
   return {
-    id: action.id,
-    name: action.name,
-    taskType: action.action_type as TaskButtonData['taskType'],
-    data: action.data,
-    autoRun: action.auto_run,
-    autoComplete: action.auto_complete,
+    id: tool.id,
+    name: tool.name,
+    taskType: tool.action_type as TaskButtonData['taskType'],
+    data: tool.data,
+    autoRun: tool.auto_run,
+    autoComplete: tool.auto_complete,
   };
 }
+
+/** @deprecated Use toolToTaskButton instead */
+export const actionToTaskButton = toolToTaskButton;
