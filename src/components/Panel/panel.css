@@ -10,6 +10,7 @@
   width: var(--pillar-panel-width);
   max-width: 100vw;
   background: var(--pillar-bg);
+  border-left: 1px solid var(--pillar-border);
   display: flex;
   flex-direction: column;
   z-index: 99999;
@@ -23,6 +24,8 @@
 
 ._pillar-panel--left {
   left: 0;
+  border-left: none;
+  border-right: 1px solid var(--pillar-border);
   transform: translateX(-100%);
 }
 
