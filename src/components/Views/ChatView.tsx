@@ -239,19 +239,36 @@ export function ChatView() {
             });
           }
 
-          // Send success result back to agent
+          // Check if the handler result indicates failure
+          // (e.g. { success: false, error: "..." })
+          const resultObj =
+            result && typeof result === "object" && !Array.isArray(result)
+              ? (result as Record<string, unknown>)
+              : null;
+          const actionSuccess = resultObj?.success !== false;
+
+          // Send result back to agent with correct success status
           await api.mcp.sendActionResult(
             request.action_name,
-            { success: true, result },
+            actionSuccess
+              ? { success: true, result }
+              : { success: false, error: resultObj?.error || "Action failed" },
             request.tool_call_id
           );
 
           const elapsed = Math.round(
             performance.now() - requestStartTime
           );
-          debug.log(
-            `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
-          );
+          if (actionSuccess) {
+            debug.log(
+              `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
+            );
+          } else {
+            debug.error(
+              `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
+              resultObj?.error
+            );
+          }
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);

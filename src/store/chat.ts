@@ -63,13 +63,22 @@ export const optimisticConversations = signal<ConversationSummary[]>([]);
 /** localStorage key for persisting the current conversation ID */
 const CONVERSATION_ID_STORAGE_KEY = "pillar:conversation_id";
 
+/** How long before a stored conversation is considered stale (3 minutes) */
+const CONVERSATION_STALENESS_MS = 3 * 60 * 1000;
+
+interface StoredConversationData {
+  id: string;
+  lastActiveAt: number;
+}
+
 function persistConversationIdToStorage(id: string | null): void {
   if (typeof window === "undefined") return;
   try {
     if (id === null) {
       localStorage.removeItem(CONVERSATION_ID_STORAGE_KEY);
     } else {
-      localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, id);
+      const data: StoredConversationData = { id, lastActiveAt: Date.now() };
+      localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, JSON.stringify(data));
     }
   } catch {
     // Silently fail - localStorage may be unavailable
@@ -77,12 +86,61 @@ function persistConversationIdToStorage(id: string | null): void {
 }
 
 /**
+ * Throttled touch — refreshes `lastActiveAt` in localStorage at most once per
+ * interval. Called on every streaming token so the conversation stays "alive"
+ * during long responses without hammering localStorage.
+ */
+const TOUCH_THROTTLE_MS = 30_000; // 30 seconds
+let lastTouchTime = 0;
+
+function touchConversationTimestamp(): void {
+  const now = Date.now();
+  if (now - lastTouchTime < TOUCH_THROTTLE_MS) return;
+  lastTouchTime = now;
+
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(CONVERSATION_ID_STORAGE_KEY);
+    if (!raw) return;
+    const data: StoredConversationData = JSON.parse(raw);
+    data.lastActiveAt = now;
+    localStorage.setItem(CONVERSATION_ID_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Silently fail
+  }
+}
+
+/**
  * Read the persisted conversation ID from localStorage (e.g. for restore on refresh).
+ * Returns null if no conversation is stored or if it's older than 3 minutes,
+ * so stale conversations are discarded and users get a fresh chat.
  */
 export function getStoredConversationId(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return localStorage.getItem(CONVERSATION_ID_STORAGE_KEY);
+    const raw = localStorage.getItem(CONVERSATION_ID_STORAGE_KEY);
+    if (!raw) return null;
+
+    // New format: JSON with timestamp
+    try {
+      const data: StoredConversationData = JSON.parse(raw);
+      if (data.id && data.lastActiveAt) {
+        const age = Date.now() - data.lastActiveAt;
+        if (age > CONVERSATION_STALENESS_MS) {
+          // Conversation is stale — clear and start fresh
+          localStorage.removeItem(CONVERSATION_ID_STORAGE_KEY);
+          return null;
+        }
+        return data.id;
+      }
+    } catch {
+      // Not valid JSON — legacy plain-string format below
+    }
+
+    // Legacy format: plain conversation ID string with no timestamp.
+    // Treat as stale since we can't know when it was last active.
+    localStorage.removeItem(CONVERSATION_ID_STORAGE_KEY);
+    return null;
   } catch {
     return null;
   }
@@ -388,6 +446,9 @@ export const addProgressEventToLastMessage = (event: ProgressEvent) => {
  * updating `content` for backward compat (history persistence, feedback, etc.).
  */
 export const appendTokenToSegments = (token: string) => {
+  // Keep conversation timestamp fresh during streaming
+  touchConversationTimestamp();
+
   const msgs = messages.value;
   if (msgs.length === 0 || msgs[msgs.length - 1].role !== "assistant") return;
   const lastMsg = msgs[msgs.length - 1];

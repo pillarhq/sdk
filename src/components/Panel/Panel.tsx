@@ -814,7 +814,8 @@ export class Panel {
     this.panelElement.appendChild(this.renderRoot);
 
     // Create resize handle on the content-facing edge of the panel
-    if (this.config.panel.resizable && !this.isManualMount) {
+    // Skip if EdgeTrigger is enabled — it provides its own resize handle on the outer edge
+    if (this.config.panel.resizable && !this.isManualMount && !this.config.edgeTrigger.enabled) {
       this.resizeHandle = document.createElement("div");
       this.resizeHandle.className = "_pillar-resize-handle pillar-resize-handle";
       this.resizeHandle.addEventListener("mousedown", this.handleResizeStart);
