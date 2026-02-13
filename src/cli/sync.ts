@@ -61,6 +61,7 @@ interface ActionDataSchema {
 interface ToolManifestEntry {
   name: string;
   description: string;
+  guidance?: string;
   examples?: string[];
   type: ToolType;
   path?: string;
@@ -277,6 +278,7 @@ function getGitSha(): string | undefined {
 interface ScannedTool {
   name: string;
   description: string;
+  guidance?: string;
   type?: ToolType;
   inputSchema?: ActionDataSchema;
   examples?: string[];
@@ -519,6 +521,7 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
               tools.push({
                 name: obj.name as string,
                 description: obj.description as string,
+                guidance: typeof obj.guidance === 'string' ? obj.guidance : undefined,
                 type: toolType,
                 inputSchema: obj.inputSchema as ActionDataSchema | undefined,
                 examples: obj.examples as string[] | undefined,
@@ -609,6 +612,7 @@ function buildManifestFromScan(
       type: normalizeTypeForBackend(tool.type),
     };
 
+    if (tool.guidance) entry.guidance = tool.guidance;
     if (tool.examples?.length) entry.examples = tool.examples;
     if (tool.autoRun) entry.auto_run = tool.autoRun;
     if (tool.autoComplete !== undefined) entry.auto_complete = tool.autoComplete;

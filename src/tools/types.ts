@@ -219,6 +219,7 @@ export type ToolDefinitions = Record<string, ToolDefinition<unknown>>;
 export interface ToolManifestEntry {
   name: string;
   description: string;
+  guidance?: string;
   examples?: string[];
   type: ToolType;
   path?: string;
@@ -576,6 +577,18 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
 
   /** Human-readable description for AI matching */
   description: string;
+
+  /**
+   * Agent-facing instructions for when/how to use this tool.
+   *
+   * Appended to the tool description in the LLM's tool list at
+   * selection time. Use for disambiguation and prerequisite hints
+   * (e.g., "Call get_datasources first to obtain a datasource_uid").
+   *
+   * Extracted by `pillar-sync --scan` and stored on the backend
+   * Action model so the agent sees it without runtime code.
+   */
+  guidance?: string;
 
   /**
    * Type of tool - determines how the SDK handles it and organizes it in the UI.
