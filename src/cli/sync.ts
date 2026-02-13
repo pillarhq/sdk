@@ -441,9 +441,19 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
   try {
     ts = await import('typescript');
   } catch {
-    console.error('[pillar-sync] TypeScript is required for --scan mode.');
-    console.error('[pillar-sync] Install it: npm install -D typescript');
-    process.exit(1);
+    // Fallback: resolve TypeScript from the current working directory.
+    // This handles cases where the CLI is symlinked (e.g. `file:` deps)
+    // and Node's ESM resolution can't find typescript from the script's
+    // real location.
+    try {
+      const { createRequire } = await import('module');
+      const require = createRequire(path.join(process.cwd(), 'node_modules', '_placeholder.js'));
+      ts = require('typescript');
+    } catch {
+      console.error('[pillar-sync] TypeScript is required for --scan mode.');
+      console.error('[pillar-sync] Install it: npm install -D typescript');
+      process.exit(1);
+    }
   }
 
   // 1. Find all .ts, .tsx, .js, .jsx, and .mjs files
