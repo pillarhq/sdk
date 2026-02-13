@@ -581,6 +581,25 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
 const scanActions = scanTools;
 
 /**
+ * Look for AGENT_GUIDANCE.md inside the scan directory.
+ * Returns the file content as a string, or undefined if not found.
+ */
+function findAgentGuidance(scanDir: string): string | undefined {
+  const absoluteDir = path.resolve(process.cwd(), scanDir);
+  const candidate = path.join(absoluteDir, 'AGENT_GUIDANCE.md');
+  if (fs.existsSync(candidate)) {
+    const content = fs.readFileSync(candidate, 'utf-8').trim();
+    if (content) {
+      console.log(
+        `[pillar-sync] Found agent guidance: ${path.relative(process.cwd(), candidate)} (${content.length} chars)`
+      );
+      return content;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Normalize tool type for backend API compatibility.
  * The SDK uses 'trigger_tool' but the backend API still expects 'trigger_action'.
  */
@@ -600,7 +619,8 @@ function buildManifestFromScan(
   tools: ScannedTool[],
   platform: Platform,
   version: string,
-  gitSha?: string
+  gitSha?: string,
+  agentGuidance?: string,
 ): ToolManifest {
   const entries: ToolManifestEntry[] = [];
 
@@ -623,13 +643,19 @@ function buildManifestFromScan(
     entries.push(entry);
   }
 
-  return {
+  const manifest: ToolManifest = {
     platform,
     version,
     gitSha,
     generatedAt: new Date().toISOString(),
     actions: entries, // Keep 'actions' key for backend API compatibility
   };
+
+  if (agentGuidance) {
+    manifest.agentGuidance = agentGuidance;
+  }
+
+  return manifest;
 }
 
 async function main(): Promise<void> {
@@ -688,12 +714,15 @@ async function main(): Promise<void> {
   const toolCount = scannedTools.length;
   console.log(`[pillar-sync] Found ${toolCount} tools`);
 
+  // Look for AGENT_GUIDANCE.md inside the scan directory
+  const agentGuidance = findAgentGuidance(scanDir);
+
   if (toolCount === 0) {
     console.warn('[pillar-sync] No tools found. Nothing to sync.');
     process.exit(0);
   }
 
-  const manifest = buildManifestFromScan(scannedTools, platform, version, gitSha);
+  const manifest = buildManifestFromScan(scannedTools, platform, version, gitSha, agentGuidance);
 
   console.log(`[pillar-sync] Platform: ${platform}`);
   console.log(`[pillar-sync] Version: ${version}`);
@@ -715,6 +744,10 @@ async function main(): Promise<void> {
     git_sha: gitSha,
     actions: manifest.actions,
   };
+
+  if (manifest.agentGuidance) {
+    requestBody.agent_guidance = manifest.agentGuidance;
+  }
 
   const syncUrl = `${apiUrl}/api/admin/configs/${slug}/actions/sync/?async=true`;
   console.log(`[pillar-sync] POST ${syncUrl}`);
