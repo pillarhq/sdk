@@ -531,30 +531,20 @@ export class Pillar {
 
   /**
    * Enable or disable DOM scanning at runtime.
-   *
-   * @param enabled - Whether to enable DOM scanning
-   *
-   * @example
-   * // Enable DOM scanning
-   * pillar.setDOMScanningEnabled(true);
-   *
-   * // Disable DOM scanning
-   * pillar.setDOMScanningEnabled(false);
+   * @deprecated DOM scanning is currently disabled and this method has no effect.
+   * @param _enabled - Ignored, DOM scanning cannot be enabled
    */
-  setDOMScanningEnabled(enabled: boolean): void {
-    if (!this._config) return;
-
-    this._config.domScanning.enabled = enabled;
-
-    // Emit event
-    this._events.emit("domScanning:change", { enabled });
+  setDOMScanningEnabled(_enabled: boolean): void {
+    // DOM scanning is disabled - this is a no-op
+    // The logic is preserved but the feature cannot be enabled
   }
 
   /**
    * Whether DOM scanning is currently enabled.
+   * @returns Always returns false - DOM scanning is disabled
    */
   get isDOMScanningEnabled(): boolean {
-    return this._config?.domScanning.enabled ?? false;
+    return false; // DOM scanning is disabled
   }
 
   // ============================================================================

@@ -198,41 +198,24 @@ export interface InteractionHighlightConfig {
   scrollBehavior?: ScrollBehavior;
 }
 
+/**
+ * DOM scanning configuration.
+ * @internal DOM scanning is currently disabled and not available for configuration.
+ */
 export interface DOMScanningConfig {
-  /**
-   * Whether DOM scanning is enabled.
-   * When enabled, page structure is captured and sent with messages.
-   * @default false
-   */
+  /** @internal DOM scanning is disabled */
   enabled?: boolean;
-  /**
-   * Whether to include text content in the scan.
-   * @default true
-   */
+  /** @internal */
   includeText?: boolean;
-  /**
-   * Maximum depth to traverse the DOM tree.
-   * @default 20
-   */
+  /** @internal */
   maxDepth?: number;
-  /**
-   * Whether to only include visible elements.
-   * @default true
-   */
+  /** @internal */
   visibleOnly?: boolean;
-  /**
-   * CSS selector for elements to exclude from scanning.
-   * @example '.sidebar, .footer, [data-no-scan]'
-   */
+  /** @internal */
   excludeSelector?: string;
-  /**
-   * Maximum text length before truncation.
-   * @default 500
-   */
+  /** @internal */
   maxTextLength?: number;
-  /**
-   * Configuration for highlighting elements during AI interactions.
-   */
+  /** Configuration for highlighting elements during AI interactions. */
   interactionHighlight?: InteractionHighlightConfig;
 }
 
@@ -382,7 +365,11 @@ export interface PillarConfig {
   /** Text selection "Ask AI" popover. */
   textSelection?: TextSelectionConfig;
   
-  /** DOM scanning for page context. */
+  /**
+   * DOM scanning for page context.
+   * @internal DOM scanning is currently disabled.
+   * @deprecated This feature is not available.
+   */
   domScanning?: DOMScanningConfig;
   
   /** Page-aware suggestions. */
@@ -653,9 +640,11 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
       ...config.textSelection,
     },
     
+    // DOM scanning is disabled - always force enabled: false
     domScanning: {
       ...DEFAULT_CONFIG.domScanning,
       ...config.domScanning,
+      enabled: false, // DOM scanning is disabled
       interactionHighlight: {
         ...DEFAULT_CONFIG.domScanning.interactionHighlight,
         ...config.domScanning?.interactionHighlight,
