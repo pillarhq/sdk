@@ -116,7 +116,7 @@ pillar.onTask("update_preferences", (data) => {
 
 ### Code-First Action Definitions
 
-For production, define actions in code and sync them via the `pillar-sync` CLI during CI/CD. See [Setting Up Actions](https://trypillar.com/docs/guides/actions) for details.
+For production, define tools in code and sync them via the `pillar-sync` CLI during CI/CD. See [Setting Up Tools](https://trypillar.com/docs/guides/tools) for details.
 
 ## Configuration
 
