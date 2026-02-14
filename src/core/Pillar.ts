@@ -2336,6 +2336,14 @@ export class Pillar {
         return null;
       });
 
+      // Check domain restrictions before proceeding
+      if (serverConfig?.security?.originAllowed === false) {
+        throw new Error(
+          "[Pillar] This domain is not authorized to use this product. " +
+          "Add it to your allowed domains in the Pillar dashboard."
+        );
+      }
+
       // Merge configs with priority: DEFAULT_CONFIG < serverConfig < localConfig
       // Local config (passed to Pillar.init) always wins
       const mergedConfig = mergeServerConfig(config, serverConfig);

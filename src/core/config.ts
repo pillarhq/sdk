@@ -692,6 +692,10 @@ export interface ServerEmbedConfig {
       primary?: string;
     };
   };
+  security?: {
+    /** False when the requesting origin is not in the product's allowed domains list. */
+    originAllowed?: boolean;
+  };
 }
 
 /**
