@@ -11,7 +11,8 @@
 ._pillar-search-input {
   width: 100%;
   padding: 10px 12px 10px 40px;
-  font-size: var(--pillar-font-size-base);
+  /* 16px on mobile prevents iOS zoom on focus */
+  font-size: 16px;
   font-family: var(--pillar-font-family);
   color: var(--pillar-text);
   background: var(--pillar-bg-secondary);
@@ -19,6 +20,12 @@
   border-radius: var(--pillar-radius-lg);
   outline: none;
   transition: border-color var(--pillar-transition-fast), box-shadow var(--pillar-transition-fast);
+}
+
+@media (min-width: 768px) {
+  ._pillar-search-input {
+    font-size: var(--pillar-font-size-base);
+  }
 }
 
 ._pillar-search-input:focus {
@@ -162,7 +169,8 @@
   display: block;
   width: 100%;
   padding: 12px 14px 8px;
-  font-size: var(--pillar-font-size-base);
+  /* 16px on mobile prevents iOS zoom on focus */
+  font-size: 16px;
   font-family: var(--pillar-font-family);
   line-height: 1.5;
   color: var(--pillar-text);
@@ -172,6 +180,12 @@
   resize: none;
   overflow-y: hidden;
   box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  ._pillar-chat-input-textarea {
+    font-size: var(--pillar-font-size-base);
+  }
 }
 
 ._pillar-chat-input-textarea::placeholder {

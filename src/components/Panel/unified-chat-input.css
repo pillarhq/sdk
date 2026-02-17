@@ -17,14 +17,15 @@
 
 ._pillar-unified-input-wrapper:focus-within {
   border-color: var(--pillar-primary);
-  box-shadow: 0 0 0 3px var(--pillar-outline-color);
+  box-shadow: 0 0 0 1px var(--pillar-outline-color);
 }
 
 ._pillar-unified-input {
   display: block;
   width: 100%;
   padding: 12px 14px 8px;
-  font-size: var(--pillar-font-size-base);
+  /* 16px on mobile prevents iOS zoom on focus */
+  font-size: 16px;
   font-family: var(--pillar-font-family);
   line-height: 1.5;
   color: var(--pillar-text);
@@ -34,6 +35,12 @@
   resize: none;
   overflow-y: hidden;
   box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  ._pillar-unified-input {
+    font-size: var(--pillar-font-size-base);
+  }
 }
 
 ._pillar-unified-input::placeholder {
