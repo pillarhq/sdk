@@ -159,6 +159,7 @@ Usage:
 Arguments:
   --scan <dir>       Directory to scan for usePillarTool/defineTool calls
   --local            Use localhost:8003 as the API URL (for local development)
+  --force            Force sync even if manifest hash matches an existing deployment
   --help             Show this help message
 
 Environment Variables:
@@ -749,8 +750,12 @@ async function main(): Promise<void> {
     requestBody.agent_guidance = manifest.agentGuidance;
   }
 
-  const syncUrl = `${apiUrl}/api/admin/configs/${slug}/actions/sync/?async=true`;
+  const forceSync = args.force === true;
+  const syncUrl = `${apiUrl}/api/admin/configs/${slug}/actions/sync/?async=true${forceSync ? '&force=true' : ''}`;
   console.log(`[pillar-sync] POST ${syncUrl}`);
+  if (forceSync) {
+    console.log(`[pillar-sync] Force sync enabled — bypassing unchanged check`);
+  }
 
   try {
     const response = await fetch(syncUrl, {
