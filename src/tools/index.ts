@@ -24,6 +24,9 @@
  * @module tools
  */
 
+// Validation utilities
+export { validateToolName, TOOL_NAME_PATTERN } from './types';
+
 // Types
 export type {
   ToolType,

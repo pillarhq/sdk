@@ -39,27 +39,27 @@
  * - inline_ui: Display inline UI card in chat
  */
 export type ToolType =
-  | 'navigate'
-  | 'open_modal'
-  | 'fill_form'
-  | 'trigger_tool'
-  | 'query'
-  | 'copy_text'
-  | 'external_link'
-  | 'start_tutorial'
-  | 'inline_ui';
+  | "navigate"
+  | "open_modal"
+  | "fill_form"
+  | "trigger_tool"
+  | "query"
+  | "copy_text"
+  | "external_link"
+  | "start_tutorial"
+  | "inline_ui";
 
 /**
  * Supported platforms for tool deployments.
  */
-export type Platform = 'web' | 'ios' | 'android' | 'desktop';
+export type Platform = "web" | "ios" | "android" | "desktop";
 
 /**
  * Schema property definition for a single field.
  * Supports nested objects and arrays with items.
  */
 export interface ToolDataSchemaProperty {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  type: "string" | "number" | "boolean" | "array" | "object";
   description?: string;
   enum?: string[];
   default?: unknown;
@@ -78,7 +78,7 @@ export interface ToolDataSchemaProperty {
  * and populate the tool's data field before execution.
  */
 export interface ToolDataSchema {
-  type: 'object';
+  type: "object";
   properties: Record<string, ToolDataSchemaProperty>;
   required?: string[];
 }
@@ -525,6 +525,62 @@ export interface TypedPillarMethods<
 }
 
 // ============================================================================
+// Tool Name Validation
+// ============================================================================
+
+/**
+ * Valid tool name pattern (matches LLM provider requirements).
+ *
+ * - Must start with a letter or underscore
+ * - Can contain: letters, numbers, underscores, dots, colons, dashes
+ * - Maximum 64 characters
+ *
+ * Examples:
+ *   - Valid: "add_to_cart", "get_user.profile", "api:v2:search"
+ *   - Invalid: "Increment count" (space), "123_start" (starts with number)
+ */
+export const TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_.\-:]{0,63}$/;
+
+/**
+ * Validate a tool name against LLM provider requirements.
+ *
+ * @param name - Tool name to validate
+ * @returns Object with `valid` boolean and optional `error` message
+ */
+export function validateToolName(name: string): {
+  valid: boolean;
+  error?: string;
+} {
+  if (!name || typeof name !== "string") {
+    return { valid: false, error: "Tool name is required" };
+  }
+
+  if (name.length > 64) {
+    return {
+      valid: false,
+      error: `Tool name exceeds 64 characters (got ${name.length})`,
+    };
+  }
+
+  if (!/^[a-zA-Z_]/.test(name)) {
+    return {
+      valid: false,
+      error: `Tool name must start with a letter or underscore, got "${name[0]}"`,
+    };
+  }
+
+  if (!TOOL_NAME_PATTERN.test(name)) {
+    const invalidChars = name.match(/[^a-zA-Z0-9_.\-:]/g);
+    return {
+      valid: false,
+      error: `Tool name contains invalid characters: ${[...new Set(invalidChars)].map((c) => `"${c}"`).join(", ")}. Only letters, numbers, underscores, dots, colons, and dashes are allowed.`,
+    };
+  }
+
+  return { valid: true };
+}
+
+// ============================================================================
 // Unified Tool Schema (new API — co-locates metadata + handler)
 // ============================================================================
 
@@ -536,8 +592,8 @@ export interface TypedPillarMethods<
  */
 export interface ToolExecuteResult {
   content: Array<
-    | { type: 'text'; text: string }
-    | { type: 'image'; data: string; mimeType: string }
+    | { type: "text"; text: string }
+    | { type: "image"; data: string; mimeType: string }
   >;
   isError?: boolean;
 }
@@ -600,7 +656,7 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
    * The AI extracts structured data from the conversation to populate these.
    */
   inputSchema?: {
-    type: 'object';
+    type: "object";
     properties: Record<string, unknown>;
     required?: string[];
   };
@@ -631,7 +687,27 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
    * - A plain object (SDK normalizes it for the agent)
    * - `void` if the tool has no return value
    */
-  execute: (input: TInput) => Promise<ToolExecuteResult | unknown | void> | ToolExecuteResult | unknown | void;
+  execute: (
+    input: TInput
+  ) =>
+    | Promise<ToolExecuteResult | unknown | void>
+    | ToolExecuteResult
+    | unknown
+    | void;
+
+  /**
+   * Whether to also register this tool with WebMCP (navigator.modelContext).
+   *
+   * When true, the tool will be exposed to browser-native AI agents and
+   * assistive technologies via the W3C WebMCP API. The tool is registered
+   * on mount and unregistered on unmount (or when the tool is removed).
+   *
+   * Only works in browser contexts where `navigator.modelContext` is available
+   * (either natively or via polyfill).
+   *
+   * @default false
+   */
+  webMCP?: boolean;
 }
 
 // ============================================================================
@@ -648,7 +724,8 @@ export type ActionDataSchemaProperty = ToolDataSchemaProperty;
 export type ActionDataSchema = ToolDataSchema;
 
 /** @deprecated Use ToolDefinition instead */
-export type ActionDefinition<TData = Record<string, unknown>> = ToolDefinition<TData>;
+export type ActionDefinition<TData = Record<string, unknown>> =
+  ToolDefinition<TData>;
 
 /** @deprecated Use ToolDefinitions instead */
 export type ActionDefinitions = ToolDefinitions;
@@ -660,7 +737,8 @@ export type ActionManifestEntry = ToolManifestEntry;
 export type ActionManifest = ToolManifest;
 
 /** @deprecated Use SyncToolDefinition instead */
-export type SyncActionDefinition<TData = Record<string, unknown>> = SyncToolDefinition<TData>;
+export type SyncActionDefinition<TData = Record<string, unknown>> =
+  SyncToolDefinition<TData>;
 
 /** @deprecated Use SyncToolDefinitions instead */
 export type SyncActionDefinitions = SyncToolDefinitions;
@@ -684,7 +762,8 @@ export type ActionDataType<
 > = ToolDataType<TTools, TName>;
 
 /** @deprecated Use ToolNames instead */
-export type ActionNames<T extends SyncToolDefinitions | ToolDefinitions> = ToolNames<T>;
+export type ActionNames<T extends SyncToolDefinitions | ToolDefinitions> =
+  ToolNames<T>;
 
 /** @deprecated Use ToolExecuteResult instead */
 export type ActionResult = ToolExecuteResult;

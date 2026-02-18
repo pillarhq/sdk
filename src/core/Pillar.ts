@@ -3,27 +3,20 @@
  * Entry point for all SDK functionality
  */
 
-import { getToolDefinition, hasTool, setClientInfo, type ToolSchema } from "../tools";
+import { h, render } from "preact";
 import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
+import { DebugPanel } from "../components/DebugPanel";
+import { PagePilotManager } from "../components/PagePilot/PagePilotManager";
 import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
-import { PagePilotManager } from "../components/PagePilot/PagePilotManager";
 import {
   conversationId as chatConversationId,
   messages as chatMessages,
   historyInvalidationCounter,
   resetChat,
 } from "../store/chat";
-import {
-  resetSuggestions,
-  setSuggestionPool,
-  setSuggestions,
-  setSuggestionsError,
-  setSuggestionsLoading,
-  sortByPageRelevance,
-} from "../store/suggestions";
 import {
   resetContext,
   clearErrorState as storeClearErrorState,
@@ -41,6 +34,14 @@ import {
 } from "../store/panel";
 import { resetRouter } from "../store/router";
 import {
+  resetSuggestions,
+  setSuggestionPool,
+  setSuggestions,
+  setSuggestionsError,
+  setSuggestionsLoading,
+  sortByPageRelevance,
+} from "../store/suggestions";
+import {
   activeWorkflow,
   advanceToNextStep,
   resetWorkflow,
@@ -49,13 +50,21 @@ import {
   startWorkflow as storeStartWorkflow,
   updateStepStatus,
 } from "../store/workflow";
-import { h, render } from "preact";
-import { debug, setDebugMode, debugLog, isDebugEnabled } from "../utils/debug";
-import { RouteObserver, type RouteInfo } from "../utils/route-observer";
-import { DebugPanel } from "../components/DebugPanel";
-import { setPillarInstance } from "./instance";
+import {
+  getToolDefinition,
+  hasTool,
+  setClientInfo,
+  validateToolName,
+  type ToolSchema,
+} from "../tools";
+import { debug, debugLog, setDebugMode } from "../utils/debug";
 import { domReady } from "../utils/dom";
-import { buildSelectorFromRef, isValidPillarRef, isDestructiveElement } from "../utils/dom-scanner";
+import {
+  buildSelectorFromRef,
+  isDestructiveElement,
+  isValidPillarRef,
+} from "../utils/dom-scanner";
+import { RouteObserver, type RouteInfo } from "../utils/route-observer";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
   mergeServerConfig,
@@ -79,6 +88,7 @@ import {
   type PillarEvents,
   type TaskExecutePayload,
 } from "./events";
+import { setPillarInstance } from "./instance";
 import type { Workflow, WorkflowStep } from "./workflow";
 
 export type PillarState = "uninitialized" | "initializing" | "ready" | "error";
@@ -172,7 +182,7 @@ export class Pillar {
 
   // Route observer for SPA navigation detection (page-aware suggestions)
   private _routeObserver: RouteObserver | null = null;
-  
+
   // Suggestion pool fetched from backend (cached for client-side sorting)
   private _suggestionPool: SuggestedQuestion[] = [];
 
@@ -308,7 +318,7 @@ export class Pillar {
    * Get debug log entries (for debug panel).
    * Returns empty array if debug mode is not enabled.
    */
-  getDebugLog(): import('../utils/debug').DebugEntry[] {
+  getDebugLog(): import("../utils/debug").DebugEntry[] {
     if (!this._config?.debug) return [];
     return debugLog.getEntries();
   }
@@ -317,7 +327,9 @@ export class Pillar {
    * Subscribe to debug log updates (for debug panel).
    * Returns unsubscribe function.
    */
-  onDebugLog(callback: (entries: import('../utils/debug').DebugEntry[]) => void): () => void {
+  onDebugLog(
+    callback: (entries: import("../utils/debug").DebugEntry[]) => void
+  ): () => void {
     return debugLog.subscribe(callback);
   }
 
@@ -473,7 +485,9 @@ export class Pillar {
 
     // Update page pilot banner primary color
     if (this._config.theme.colors.primary) {
-      this._pagePilotManager?.setPrimaryColor(this._config.theme.colors.primary);
+      this._pagePilotManager?.setPrimaryColor(
+        this._config.theme.colors.primary
+      );
     }
 
     // Emit event
@@ -583,8 +597,8 @@ export class Pillar {
     if (config.scrollIntoView) {
       el.scrollIntoView({
         behavior: config.scrollBehavior,
-        block: 'center',
-        inline: 'nearest',
+        block: "center",
+        inline: "nearest",
       });
     }
 
@@ -598,8 +612,8 @@ export class Pillar {
 
     // Set up transition for smooth fade in/out
     const existingTransition = el.style.transition;
-    const outlineTransition = 'outline-color 0.3s ease-in-out';
-    el.style.transition = existingTransition 
+    const outlineTransition = "outline-color 0.3s ease-in-out";
+    el.style.transition = existingTransition
       ? `${existingTransition}, ${outlineTransition}`
       : outlineTransition;
 
@@ -614,7 +628,7 @@ export class Pillar {
     // Fade in to the actual color
     el.style.outline = `${config.outlineWidth}px solid ${config.outlineColor}`;
 
-    debug.log('[Pillar] Element highlighted with fade-in:', el.tagName);
+    debug.log("[Pillar] Element highlighted with fade-in:", el.tagName);
 
     // Auto-remove highlight after duration (if duration > 0)
     if (config.duration > 0) {
@@ -648,17 +662,17 @@ export class Pillar {
         el.style.outline = originalStyles.outline;
         el.style.outlineOffset = originalStyles.outlineOffset;
         el.style.transition = originalStyles.transition;
-        debug.log('[Pillar] Highlight cleared immediately');
+        debug.log("[Pillar] Highlight cleared immediately");
       } else {
         // Fade out to transparent first
-        el.style.outline = el.style.outline.replace(/[^,\s]+$/, 'transparent');
-        
+        el.style.outline = el.style.outline.replace(/[^,\s]+$/, "transparent");
+
         // Wait for transition to complete, then restore original styles
         this._fadeOutTimeout = setTimeout(() => {
           el.style.outline = originalStyles.outline;
           el.style.outlineOffset = originalStyles.outlineOffset;
           el.style.transition = originalStyles.transition;
-          debug.log('[Pillar] Highlight fade-out complete');
+          debug.log("[Pillar] Highlight fade-out complete");
           this._fadeOutTimeout = null;
         }, 300); // Match the transition duration
       }
@@ -691,20 +705,24 @@ export class Pillar {
    * @returns true if the element was found and clicked, false otherwise
    */
   clickElement(selector: string): boolean {
-    debug.log('[Pillar] clickElement called with selector:', selector);
+    debug.log("[Pillar] clickElement called with selector:", selector);
     const el = this.getElement(selector);
-    debug.log('[Pillar] clickElement found element:', el);
+    debug.log("[Pillar] clickElement found element:", el);
     if (el instanceof HTMLElement) {
-      debug.log('[Pillar] clickElement clicking element:', el.tagName, el.textContent?.slice(0, 50));
-      
+      debug.log(
+        "[Pillar] clickElement clicking element:",
+        el.tagName,
+        el.textContent?.slice(0, 50)
+      );
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       // Get element position for realistic event coordinates
       const rect = el.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-      
+
       const eventOptions: MouseEventInit = {
         bubbles: true,
         cancelable: true,
@@ -714,16 +732,16 @@ export class Pillar {
         button: 0,
         buttons: 1,
       };
-      
+
       // Fire the full mouse event sequence for realistic simulation
-      el.dispatchEvent(new MouseEvent('mousedown', eventOptions));
-      el.dispatchEvent(new MouseEvent('mouseup', eventOptions));
-      el.dispatchEvent(new MouseEvent('click', eventOptions));
-      
-      debug.log('[Pillar] clickElement full mouse sequence executed');
+      el.dispatchEvent(new MouseEvent("mousedown", eventOptions));
+      el.dispatchEvent(new MouseEvent("mouseup", eventOptions));
+      el.dispatchEvent(new MouseEvent("click", eventOptions));
+
+      debug.log("[Pillar] clickElement full mouse sequence executed");
       return true;
     }
-    debug.warn('[Pillar] clickElement element not found or not HTMLElement');
+    debug.warn("[Pillar] clickElement element not found or not HTMLElement");
     return false;
   }
 
@@ -736,91 +754,115 @@ export class Pillar {
    * @returns true if the element was found and text was entered, false otherwise
    */
   typeInElement(selector: string, text: string): boolean {
-    debug.log('[Pillar] typeInElement called with selector:', selector, 'text:', text);
+    debug.log(
+      "[Pillar] typeInElement called with selector:",
+      selector,
+      "text:",
+      text
+    );
     const el = this.getElement(selector);
-    
+
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      debug.log('[Pillar] typeInElement found input/textarea:', el.tagName, el.type);
-      
+      debug.log(
+        "[Pillar] typeInElement found input/textarea:",
+        el.tagName,
+        el.type
+      );
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       // Focus the element first
       el.focus();
-      
+
       // Get the native value setter to bypass React's synthetic event system
       // React overrides the value property, so we need to use the native setter
-      const prototype = el instanceof HTMLInputElement 
-        ? HTMLInputElement.prototype 
-        : HTMLTextAreaElement.prototype;
-      const nativeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-      
+      const prototype =
+        el instanceof HTMLInputElement
+          ? HTMLInputElement.prototype
+          : HTMLTextAreaElement.prototype;
+      const nativeValueSetter = Object.getOwnPropertyDescriptor(
+        prototype,
+        "value"
+      )?.set;
+
       if (nativeValueSetter) {
         // Use native setter to set the value (bypasses React)
         nativeValueSetter.call(el, text);
-        debug.log('[Pillar] typeInElement set value via native setter');
+        debug.log("[Pillar] typeInElement set value via native setter");
       } else {
         // Fallback to direct assignment
         el.value = text;
-        debug.log('[Pillar] typeInElement set value directly (fallback)');
+        debug.log("[Pillar] typeInElement set value directly (fallback)");
       }
-      
+
       // Fire beforeinput event (some frameworks check this)
-      el.dispatchEvent(new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      }));
-      
+      el.dispatchEvent(
+        new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        })
+      );
+
       // Fire input event with proper InputEvent type
       // This is what React listens to for controlled inputs
-      el.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      }));
-      
+      el.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        })
+      );
+
       // Fire change event
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      
-      debug.log('[Pillar] typeInElement complete - events fired');
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+
+      debug.log("[Pillar] typeInElement complete - events fired");
       return true;
     }
-    
+
     // Handle contenteditable elements
-    if (el instanceof HTMLElement && el.getAttribute('contenteditable') === 'true') {
-      debug.log('[Pillar] typeInElement found contenteditable element');
-      
+    if (
+      el instanceof HTMLElement &&
+      el.getAttribute("contenteditable") === "true"
+    ) {
+      debug.log("[Pillar] typeInElement found contenteditable element");
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       el.focus();
-      
+
       // For contenteditable, we need to use execCommand or modify textContent
       // and fire the appropriate events
       el.textContent = text;
-      
-      el.dispatchEvent(new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      }));
-      
-      el.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      }));
-      
-      debug.log('[Pillar] typeInElement contenteditable complete');
+
+      el.dispatchEvent(
+        new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        })
+      );
+
+      el.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        })
+      );
+
+      debug.log("[Pillar] typeInElement contenteditable complete");
       return true;
     }
-    
-    debug.warn('[Pillar] typeInElement element not found or not an input:', el);
+
+    debug.warn("[Pillar] typeInElement element not found or not an input:", el);
     return false;
   }
 
@@ -833,42 +875,48 @@ export class Pillar {
    * @returns true if the element was found and option was selected, false otherwise
    */
   selectOption(selector: string, value: string): boolean {
-    debug.log('[Pillar] selectOption called with selector:', selector, 'value:', value);
+    debug.log(
+      "[Pillar] selectOption called with selector:",
+      selector,
+      "value:",
+      value
+    );
     const el = this.getElement(selector);
-    
+
     if (el instanceof HTMLSelectElement) {
-      debug.log('[Pillar] selectOption found select element');
-      
+      debug.log("[Pillar] selectOption found select element");
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       // Focus the element first
       el.focus();
-      
+
       // Get native value setter to bypass React's synthetic events
       const nativeValueSetter = Object.getOwnPropertyDescriptor(
-        HTMLSelectElement.prototype, 'value'
+        HTMLSelectElement.prototype,
+        "value"
       )?.set;
-      
+
       if (nativeValueSetter) {
         nativeValueSetter.call(el, value);
-        debug.log('[Pillar] selectOption set value via native setter');
+        debug.log("[Pillar] selectOption set value via native setter");
       } else {
         el.value = value;
-        debug.log('[Pillar] selectOption set value directly (fallback)');
+        debug.log("[Pillar] selectOption set value directly (fallback)");
       }
-      
+
       // Fire input event (React listens to this)
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+
       // Fire change event
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      
-      debug.log('[Pillar] selectOption complete');
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+
+      debug.log("[Pillar] selectOption complete");
       return true;
     }
-    
-    debug.warn('[Pillar] selectOption element not found or not a select:', el);
+
+    debug.warn("[Pillar] selectOption element not found or not a select:", el);
     return false;
   }
 
@@ -880,26 +928,26 @@ export class Pillar {
    * @returns true if the element was found and focused, false otherwise
    */
   focusElement(selector: string): boolean {
-    debug.log('[Pillar] focusElement called with selector:', selector);
+    debug.log("[Pillar] focusElement called with selector:", selector);
     const el = this.getElement(selector);
-    
+
     if (el instanceof HTMLElement) {
-      debug.log('[Pillar] focusElement found element:', el.tagName);
-      
+      debug.log("[Pillar] focusElement found element:", el.tagName);
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       // Focus the element (this fires 'focus' event automatically)
       el.focus();
-      
+
       // Fire focusin event (bubbles, unlike focus)
-      el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-      
-      debug.log('[Pillar] focusElement complete');
+      el.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+
+      debug.log("[Pillar] focusElement complete");
       return true;
     }
-    
-    debug.warn('[Pillar] focusElement element not found:', el);
+
+    debug.warn("[Pillar] focusElement element not found:", el);
     return false;
   }
 
@@ -911,23 +959,31 @@ export class Pillar {
    * @returns true if the element was found and toggled, false otherwise
    */
   toggleElement(selector: string): boolean {
-    debug.log('[Pillar] toggleElement called with selector:', selector);
+    debug.log("[Pillar] toggleElement called with selector:", selector);
     const el = this.getElement(selector);
-    
-    if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-      debug.log('[Pillar] toggleElement found checkbox/radio:', el.type, 'current checked:', el.checked);
-      
+
+    if (
+      el instanceof HTMLInputElement &&
+      (el.type === "checkbox" || el.type === "radio")
+    ) {
+      debug.log(
+        "[Pillar] toggleElement found checkbox/radio:",
+        el.type,
+        "current checked:",
+        el.checked
+      );
+
       // Highlight the element to show AI interaction
       this.highlightElement(el);
-      
+
       // Focus first
       el.focus();
-      
+
       // Get element position for realistic event coordinates
       const rect = el.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-      
+
       const eventOptions: MouseEventInit = {
         bubbles: true,
         cancelable: true,
@@ -937,21 +993,24 @@ export class Pillar {
         button: 0,
         buttons: 1,
       };
-      
+
       // Use click simulation - clicking a checkbox naturally toggles it
       // and fires all the right events (including change)
-      el.dispatchEvent(new MouseEvent('mousedown', eventOptions));
-      el.dispatchEvent(new MouseEvent('mouseup', eventOptions));
-      el.dispatchEvent(new MouseEvent('click', eventOptions));
-      
+      el.dispatchEvent(new MouseEvent("mousedown", eventOptions));
+      el.dispatchEvent(new MouseEvent("mouseup", eventOptions));
+      el.dispatchEvent(new MouseEvent("click", eventOptions));
+
       // For React controlled checkboxes, we may also need to fire input event
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      
-      debug.log('[Pillar] toggleElement complete - new checked:', el.checked);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+
+      debug.log("[Pillar] toggleElement complete - new checked:", el.checked);
       return true;
     }
-    
-    debug.warn('[Pillar] toggleElement element not found or not checkbox/radio:', el);
+
+    debug.warn(
+      "[Pillar] toggleElement element not found or not checkbox/radio:",
+      el
+    );
     return false;
   }
 
@@ -972,82 +1031,105 @@ export class Pillar {
    * await pillar.handlePageInteraction({ operation: 'type', ref: 'pr-b1', value: 'hello' });
    */
   async handlePageInteraction(params: {
-    operation: 'click' | 'type' | 'select' | 'focus' | 'toggle';
+    operation: "click" | "type" | "select" | "focus" | "toggle";
     ref: string;
     value?: string;
   }): Promise<{ success: boolean; error?: string }> {
-    debug.log('[Pillar] handlePageInteraction called with params:', params);
+    debug.log("[Pillar] handlePageInteraction called with params:", params);
 
     // Validate ref format to prevent CSS selector injection
     if (!isValidPillarRef(params.ref)) {
-      debug.warn('[Pillar] handlePageInteraction rejected invalid ref format:', params.ref);
-      return { success: false, error: 'Invalid ref format' };
+      debug.warn(
+        "[Pillar] handlePageInteraction rejected invalid ref format:",
+        params.ref
+      );
+      return { success: false, error: "Invalid ref format" };
     }
 
     const selector = buildSelectorFromRef(params.ref);
-    debug.log('[Pillar] handlePageInteraction built selector:', selector);
+    debug.log("[Pillar] handlePageInteraction built selector:", selector);
 
     // Defense-in-depth: verify the element's data-pillar-ref matches exactly
     const targetEl = this.getElement(selector);
     if (!targetEl) {
-      debug.warn('[Pillar] handlePageInteraction element not found for ref:', params.ref);
-      return { success: false, error: 'Element not found' };
+      debug.warn(
+        "[Pillar] handlePageInteraction element not found for ref:",
+        params.ref
+      );
+      return { success: false, error: "Element not found" };
     }
-    if (targetEl.getAttribute('data-pillar-ref') !== params.ref) {
-      debug.warn('[Pillar] handlePageInteraction ref attribute mismatch');
-      return { success: false, error: 'Ref attribute mismatch' };
+    if (targetEl.getAttribute("data-pillar-ref") !== params.ref) {
+      debug.warn("[Pillar] handlePageInteraction ref attribute mismatch");
+      return { success: false, error: "Ref attribute mismatch" };
     }
 
     // Check for destructive actions and request user confirmation
     if (isDestructiveElement(targetEl)) {
-      const label = targetEl.textContent?.trim().slice(0, 50) ||
-        targetEl.getAttribute('aria-label') ||
+      const label =
+        targetEl.textContent?.trim().slice(0, 50) ||
+        targetEl.getAttribute("aria-label") ||
         params.operation;
-      debug.log('[Pillar] handlePageInteraction detected destructive element:', label);
+      debug.log(
+        "[Pillar] handlePageInteraction detected destructive element:",
+        label
+      );
 
-      const { requestConfirmation } = await import('../store/pagePilot');
+      const { requestConfirmation } = await import("../store/pagePilot");
       const confirmed = await requestConfirmation(
         `Agent wants to ${params.operation} "${label}"`
       );
 
       if (!confirmed) {
-        debug.log('[Pillar] handlePageInteraction destructive action denied by user');
-        return { success: false, error: 'User denied destructive action' };
+        debug.log(
+          "[Pillar] handlePageInteraction destructive action denied by user"
+        );
+        return { success: false, error: "User denied destructive action" };
       }
-      debug.log('[Pillar] handlePageInteraction destructive action confirmed by user');
+      debug.log(
+        "[Pillar] handlePageInteraction destructive action confirmed by user"
+      );
     }
 
     let result: { success: boolean; error?: string };
 
     switch (params.operation) {
-      case 'click':
+      case "click":
         result = { success: this.clickElement(selector) };
         break;
-      case 'type':
+      case "type":
         if (!params.value) {
-          result = { success: false, error: 'value required for type operation' };
+          result = {
+            success: false,
+            error: "value required for type operation",
+          };
           break;
         }
         result = { success: this.typeInElement(selector, params.value) };
         break;
-      case 'select':
+      case "select":
         if (!params.value) {
-          result = { success: false, error: 'value required for select operation' };
+          result = {
+            success: false,
+            error: "value required for select operation",
+          };
           break;
         }
         result = { success: this.selectOption(selector, params.value) };
         break;
-      case 'focus':
+      case "focus":
         result = { success: this.focusElement(selector) };
         break;
-      case 'toggle':
+      case "toggle":
         result = { success: this.toggleElement(selector) };
         break;
       default:
-        result = { success: false, error: `Unknown operation: ${params.operation}` };
+        result = {
+          success: false,
+          error: `Unknown operation: ${params.operation}`,
+        };
     }
 
-    debug.log('[Pillar] handlePageInteraction result:', result);
+    debug.log("[Pillar] handlePageInteraction result:", result);
     return result;
   }
 
@@ -1141,7 +1223,10 @@ export class Pillar {
     // If already identified as this user (e.g. restored from localStorage on refresh),
     // skip redundant re-identification to avoid resetting the active conversation.
     // Use String() coercion so numeric IDs match their localStorage string form.
-    if (this._externalUserId !== null && String(this._externalUserId) === String(userId)) {
+    if (
+      this._externalUserId !== null &&
+      String(this._externalUserId) === String(userId)
+    ) {
       debug.log("[Pillar] Already identified as this user, skipping");
       return;
     }
@@ -1386,11 +1471,82 @@ export class Pillar {
       return () => {};
     }
 
+    // Validate tool name against LLM provider requirements
+    const validation = validateToolName(schema.name);
+    if (!validation.valid) {
+      debug.error(
+        `[Pillar] Invalid tool name "${schema.name}": ${validation.error}. ` +
+          `Tool names must start with a letter or underscore and contain only ` +
+          `letters, numbers, underscores, dots, colons, or dashes (max 64 chars). ` +
+          `Example: "add_to_cart" or "get-user-profile"`
+      );
+      return () => {};
+    }
+
     this._definedTools.set(schema.name, schema as ToolSchema);
     debug.log(`[Pillar] Defined tool: ${schema.name}`);
 
+    // Register with WebMCP if enabled and available
+    let webMCPRegistered = false;
+    if (schema.webMCP) {
+      if (typeof navigator !== "undefined" && navigator.modelContext) {
+        try {
+          navigator.modelContext.registerTool({
+            name: schema.name,
+            description: schema.description,
+            inputSchema: schema.inputSchema,
+            execute: async (params, _agent) => {
+              const result = await schema.execute(params as TInput);
+              // Normalize result to WebMCP format
+              if (result && typeof result === "object" && "content" in result) {
+                return result as {
+                  content: Array<{ type: "text"; text: string }>;
+                };
+              }
+              // Wrap plain objects in content array
+              return {
+                content: [
+                  {
+                    type: "text" as const,
+                    text:
+                      typeof result === "string"
+                        ? result
+                        : JSON.stringify(result ?? { success: true }),
+                  },
+                ],
+              };
+            },
+          });
+          webMCPRegistered = true;
+          debug.log(`[Pillar] Registered tool with WebMCP: ${schema.name}`);
+        } catch (e) {
+          debug.warn(
+            `[Pillar] Failed to register tool with WebMCP: ${schema.name}`,
+            e
+          );
+        }
+      } else {
+        debug.log(
+          `[Pillar] WebMCP not available, skipping WebMCP registration for: ${schema.name}`
+        );
+      }
+    }
+
     return () => {
       this._definedTools.delete(schema.name);
+
+      // Unregister from WebMCP if it was registered
+      if (webMCPRegistered && navigator.modelContext) {
+        try {
+          navigator.modelContext.unregisterTool(schema.name);
+          debug.log(`[Pillar] Unregistered tool from WebMCP: ${schema.name}`);
+        } catch (e) {
+          debug.warn(
+            `[Pillar] Failed to unregister tool from WebMCP: ${schema.name}`,
+            e
+          );
+        }
+      }
     };
   }
 
@@ -1569,15 +1725,16 @@ export class Pillar {
     // 3. Generic handler by task type (e.g., "navigate")
     // 4. Built-in handlers as fallback
     const definedTool = this._definedTools.get(name);
-    const definedHandler = definedTool?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
-    const toolDefinition = hasTool(name)
-      ? getToolDefinition(name)
-      : undefined;
+    const definedHandler = definedTool?.execute as
+      | ((data: Record<string, unknown>) => unknown)
+      | undefined;
+    const toolDefinition = hasTool(name) ? getToolDefinition(name) : undefined;
     const runtimeTool = this._registeredTools.get(name);
     const registryHandler = toolDefinition?.handler;
     const specificHandler = this._taskHandlers.get(name);
     const typeHandler = taskType ? this._taskHandlers.get(taskType) : undefined;
-    const handler = definedHandler || registryHandler || specificHandler || typeHandler;
+    const handler =
+      definedHandler || registryHandler || specificHandler || typeHandler;
 
     // Check if tool returns data
     // Unified tools (defineTool) always return data when execute returns a value (auto-detect)
@@ -1587,10 +1744,10 @@ export class Pillar {
     if (handler) {
       const handlerStartTime = performance.now();
       debugLog.add({
-        event: 'handler:execute',
+        event: "handler:execute",
         data: { action: name, taskType, params: data },
-        source: 'handler',
-        level: 'info',
+        source: "handler",
+        level: "info",
       });
 
       try {
@@ -1622,10 +1779,15 @@ export class Pillar {
                   }
                 }
                 debugLog.add({
-                  event: 'handler:complete',
-                  data: { action: name, duration, success: taskSuccess, returnsData: true },
-                  source: 'handler',
-                  level: taskSuccess ? 'info' : 'warn',
+                  event: "handler:complete",
+                  data: {
+                    action: name,
+                    duration,
+                    success: taskSuccess,
+                    returnsData: true,
+                  },
+                  source: "handler",
+                  level: taskSuccess ? "info" : "warn",
                 });
                 this._events.emit("task:complete", {
                   name,
@@ -1634,10 +1796,10 @@ export class Pillar {
                 });
               } else {
                 debugLog.add({
-                  event: 'handler:complete',
+                  event: "handler:complete",
                   data: { action: name, duration, success: true },
-                  source: 'handler',
-                  level: 'info',
+                  source: "handler",
+                  level: "info",
                 });
                 this._events.emit("task:complete", {
                   name,
@@ -1649,10 +1811,14 @@ export class Pillar {
             .catch((error) => {
               const duration = Math.round(performance.now() - handlerStartTime);
               debugLog.add({
-                event: 'handler:error',
-                data: { action: name, duration, error: error instanceof Error ? error.message : String(error) },
-                source: 'handler',
-                level: 'error',
+                event: "handler:error",
+                data: {
+                  action: name,
+                  duration,
+                  error: error instanceof Error ? error.message : String(error),
+                },
+                source: "handler",
+                level: "error",
               });
               debug.error(`[Pillar] Error in query action "${name}":`, error);
               this._events.emit("task:complete", {
@@ -1665,20 +1831,24 @@ export class Pillar {
           // No data returned - assume success
           const duration = Math.round(performance.now() - handlerStartTime);
           debugLog.add({
-            event: 'handler:complete',
+            event: "handler:complete",
             data: { action: name, duration, success: true },
-            source: 'handler',
-            level: 'info',
+            source: "handler",
+            level: "info",
           });
           this._events.emit("task:complete", { name, success: true, data });
         }
       } catch (error) {
         const duration = Math.round(performance.now() - handlerStartTime);
         debugLog.add({
-          event: 'handler:error',
-          data: { action: name, duration, error: error instanceof Error ? error.message : String(error) },
-          source: 'handler',
-          level: 'error',
+          event: "handler:error",
+          data: {
+            action: name,
+            duration,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          source: "handler",
+          level: "error",
         });
         debug.error(`[Pillar] Error executing task "${name}":`, error);
         this._events.emit("task:complete", { name, success: false, data });
@@ -1829,9 +1999,7 @@ export class Pillar {
     }
 
     if (!this._api) {
-      debug.warn(
-        "[Pillar] SDK not initialized, cannot confirm task execution"
-      );
+      debug.warn("[Pillar] SDK not initialized, cannot confirm task execution");
       return;
     }
 
@@ -2093,21 +2261,36 @@ export class Pillar {
    * @returns Promise that resolves when the result is delivered
    * @internal
    */
-  async sendToolResult(toolName: string, result: unknown, toolCallId?: string): Promise<void> {
+  async sendToolResult(
+    toolName: string,
+    result: unknown,
+    toolCallId?: string
+  ): Promise<void> {
     if (!this._api) {
       debug.warn("[Pillar] SDK not initialized, cannot send tool result");
       return;
     }
 
-    debug.log(`[Pillar] Sending tool result for "${toolName}" (tool_call_id: ${toolCallId}):`, result);
+    debug.log(
+      `[Pillar] Sending tool result for "${toolName}" (tool_call_id: ${toolCallId}):`,
+      result
+    );
     await this._api.mcp.sendToolResult(toolName, result, toolCallId);
     this._events.emit("tool:result", { toolName, result, toolCallId });
     // Backwards compatibility: also emit action:result
-    this._events.emit("action:result", { actionName: toolName, result, toolCallId });
+    this._events.emit("action:result", {
+      actionName: toolName,
+      result,
+      toolCallId,
+    });
   }
 
   /** @deprecated Use sendToolResult instead */
-  async sendActionResult(actionName: string, result: unknown, toolCallId?: string): Promise<void> {
+  async sendActionResult(
+    actionName: string,
+    result: unknown,
+    toolCallId?: string
+  ): Promise<void> {
     return this.sendToolResult(actionName, result, toolCallId);
   }
 
@@ -2128,10 +2311,13 @@ export class Pillar {
     schema?: { properties?: Record<string, unknown>; required?: string[] }
   ): Promise<void> {
     const startTime = performance.now();
-    
+
     // Defensive validation: ensure toolName is valid
-    if (!toolName || typeof toolName !== 'string' || toolName.trim() === '') {
-      debug.error('[Pillar] executeQueryTool called with missing or invalid toolName:', toolName);
+    if (!toolName || typeof toolName !== "string" || toolName.trim() === "") {
+      debug.error(
+        "[Pillar] executeQueryTool called with missing or invalid toolName:",
+        toolName
+      );
       // Cannot send result back without a valid toolName
       return;
     }
@@ -2142,7 +2328,9 @@ export class Pillar {
     if (schema?.properties) {
       const validationError = this._validateQueryParams(args, schema);
       if (validationError) {
-        debug.error(`[Pillar] Query param validation failed: ${validationError}`);
+        debug.error(
+          `[Pillar] Query param validation failed: ${validationError}`
+        );
         await this.sendToolResult(toolName, {
           success: false,
           error: validationError,
@@ -2153,7 +2341,9 @@ export class Pillar {
 
     // Look for handlers (unified tools first, then legacy systems)
     const definedTool = this._definedTools.get(toolName);
-    const definedHandler = definedTool?.execute as ((data: Record<string, unknown>) => unknown) | undefined;
+    const definedHandler = definedTool?.execute as
+      | ((data: Record<string, unknown>) => unknown)
+      | undefined;
     const toolDefinition = hasTool(toolName)
       ? getToolDefinition(toolName)
       : undefined;
@@ -2161,7 +2351,8 @@ export class Pillar {
     const registryHandler = toolDefinition?.handler;
     const specificHandler = this._taskHandlers.get(toolName);
     const queryTypeHandler = this._taskHandlers.get("query");
-    const handler = definedHandler || registryHandler || specificHandler || queryTypeHandler;
+    const handler =
+      definedHandler || registryHandler || specificHandler || queryTypeHandler;
 
     if (!handler) {
       debug.error(
@@ -2177,17 +2368,17 @@ export class Pillar {
     }
 
     debugLog.add({
-      event: 'handler:execute',
-      data: { tool: toolName, type: 'query', params: args },
-      source: 'handler',
-      level: 'info',
+      event: "handler:execute",
+      data: { tool: toolName, type: "query", params: args },
+      source: "handler",
+      level: "info",
     });
 
     try {
       const handlerStart = performance.now();
       const result = await Promise.resolve(handler(args));
       const handlerElapsed = Math.round(performance.now() - handlerStart);
-      
+
       debug.log(
         `[Pillar] Query tool "${toolName}" handler completed in ${handlerElapsed}ms`,
         result
@@ -2195,20 +2386,32 @@ export class Pillar {
 
       if (result !== undefined) {
         debugLog.add({
-          event: 'handler:complete',
-          data: { tool: toolName, duration: handlerElapsed, success: true, returnsData: true },
-          source: 'handler',
-          level: 'info',
+          event: "handler:complete",
+          data: {
+            tool: toolName,
+            duration: handlerElapsed,
+            success: true,
+            returnsData: true,
+          },
+          source: "handler",
+          level: "info",
         });
         await this.sendToolResult(toolName, result);
         const totalElapsed = Math.round(performance.now() - startTime);
-        debug.log(`[Pillar] Query tool "${toolName}" total time: ${totalElapsed}ms`);
+        debug.log(
+          `[Pillar] Query tool "${toolName}" total time: ${totalElapsed}ms`
+        );
       } else {
         debugLog.add({
-          event: 'handler:complete',
-          data: { tool: toolName, duration: handlerElapsed, success: false, error: 'returned undefined' },
-          source: 'handler',
-          level: 'warn',
+          event: "handler:complete",
+          data: {
+            tool: toolName,
+            duration: handlerElapsed,
+            success: false,
+            error: "returned undefined",
+          },
+          source: "handler",
+          level: "warn",
         });
         debug.warn(
           `[Pillar] Query tool "${toolName}" returned undefined. ` +
@@ -2222,10 +2425,14 @@ export class Pillar {
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
       debugLog.add({
-        event: 'handler:error',
-        data: { tool: toolName, duration: elapsed, error: error instanceof Error ? error.message : String(error) },
-        source: 'handler',
-        level: 'error',
+        event: "handler:error",
+        data: {
+          tool: toolName,
+          duration: elapsed,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        source: "handler",
+        level: "error",
       });
       debug.error(
         `[Pillar] Error executing query tool "${toolName}" after ${elapsed}ms:`,
@@ -2310,10 +2517,10 @@ export class Pillar {
       if (config.debug) {
         setDebugMode(true);
         debugLog.add({
-          event: 'sdk:init:start',
+          event: "sdk:init:start",
           data: { productKey: config.productKey, debug: true },
-          source: 'sdk',
-          level: 'info',
+          source: "sdk",
+          level: "info",
         });
       }
 
@@ -2340,7 +2547,7 @@ export class Pillar {
       if (serverConfig?.security?.originAllowed === false) {
         throw new Error(
           "[Pillar] This domain is not authorized to use this product. " +
-          "Add it to your allowed domains in the Pillar dashboard."
+            "Add it to your allowed domains in the Pillar dashboard."
         );
       }
 
@@ -2449,7 +2656,7 @@ export class Pillar {
       // Fetch starts immediately but doesn't block SDK ready state
       if (this._config.suggestions.enabled) {
         this._initSuggestions().catch((err) => {
-          debug.warn('[Pillar] Background suggestions init failed:', err);
+          debug.warn("[Pillar] Background suggestions init failed:", err);
         });
       }
 
@@ -2464,7 +2671,7 @@ export class Pillar {
       // Auto-open panel if configured (overrides persisted closed state)
       if (this._config.panel.initialOpen && !panelIsOpen.value) {
         this.open();
-        debug.log('[Pillar] Panel auto-opened via initialOpen config');
+        debug.log("[Pillar] Panel auto-opened via initialOpen config");
       }
 
       // Restore last conversation from localStorage (runs last so it's not
@@ -2486,55 +2693,63 @@ export class Pillar {
    */
   private async _recoverSession(): Promise<void> {
     if (!this._config || !this._api) {
-      debug.warn('[Pillar] _recoverSession skipped: config or api not available');
+      debug.warn(
+        "[Pillar] _recoverSession skipped: config or api not available"
+      );
       return;
     }
 
     const siteId = this._config.productKey;
-    debug.log('[Pillar] Checking for saved session hint with siteId:', siteId);
-    
+    debug.log("[Pillar] Checking for saved session hint with siteId:", siteId);
+
     // Import session persistence functions
-    const { loadActiveSession, clearActiveSession } = await import('../store/session-persistence');
-    const { setInterruptedSession, setConversationId } = await import('../store/chat');
-    
+    const { loadActiveSession, clearActiveSession } = await import(
+      "../store/session-persistence"
+    );
+    const { setInterruptedSession, setConversationId } = await import(
+      "../store/chat"
+    );
+
     // Check for saved session hint
     const savedSession = loadActiveSession(siteId);
     if (!savedSession) {
-      debug.log('[Pillar] No saved session found for siteId:', siteId);
+      debug.log("[Pillar] No saved session found for siteId:", siteId);
       return;
     }
 
-    debug.log('[Pillar] Found saved session hint, checking with server...');
+    debug.log("[Pillar] Found saved session hint, checking with server...");
 
     try {
       // Validate with server
-      const status = await this._api.mcp.getConversationStatus(savedSession.conversationId);
-      
+      const status = await this._api.mcp.getConversationStatus(
+        savedSession.conversationId
+      );
+
       if (!status || !status.resumable) {
         // Session is no longer resumable, clear the hint
-        debug.log('[Pillar] Session is no longer resumable, clearing hint');
+        debug.log("[Pillar] Session is no longer resumable, clearing hint");
         clearActiveSession(siteId);
         return;
       }
 
       // Session is resumable - set up the interrupted session state
-      debug.log('[Pillar] Session is resumable, setting up resume state');
-      
+      debug.log("[Pillar] Session is resumable, setting up resume state");
+
       // Set conversation ID so we can resume into the same conversation
       setConversationId(savedSession.conversationId);
-      
+
       // Set the interrupted session signal for the UI to pick up
       setInterruptedSession({
         conversationId: savedSession.conversationId,
-        userMessage: status.user_message ?? '',
-        partialResponse: status.partial_response ?? '',
+        userMessage: status.user_message ?? "",
+        partialResponse: status.partial_response ?? "",
         displayTrace: status.display_trace ?? [],
         elapsedMs: status.elapsed_ms ?? 0,
       });
 
-      debug.log('[Pillar] Resume state set up successfully');
+      debug.log("[Pillar] Resume state set up successfully");
     } catch (error) {
-      debug.warn('[Pillar] Failed to check session status:', error);
+      debug.warn("[Pillar] Failed to check session status:", error);
       clearActiveSession(siteId);
     }
   }
@@ -2551,19 +2766,26 @@ export class Pillar {
   private async _restoreConversation(): Promise<void> {
     if (!this._api) return;
 
-    const { getStoredConversationId, messages, loadConversation, isLoadingHistory, interruptedSession, setInterruptedSession } = await import('../store/chat');
-    const { navigate, currentView } = await import('../store/router');
+    const {
+      getStoredConversationId,
+      messages,
+      loadConversation,
+      isLoadingHistory,
+      interruptedSession,
+      setInterruptedSession,
+    } = await import("../store/chat");
+    const { navigate, currentView } = await import("../store/router");
 
     const storedId = getStoredConversationId();
     if (!storedId || messages.value.length > 0) return;
 
-    debug.log('[Pillar] Restoring conversation from localStorage:', storedId);
+    debug.log("[Pillar] Restoring conversation from localStorage:", storedId);
 
     try {
       // Navigate to chat and show loading state
       isLoadingHistory.value = true;
-      if (currentView.value.type !== 'chat') {
-        navigate('chat');
+      if (currentView.value.type !== "chat") {
+        navigate("chat");
       }
 
       const conversation = await this._api.getConversation(storedId);
@@ -2573,10 +2795,13 @@ export class Pillar {
         // Check if the last message is an empty assistant message (interrupted response).
         // Strip it so the UI doesn't show a stale "Processing..." spinner.
         const lastMsg = messagesToLoad[messagesToLoad.length - 1];
-        const hasStaleAssistantMsg = lastMsg.role === 'assistant' && !lastMsg.content?.trim();
+        const hasStaleAssistantMsg =
+          lastMsg.role === "assistant" && !lastMsg.content?.trim();
 
         if (hasStaleAssistantMsg) {
-          debug.log('[Pillar] Stripped trailing empty assistant message from restored conversation');
+          debug.log(
+            "[Pillar] Stripped trailing empty assistant message from restored conversation"
+          );
           messagesToLoad = messagesToLoad.slice(0, -1);
         }
 
@@ -2589,29 +2814,37 @@ export class Pillar {
         // If we stripped an empty assistant message and _recoverSession didn't
         // already set up the interrupted session, try the status endpoint as
         // a fallback so the resume prompt can still appear.
-        if (hasStaleAssistantMsg && !interruptedSession.value && this._api.mcp) {
-          debug.log('[Pillar] Checking conversation status as fallback for resume...');
+        if (
+          hasStaleAssistantMsg &&
+          !interruptedSession.value &&
+          this._api.mcp
+        ) {
+          debug.log(
+            "[Pillar] Checking conversation status as fallback for resume..."
+          );
           try {
             const status = await this._api.mcp.getConversationStatus(storedId);
             if (status && status.resumable) {
-              debug.log('[Pillar] Fallback: session is resumable, setting up resume state');
+              debug.log(
+                "[Pillar] Fallback: session is resumable, setting up resume state"
+              );
               setInterruptedSession({
                 conversationId: storedId,
-                userMessage: status.user_message ?? '',
-                partialResponse: status.partial_response ?? '',
+                userMessage: status.user_message ?? "",
+                partialResponse: status.partial_response ?? "",
                 displayTrace: status.display_trace ?? [],
                 elapsedMs: status.elapsed_ms ?? 0,
               });
             }
           } catch (err) {
-            debug.warn('[Pillar] Fallback resume check failed:', err);
+            debug.warn("[Pillar] Fallback resume check failed:", err);
           }
         }
       } else {
         isLoadingHistory.value = false;
       }
     } catch (error) {
-      debug.warn('[Pillar] Failed to restore conversation:', error);
+      debug.warn("[Pillar] Failed to restore conversation:", error);
       isLoadingHistory.value = false;
     }
   }
@@ -2643,17 +2876,17 @@ export class Pillar {
    */
   private _mountDebugPanel(): void {
     // Create container for debug panel
-    this._debugPanelContainer = document.createElement('div');
-    this._debugPanelContainer.id = 'pillar-debug-panel-root';
+    this._debugPanelContainer = document.createElement("div");
+    this._debugPanelContainer.id = "pillar-debug-panel-root";
     document.body.appendChild(this._debugPanelContainer);
 
     // Render debug panel
     render(h(DebugPanel, null), this._debugPanelContainer);
-    
+
     debugLog.add({
-      event: 'debug:panel:mounted',
-      source: 'sdk',
-      level: 'info',
+      event: "debug:panel:mounted",
+      source: "sdk",
+      level: "info",
     });
   }
 
@@ -2663,27 +2896,47 @@ export class Pillar {
    */
   private _setupDebugEventCapture(): void {
     // Task events
-    this._events.on('task:execute', (data) => {
-      debugLog.add({ event: 'task:execute', data: { name: data.name, taskType: data.taskType }, source: 'sdk', level: 'info' });
+    this._events.on("task:execute", (data) => {
+      debugLog.add({
+        event: "task:execute",
+        data: { name: data.name, taskType: data.taskType },
+        source: "sdk",
+        level: "info",
+      });
     });
-    this._events.on('task:complete', (data) => {
-      debugLog.add({ event: 'task:complete', data: { name: data.name, success: data.success }, source: 'sdk', level: data.success ? 'info' : 'error' });
+    this._events.on("task:complete", (data) => {
+      debugLog.add({
+        event: "task:complete",
+        data: { name: data.name, success: data.success },
+        source: "sdk",
+        level: data.success ? "info" : "error",
+      });
     });
 
     // Action events
-    this._events.on('action:result', (data) => {
-      debugLog.add({ event: 'action:result', data: { actionName: data.actionName, hasResult: !!data.result }, source: 'sdk', level: 'info' });
+    this._events.on("action:result", (data) => {
+      debugLog.add({
+        event: "action:result",
+        data: { actionName: data.actionName, hasResult: !!data.result },
+        source: "sdk",
+        level: "info",
+      });
     });
 
     // General events
-    this._events.on('ready', () => {
-      debugLog.add({ event: 'sdk:ready', source: 'sdk', level: 'info' });
+    this._events.on("ready", () => {
+      debugLog.add({ event: "sdk:ready", source: "sdk", level: "info" });
     });
-    this._events.on('error', (data) => {
-      debugLog.add({ event: 'sdk:error', data: { message: data.message }, source: 'sdk', level: 'error' });
+    this._events.on("error", (data) => {
+      debugLog.add({
+        event: "sdk:error",
+        data: { message: data.message },
+        source: "sdk",
+        level: "error",
+      });
     });
 
-    debug.log('[Pillar] Debug event capture enabled');
+    debug.log("[Pillar] Debug event capture enabled");
   }
 
   // ============================================================================
@@ -2697,13 +2950,13 @@ export class Pillar {
   private async _initSuggestions(): Promise<void> {
     if (!this._api || !this._config) return;
 
-    debug.log('[Pillar] Initializing page-aware suggestions');
+    debug.log("[Pillar] Initializing page-aware suggestions");
     setSuggestionsLoading(true);
 
     try {
       // Fetch the full suggestion pool from backend
       const pool = await this._api.getSuggestedQuestions();
-      
+
       debug.log(`[Pillar] Fetched ${pool.length} suggestions for pool`);
       this._suggestionPool = pool;
       setSuggestionPool(pool);
@@ -2727,8 +2980,10 @@ export class Pillar {
 
       setSuggestionsLoading(false);
     } catch (error) {
-      debug.error('[Pillar] Failed to initialize suggestions:', error);
-      setSuggestionsError(error instanceof Error ? error.message : String(error));
+      debug.error("[Pillar] Failed to initialize suggestions:", error);
+      setSuggestionsError(
+        error instanceof Error ? error.message : String(error)
+      );
       setSuggestionsLoading(false);
     }
   }
@@ -2756,7 +3011,7 @@ export class Pillar {
     setSuggestions(sorted, pathname);
 
     // Emit event for external listeners
-    this._events.emit('suggestions:updated', {
+    this._events.emit("suggestions:updated", {
       suggestions: sorted.map((s) => ({ id: s.id, text: s.text })),
       route: pathname,
     });
