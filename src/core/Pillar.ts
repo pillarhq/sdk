@@ -58,6 +58,7 @@ import {
   type ToolSchema,
 } from "../tools";
 import { debug, debugLog, setDebugMode } from "../utils/debug";
+import { getTracer, initTracing, isTracingEnabled, type Span, SpanStatusCode } from "../utils/tracing";
 import { domReady } from "../utils/dom";
 import {
   buildSelectorFromRef,
@@ -2312,13 +2313,20 @@ export class Pillar {
   ): Promise<void> {
     const startTime = performance.now();
 
+    // OTel: span for query tool execution on client
+    const _tracer = getTracer();
+    const _span: Span = _tracer.startSpan('query_tool.execute', {
+      attributes: { 'query_tool.name': toolName },
+    });
+
     // Defensive validation: ensure toolName is valid
     if (!toolName || typeof toolName !== "string" || toolName.trim() === "") {
       debug.error(
         "[Pillar] executeQueryTool called with missing or invalid toolName:",
         toolName
       );
-      // Cannot send result back without a valid toolName
+      _span.setStatus({ code: SpanStatusCode.ERROR, message: 'invalid toolName' });
+      _span.end();
       return;
     }
 
@@ -2398,6 +2406,9 @@ export class Pillar {
         });
         await this.sendToolResult(toolName, result);
         const totalElapsed = Math.round(performance.now() - startTime);
+        _span.setAttribute('query_tool.duration_ms', totalElapsed);
+        _span.setAttribute('query_tool.success', true);
+        _span.end();
         debug.log(
           `[Pillar] Query tool "${toolName}" total time: ${totalElapsed}ms`
         );
@@ -2417,6 +2428,8 @@ export class Pillar {
           `[Pillar] Query tool "${toolName}" returned undefined. ` +
             `Make sure your handler returns data for the agent.`
         );
+        _span.setAttribute('query_tool.success', false);
+        _span.end();
         await this.sendToolResult(toolName, {
           error: `Handler returned undefined`,
           success: false,
@@ -2424,6 +2437,8 @@ export class Pillar {
       }
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
+      _span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+      _span.end();
       debugLog.add({
         event: "handler:error",
         data: {
@@ -2580,6 +2595,15 @@ export class Pillar {
       // Set up debug event capturing when debug mode is enabled
       if (this._config.debug) {
         this._setupDebugEventCapture();
+      }
+
+      // Initialize OpenTelemetry tracing (opt-in via tracing: true or debug: true)
+      if (this._config.tracing) {
+        initTracing(this._config.apiBaseUrl, {
+          'pillar.product_key': this._config.productKey,
+          'pillar.platform': this._config.platform || 'web',
+        });
+        debug.log("[Pillar] OpenTelemetry tracing enabled");
       }
 
       // Create shared root container for all Pillar UI elements

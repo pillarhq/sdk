@@ -381,6 +381,14 @@ export interface PillarConfig {
   /** API base URL. Defaults to Pillar's production API. */
   apiBaseUrl?: string;
   
+  /**
+   * Enable OpenTelemetry tracing. Browser spans are exported to the server's
+   * Cloud Trace project via the OTLP proxy endpoint. Also enabled when debug
+   * is true.
+   * @default false
+   */
+  tracing?: boolean;
+  
   /** Theme customization. */
   theme?: ThemeConfig;
   
@@ -478,6 +486,8 @@ export interface ResolvedConfig {
   version?: string;
   /** Debug mode enabled */
   debug: boolean;
+  /** OpenTelemetry tracing enabled */
+  tracing: boolean;
   
   panel: ResolvedPanelConfig;
   edgeTrigger: Required<EdgeTriggerConfig>;
@@ -498,6 +508,7 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
   platform: 'web',
   debug: false,
+  tracing: false,
   
   panel: {
     enabled: true,
@@ -614,6 +625,7 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     platform: config.platform || 'web',
     version: config.version,
     debug: config.debug ?? false,
+    tracing: config.tracing ?? config.debug ?? false,
     
     panel: {
       ...DEFAULT_CONFIG.panel,

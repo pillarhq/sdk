@@ -59,6 +59,7 @@ import type {
 } from "../../types/user-context";
 import { generateContextId } from "../../types/user-context";
 import { debug } from "../../utils/debug";
+import { getTracer, type Span, SpanStatusCode } from "../../utils/tracing";
 import type { ScanOptions } from "../../types/dom-scanner";
 import { scanPageDelta, scanPageDirect } from "../../utils/dom-scanner";
 import { PreactMarkdown } from "../../utils/preact-markdown";
@@ -474,6 +475,12 @@ export function ChatView() {
       // Clear any previous error
       clearChatError();
 
+      // OTel: span wrapping the full send-message lifecycle
+      const _tracer = getTracer();
+      const _msgSpan: Span = _tracer.startSpan('chat.send_message', {
+        attributes: { 'chat.message_length': message.length },
+      });
+
       // Add user message with context and images
       addUserMessage(message, userContext, images);
 
@@ -532,15 +539,18 @@ export function ChatView() {
             clearActiveSession(siteId);
           }
         }
+        _msgSpan.end();
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          // User cancelled -- clean up empty placeholder if no tokens arrived
           removeLastEmptyAssistantMessage();
           debug.log("[Pillar] Chat cancelled by user");
+          _msgSpan.setAttribute('chat.cancelled', true);
+          _msgSpan.end();
           return;
         }
         debug.error("[Pillar] Chat error:", error);
-        // Remove the empty assistant placeholder and show a subtle error row instead
+        _msgSpan.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+        _msgSpan.end();
         removeLastEmptyAssistantMessage();
         setChatError({
           message: "Something went wrong. Please try again.",

@@ -10,6 +10,7 @@ import type { ResolvedConfig } from '../core/config';
 import type { UserContextItem } from '../types/user-context';
 import { debug, debugLog, type LogEntry } from '../utils/debug';
 import { resilientFetch } from '../utils/resilient-fetch';
+import { injectTraceHeaders, isTracingEnabled, getTracer, type Span, SpanStatusCode } from '../utils/tracing';
 import type { ArticleSummary, DisplayStep } from './client';
 
 // ============================================================================
@@ -294,6 +295,11 @@ export class MCPClient {
       headers['X-Pillar-Action-Version'] = this.config.version;
     }
 
+    // Inject W3C traceparent if tracing is active
+    if (isTracingEnabled()) {
+      injectTraceHeaders(headers);
+    }
+
     return headers;
   }
 
@@ -381,6 +387,15 @@ export class MCPClient {
 
     // Notify caller of request ID for cancellation support
     callbacks.onRequestId?.(requestId);
+
+    // OTel: start a span for the streaming MCP request
+    const tracer = getTracer();
+    const span: Span = tracer.startSpan('mcp.call_tool_stream', {
+      attributes: {
+        'mcp.tool': name,
+        'mcp.request_id': requestId,
+      },
+    });
 
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -645,8 +660,10 @@ export class MCPClient {
         }
       }
     } catch (error) {
+      span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
       if ((error as Error).name === 'AbortError') {
-        // Request was cancelled
+        span.setAttribute('mcp.cancelled', true);
+        span.end();
         throw error;
       }
       
@@ -662,10 +679,13 @@ export class MCPClient {
       });
       
       callbacks.onError?.(errorMessage);
+      span.end();
       throw error;
     } finally {
       reader.releaseLock();
       const totalDuration = Math.round(performance.now() - startTime);
+      span.setAttribute('mcp.duration_ms', totalDuration);
+      span.end();
       debugLog.add({
         event: 'network:stream:complete',
         data: { duration: totalDuration, tool: name },
@@ -843,6 +863,15 @@ export class MCPClient {
    */
   async sendToolResult(toolName: string, result: unknown, toolCallId?: string): Promise<void> {
     const startTime = performance.now();
+
+    // OTel: span for the tool result delivery
+    const _tracer = getTracer();
+    const _span = _tracer.startSpan('mcp.send_tool_result', {
+      attributes: {
+        'mcp.tool': toolName,
+        'mcp.tool_call_id': toolCallId || '',
+      },
+    });
     
     // Warn if tool_call_id is missing - will cause result correlation to fail on server
     if (!toolCallId) {
@@ -915,8 +944,12 @@ export class MCPClient {
         level: 'info',
       });
       debug.log(`[MCPClient] Tool result for "${toolName}" delivered in ${elapsed}ms`);
+      _span.setAttribute('mcp.duration_ms', elapsed);
+      _span.end();
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
+      _span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+      _span.end();
       debug.error(
         `[MCPClient] Failed to send tool result for "${toolName}" after ${elapsed}ms:`,
         error
