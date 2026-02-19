@@ -253,7 +253,7 @@ export function ChatView() {
             request.action_name,
             actionSuccess
               ? { success: true, result }
-              : { success: false, error: resultObj?.error || "Action failed" },
+              : { success: false, error: resultObj?.error || resultObj?.message || "Action failed" },
             request.tool_call_id
           );
 
@@ -267,7 +267,7 @@ export function ChatView() {
           } else {
             debug.error(
               `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
-              resultObj?.error
+              resultObj?.error || resultObj?.message
             );
           }
         } catch (error) {
