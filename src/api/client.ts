@@ -617,6 +617,47 @@ export class APIClient {
     }
   }
 
+  /**
+   * Track WebMCP tool execution.
+   * Called when a browser agent invokes a WebMCP-registered tool.
+   * Fire-and-forget - errors are logged but don't throw.
+   *
+   * @param toolName - The name of the tool that was executed
+   * @param status - 'success' or 'failure'
+   * @param details - Optional execution details
+   */
+  async trackWebMCPExecution(
+    toolName: string,
+    status: "success" | "failure",
+    details?: {
+      duration_ms?: number;
+      error?: string;
+      input?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    try {
+      const url = `${this.config.apiBaseUrl}/mcp/track-webmcp-execution/`;
+
+      await resilientFetch(url, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({
+          tool_name: toolName,
+          status,
+          duration_ms: details?.duration_ms,
+          error: details?.error,
+          input: details?.input,
+          session_id: this.getSessionId(),
+          visitor_id: this.getVisitorId(),
+        }),
+        maxRetries: 1,
+      });
+    } catch (error) {
+      // Fire-and-forget - don't throw on tracking errors
+      debug.warn("[Pillar] Failed to track WebMCP execution:", error);
+    }
+  }
+
   // ============================================================================
   // Contextual Suggestions
   // ============================================================================

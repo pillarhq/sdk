@@ -1497,7 +1497,41 @@ export class Pillar {
             description: schema.description,
             inputSchema: schema.inputSchema,
             execute: async (params, _agent) => {
-              const result = await schema.execute(params as TInput);
+              const startTime = performance.now();
+              let status: "success" | "failure" = "success";
+              let errorMessage: string | undefined;
+              let result: unknown;
+
+              try {
+                result = await schema.execute(params as TInput);
+
+                // Check if result indicates failure
+                if (
+                  result &&
+                  typeof result === "object" &&
+                  !Array.isArray(result) &&
+                  (result as Record<string, unknown>).success === false
+                ) {
+                  status = "failure";
+                  errorMessage =
+                    ((result as Record<string, unknown>).error as string) ||
+                    ((result as Record<string, unknown>).message as string);
+                }
+              } catch (error) {
+                status = "failure";
+                errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                throw error;
+              } finally {
+                const duration = Math.round(performance.now() - startTime);
+                // Track execution (fire-and-forget)
+                this._api?.trackWebMCPExecution(schema.name, status, {
+                  duration_ms: duration,
+                  error: errorMessage,
+                  input: params as Record<string, unknown>,
+                });
+              }
+
               // Normalize result to WebMCP format
               if (result && typeof result === "object" && "content" in result) {
                 return result as {
