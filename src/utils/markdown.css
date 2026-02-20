@@ -265,6 +265,7 @@
   font-size: 14px;
   line-height: 1.45;
   color: var(--pillar-text, #1a1a1a);
+  overflow-wrap: anywhere;
 }
 
 /* Headings */
@@ -303,6 +304,7 @@
   font-size: 0.9em;
   background: var(--pillar-bg-tertiary);
   border-radius: 4px;
+  overflow-wrap: anywhere;
 }
 
 /* Lists */

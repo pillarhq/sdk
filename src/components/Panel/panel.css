@@ -16,6 +16,7 @@
   z-index: 99999;
   transform: translateX(100%);
   transition: transform var(--pillar-transition-normal);
+  overflow: hidden;
 }
 
 ._pillar-panel--right {

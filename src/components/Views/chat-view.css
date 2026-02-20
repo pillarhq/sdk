@@ -13,6 +13,7 @@
 ._pillar-chat-view-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--pillar-spacing-xl);
   display: flex;
   flex-direction: column;
@@ -150,6 +151,7 @@
   font-size: var(--pillar-font-size-base);
   line-height: 1.45;
   color: var(--pillar-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 ._pillar-message-assistant p {
@@ -207,6 +209,7 @@
   border-radius: var(--pillar-radius-sm);
   font-family: var(--pillar-font-mono);
   color: var(--pillar-text);
+  overflow-wrap: anywhere;
 }
 
 ._pillar-message-assistant pre {
@@ -550,6 +553,8 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 ._pillar-action-status {

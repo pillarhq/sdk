@@ -40,7 +40,11 @@ export interface TaskExecutePayload {
  * Callbacks provided to custom card renderers.
  */
 export interface CardCallbacks {
-  /** Called when user confirms the action. Pass modified data if needed. */
+  /**
+   * Called when user confirms the action. Pass modified data if needed.
+   * WARNING: Data passed here flows through the SDK pipeline (telemetry,
+   * agent context, logs). Never include secrets, tokens, or PII.
+   */
   onConfirm: (modifiedData?: Record<string, unknown>) => void;
   /** Called when user cancels the action */
   onCancel: () => void;

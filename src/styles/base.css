@@ -11,4 +11,6 @@
   color: var(--pillar-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
