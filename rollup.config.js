@@ -3,8 +3,28 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import alias from '@rollup/plugin-alias';
+import { readFileSync } from 'fs';
 
 const production = !process.env.ROLLUP_WATCH;
+const pkg = JSON.parse(readFileSync('./package.json', 'utf8'));
+
+/**
+ * Injects the SDK version from package.json at build time.
+ * Replaces the __SDK_VERSION__ placeholder in source code.
+ */
+function versionPlugin() {
+  return {
+    name: 'version-inject',
+    transform(code) {
+      if (code.includes('__SDK_VERSION__')) {
+        return {
+          code: code.replaceAll('__SDK_VERSION__', pkg.version),
+          map: null,
+        };
+      }
+    },
+  };
+}
 
 /**
  * Raw CSS plugin - imports .css files as string constants.
@@ -28,6 +48,7 @@ function rawCSSPlugin() {
 // Common plugins used across all builds
 const getPlugins = (minify = false) => {
   const plugins = [
+    versionPlugin(),
     rawCSSPlugin(),
     alias({
       entries: [

@@ -108,6 +108,8 @@ export interface ChatContext {
 }
 
 export class Pillar {
+  static readonly version: string = '__SDK_VERSION__';
+
   private static instance: Pillar | null = null;
 
   private _state: PillarState = "uninitialized";
