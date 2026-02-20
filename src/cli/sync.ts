@@ -1,10 +1,14 @@
 /**
  * Pillar Tool Sync CLI
  *
- * Scans for usePillarTool/defineTool calls and syncs to the Pillar backend.
+ * Scans for tool definitions and syncs to the Pillar backend.
  * Run this in your CI/CD pipeline after building your app.
  *
- * Also supports legacy usePillarAction/defineAction calls for backwards compatibility.
+ * Supported patterns:
+ *   - React/Vue: usePillarTool()
+ *   - Angular: injectPillarTool()
+ *   - Vanilla JS: pillar.defineTool()
+ *   - Legacy: usePillarAction(), defineAction(), injectPillarAction()
  *
  * Usage:
  *   npx pillar-sync --scan ./src
@@ -150,14 +154,19 @@ function printUsage(): void {
   console.log(`
 Pillar Tool Sync CLI
 
-Scans for usePillarTool/defineTool calls and syncs to the Pillar backend.
-Also supports legacy usePillarAction/defineAction calls.
+Scans for tool definitions and syncs to the Pillar backend.
+
+Supported patterns:
+  - React/Vue: usePillarTool()
+  - Angular: injectPillarTool()
+  - Vanilla JS: pillar.defineTool()
+  - Legacy: usePillarAction(), defineAction(), injectPillarAction()
 
 Usage:
   npx pillar-sync --scan <dir> [--local]
 
 Arguments:
-  --scan <dir>       Directory to scan for usePillarTool/defineTool calls
+  --scan <dir>       Directory to scan for tool definitions
   --local            Use localhost:8003 as the API URL (for local development)
   --force            Force sync even if manifest hash matches an existing deployment
   --help             Show this help message
@@ -271,8 +280,12 @@ function getGitSha(): string | undefined {
 
 // ============================================================================
 // AST-based Scanner (--scan mode)
-// Discovers defineTool / usePillarTool calls without a barrel file.
-// Also supports legacy defineAction / usePillarAction for backwards compat.
+// Discovers tool definitions without a barrel file.
+// Supported patterns:
+//   - usePillarTool (React/Vue)
+//   - injectPillarTool (Angular)
+//   - defineTool / pillar.defineTool (Vanilla JS)
+//   - Legacy: usePillarAction, injectPillarAction, defineAction
 // Uses TypeScript's compiler API for parse-only AST extraction.
 // ============================================================================
 
@@ -464,9 +477,16 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
   console.log(`[pillar-sync] Scanning ${files.length} files in ${scanDir}`);
 
   // 2. Quick filter: only parse files that mention tool/action patterns
-  // New patterns: defineTool, usePillarTool
-  // Legacy patterns: defineAction, usePillarAction (for backwards compat)
-  const PATTERNS = ['defineTool', 'usePillarTool', 'defineAction', 'usePillarAction'];
+  // New patterns: defineTool, usePillarTool, injectPillarTool (Angular)
+  // Legacy patterns: defineAction, usePillarAction, injectPillarAction (for backwards compat)
+  const PATTERNS = [
+    'defineTool',
+    'usePillarTool',
+    'injectPillarTool',
+    'defineAction',
+    'usePillarAction',
+    'injectPillarAction',
+  ];
   const candidateFiles = files.filter((file) => {
     const content = fs.readFileSync(file, 'utf-8');
     return PATTERNS.some((p) => content.includes(p));
@@ -575,7 +595,32 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
     visit(sourceFile);
   }
 
-  return tools;
+  // Deduplicate tools by name, warning about duplicates
+  const toolsByName = new Map<string, ScannedTool[]>();
+  for (const tool of tools) {
+    const existing = toolsByName.get(tool.name);
+    if (existing) {
+      existing.push(tool);
+    } else {
+      toolsByName.set(tool.name, [tool]);
+    }
+  }
+
+  const deduplicatedTools: ScannedTool[] = [];
+  for (const [name, instances] of toolsByName) {
+    if (instances.length > 1) {
+      const locations = instances
+        .map((t) => `${t.sourceFile}:${t.line}`)
+        .join(', ');
+      console.warn(
+        `[pillar-sync] ⚠ Duplicate tool "${name}" found in ${instances.length} locations: ${locations}`
+      );
+      console.warn(`[pillar-sync]   Using first definition from ${instances[0].sourceFile}:${instances[0].line}`);
+    }
+    deduplicatedTools.push(instances[0]);
+  }
+
+  return deduplicatedTools;
 }
 
 // Backwards compat alias
