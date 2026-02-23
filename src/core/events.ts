@@ -231,6 +231,9 @@ export interface PillarEvents {
   /** Sidebar tab was clicked. Use to integrate external support systems. */
   "sidebar:click": { tabId: string; label: string };
 
+  /** A tool was registered or unregistered. */
+  "tools:change": { action: "add" | "remove"; name: string };
+
   /** @deprecated Use 'sidebar:click' instead. Will be removed in next major version. */
   "support:request": { tabId: string };
 }
