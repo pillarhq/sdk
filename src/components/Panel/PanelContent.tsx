@@ -8,6 +8,7 @@ import { currentView, type ViewType } from "../../store/router";
 import { ChatView, HomeView } from "../Views";
 import { Header } from "./Header";
 import { UnifiedChatInput } from "./UnifiedChatInput";
+import { ToolDebugPanel } from "../ToolDebugPanel";
 
 export function PanelContent() {
   const view = currentView.value;
@@ -21,6 +22,9 @@ export function PanelContent() {
   // Render content for non-assistant tabs
   const renderTabContent = () => {
     switch (currentTab) {
+      case "tools":
+        // Tools tab renders the ToolDebugPanel (full panel)
+        return <ToolDebugPanel />;
       case "support":
         return (
           <div style={{ padding: "24px", textAlign: "center" }}>
@@ -55,7 +59,16 @@ export function PanelContent() {
     }
   };
 
-  // For non-assistant tabs, show the tab content
+  // Tools tab gets full panel without header
+  if (currentTab === "tools") {
+    return (
+      <div class="_pillar-panel-ui pillar-panel-ui">
+        <ToolDebugPanel />
+      </div>
+    );
+  }
+
+  // For other non-assistant tabs, show the tab content with header
   if (currentTab !== "assistant") {
     return (
       <div class="_pillar-panel-ui pillar-panel-ui">

@@ -27,7 +27,7 @@ export {
   type PillarEvents,
   type TaskExecutePayload,
 } from "./core/events";
-export { Pillar, type ChatContext, type PillarState } from "./core/Pillar";
+export { Pillar, type ChatContext, type PillarState, type ToolInfo } from "./core/Pillar";
 
 // Configuration
 export {

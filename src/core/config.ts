@@ -19,7 +19,7 @@ export interface SidebarTabConfig {
   enabled: boolean;
   order: number;
   /** Preset icon for this tab */
-  icon?: 'help' | 'support' | 'settings' | 'feedback' | 'chat' | 'calendar' | 'mail';
+  icon?: 'help' | 'support' | 'settings' | 'feedback' | 'chat' | 'calendar' | 'mail' | 'tools';
 }
 
 export const DEFAULT_SIDEBAR_TABS: SidebarTabConfig[] = [

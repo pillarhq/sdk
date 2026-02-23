@@ -1,0 +1,429 @@
+/**
+ * Tool Debug Panel Styles
+ * Matches the debug panel theme and styling patterns
+ */
+
+.pillar-tool-debug-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+/* Header */
+.pillar-tool-debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.pillar-tool-debug-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: #e5e5e5;
+}
+
+.pillar-tool-debug-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pillar-tool-debug-btn {
+  background-color: transparent;
+  border: 1px solid #555;
+  color: #d4d4d4;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.pillar-tool-debug-btn:hover {
+  background-color: #333;
+  border-color: #666;
+}
+
+/* Content Layout */
+.pillar-tool-debug-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Tool List */
+.pillar-tool-debug-list {
+  width: 280px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #333;
+  background-color: #1e1e1e;
+}
+
+.pillar-tool-debug-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+}
+
+.pillar-tool-debug-search-input {
+  flex: 1;
+  background-color: #3c3c3c;
+  border: 1px solid transparent;
+  color: #d4d4d4;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  border-radius: 4px;
+  transition: border-color 0.15s;
+}
+
+.pillar-tool-debug-search-input:focus {
+  border-color: #3b82f6;
+}
+
+.pillar-tool-debug-search-input::placeholder {
+  color: #6b7280;
+}
+
+.pillar-tool-debug-count {
+  color: #6b7280;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pillar-tool-debug-tools {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.pillar-tool-debug-empty {
+  padding: 24px 16px;
+  color: #6b7280;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* Tool Item */
+.pillar-tool-debug-tool-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #2d2d2d;
+  text-align: left;
+  cursor: pointer;
+  color: #d4d4d4;
+  font-family: inherit;
+  transition: background-color 0.15s;
+}
+
+.pillar-tool-debug-tool-item:hover {
+  background-color: #252526;
+}
+
+.pillar-tool-debug-tool-item--selected {
+  background-color: #2d4a7c;
+}
+
+.pillar-tool-debug-tool-item--selected:hover {
+  background-color: #2d4a7c;
+}
+
+.pillar-tool-debug-tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pillar-tool-debug-tool-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: #e5e5e5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pillar-tool-debug-tool-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.pillar-tool-debug-tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.pillar-tool-source {
+  color: #6b7280;
+  background-color: #2d2d2d;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.pillar-tool-handler {
+  color: #6b7280;
+}
+
+.pillar-tool-handler--active {
+  color: #10b981;
+}
+
+/* Type Badges */
+.pillar-tool-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.pillar-tool-badge--navigate {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.pillar-tool-badge--query {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+.pillar-tool-badge--trigger {
+  background-color: #10b981;
+  color: white;
+}
+
+.pillar-tool-badge--inline {
+  background-color: #f59e0b;
+  color: black;
+}
+
+.pillar-tool-badge--default {
+  background-color: #4b5563;
+  color: white;
+}
+
+/* Tool Detail */
+.pillar-tool-debug-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+  background-color: #1e1e1e;
+}
+
+.pillar-tool-debug-no-selection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  text-align: center;
+  padding: 24px;
+}
+
+.pillar-tool-debug-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pillar-tool-debug-detail-name {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: #e5e5e5;
+}
+
+.pillar-tool-debug-detail-desc {
+  color: #9ca3af;
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pillar-tool-debug-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+/* Schema Display */
+.pillar-tool-debug-schema {
+  margin-bottom: 16px;
+}
+
+.pillar-tool-debug-schema-content {
+  background-color: #252526;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 200px;
+  color: #d4d4d4;
+}
+
+/* Input Editor */
+.pillar-tool-debug-input {
+  margin-bottom: 16px;
+}
+
+.pillar-tool-debug-textarea {
+  width: 100%;
+  background-color: #252526;
+  border: 1px solid #333;
+  color: #d4d4d4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 6px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.pillar-tool-debug-textarea:focus {
+  border-color: #3b82f6;
+}
+
+.pillar-tool-debug-textarea--error {
+  border-color: #ef4444;
+}
+
+.pillar-tool-debug-json-error {
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Actions */
+.pillar-tool-debug-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pillar-tool-debug-execute-btn {
+  background-color: #3b82f6;
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background-color 0.15s;
+}
+
+.pillar-tool-debug-execute-btn:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.pillar-tool-debug-execute-btn:disabled {
+  background-color: #4b5563;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.pillar-tool-debug-no-handler {
+  color: #f59e0b;
+  font-size: 12px;
+}
+
+/* Execution Result */
+.pillar-tool-debug-result {
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: auto;
+}
+
+.pillar-tool-debug-result--success {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pillar-tool-debug-result--error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pillar-tool-debug-result--success .pillar-tool-debug-section-title {
+  color: #10b981;
+}
+
+.pillar-tool-debug-result--error .pillar-tool-debug-section-title {
+  color: #ef4444;
+}
+
+.pillar-tool-debug-result-content {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d4d4d4;
+}
+
+/* Scrollbar Styling */
+.pillar-tool-debug-tools::-webkit-scrollbar,
+.pillar-tool-debug-detail::-webkit-scrollbar,
+.pillar-tool-debug-schema-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pillar-tool-debug-tools::-webkit-scrollbar-track,
+.pillar-tool-debug-detail::-webkit-scrollbar-track,
+.pillar-tool-debug-schema-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pillar-tool-debug-tools::-webkit-scrollbar-thumb,
+.pillar-tool-debug-detail::-webkit-scrollbar-thumb,
+.pillar-tool-debug-schema-content::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 4px;
+}
+
+.pillar-tool-debug-tools::-webkit-scrollbar-thumb:hover,
+.pillar-tool-debug-detail::-webkit-scrollbar-thumb:hover,
+.pillar-tool-debug-schema-content::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}

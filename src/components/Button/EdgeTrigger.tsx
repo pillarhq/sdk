@@ -38,12 +38,14 @@ const PRESET_ICONS = {
   chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>`,
   calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
   mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`,
+  tools: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`,
 } as const;
 
 // Map of tab ids to their default icons (for backward compatibility)
 const TAB_ICONS: Record<string, string> = {
   assistant: PRESET_ICONS.help,
   support: PRESET_ICONS.support,
+  tools: PRESET_ICONS.tools,
 };
 
 const getTabIcon = (tabId: string, icon?: string): string => {
@@ -252,10 +254,14 @@ export class EdgeTrigger {
   /**
    * Handle tab click - sets active tab and opens panel
    * For non-assistant tabs, emits event for customer's code to handle (e.g., Intercom, Zendesk)
+   * Tools tab (debug only) opens the panel with tool debugger
    */
   private handleTabClick = (tabId: string) => {
-    // For any non-assistant tab, emit sidebar:click event for customer code to handle
-    if (tabId !== 'assistant') {
+    // Internal tabs that open the panel directly
+    const internalTabs = ['assistant', 'tools'];
+    
+    // For external tabs, emit sidebar:click event for customer code to handle
+    if (!internalTabs.includes(tabId)) {
       const tab = this.config.sidebarTabs.find(t => t.id === tabId);
       this.events.emit('sidebar:click', { tabId, label: tab?.label || tabId });
       
@@ -679,7 +685,23 @@ export class EdgeTrigger {
     if (!this.container || this._isHidden) return;
 
     const position = this.getEdgePosition();
-    const tabs = this.config.sidebarTabs;
+    let tabs = [...this.config.sidebarTabs];
+
+    // Inject tools tab when debug mode is enabled
+    if (this.config.debug) {
+      const hasToolsTab = tabs.some(t => t.id === 'tools');
+      if (!hasToolsTab) {
+        // Add tools tab at the end with highest order
+        const maxOrder = Math.max(...tabs.map(t => t.order), 0);
+        tabs.push({
+          id: 'tools',
+          label: 'Tools',
+          enabled: true,
+          order: maxOrder + 1,
+          icon: 'tools' as const,
+        });
+      }
+    }
 
     render(
       <EdgeTriggerContent

@@ -52,10 +52,12 @@ import {
 } from "../store/workflow";
 import {
   getToolDefinition,
+  getToolNames,
   hasTool,
   setClientInfo,
   validateToolName,
   type ToolSchema,
+  type ToolType,
 } from "../tools";
 import { debug, debugLog, setDebugMode } from "../utils/debug";
 import { getTracer, initTracing, isTracingEnabled, type Span, SpanStatusCode } from "../utils/tracing";
@@ -105,6 +107,28 @@ export interface ChatContext {
     role: "user" | "assistant";
     content: string;
   }>;
+}
+
+/**
+ * Tool information for the debug panel.
+ */
+export interface ToolInfo {
+  /** Tool name (unique identifier) */
+  name: string;
+  /** Human-readable description */
+  description: string;
+  /** Tool type (navigate, query, trigger_tool, etc.) */
+  type?: ToolType;
+  /** JSON Schema for input parameters */
+  inputSchema?: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+  /** Where this tool was registered from */
+  source: "defined" | "registered" | "registry";
+  /** Whether the tool has an execute handler */
+  hasHandler: boolean;
 }
 
 export class Pillar {
@@ -341,6 +365,105 @@ export class Pillar {
    */
   clearDebugLog(): void {
     debugLog.clear();
+  }
+
+  /**
+   * Get all registered tools for debugging.
+   * Returns tools from all sources: defineTool(), registerTool(), and onTask() handlers.
+   *
+   * Only available when debug mode is enabled.
+   *
+   * @returns Array of tool information objects
+   */
+  getTools(): ToolInfo[] {
+    if (!this._config?.debug) return [];
+
+    const tools: ToolInfo[] = [];
+    const seenNames = new Set<string>();
+
+    // From _definedTools (defineTool API - has both metadata and handler)
+    for (const [name, schema] of this._definedTools) {
+      seenNames.add(name);
+      tools.push({
+        name,
+        description: schema.description,
+        type: schema.type,
+        inputSchema: schema.inputSchema,
+        source: "defined",
+        hasHandler: typeof schema.execute === "function",
+      });
+    }
+
+    // From _registeredTools (registerTool API - metadata only, handler via onTask)
+    for (const [name, def] of this._registeredTools) {
+      if (seenNames.has(name)) continue;
+      seenNames.add(name);
+      tools.push({
+        name,
+        description: (def.description as string) || "",
+        type: def.type as ToolType | undefined,
+        inputSchema: def.dataSchema as ToolInfo["inputSchema"],
+        source: "registered",
+        hasHandler: this._taskHandlers.has(name),
+      });
+    }
+
+    // From registry (tools synced via CLI with onTask handlers)
+    for (const name of getToolNames()) {
+      if (seenNames.has(name)) continue;
+      seenNames.add(name);
+      const def = getToolDefinition(name);
+      tools.push({
+        name,
+        description: def?.description || "",
+        type: def?.type,
+        inputSchema: def?.dataSchema as ToolInfo["inputSchema"],
+        source: "registry",
+        hasHandler: this._taskHandlers.has(name),
+      });
+    }
+
+    return tools.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Execute a tool by name for debugging purposes.
+   * Only available when debug mode is enabled.
+   *
+   * @param toolName - Name of the tool to execute
+   * @param input - Input parameters to pass to the tool
+   * @returns Promise resolving to the tool's result or error
+   */
+  async executeToolForDebug(
+    toolName: string,
+    input: Record<string, unknown>
+  ): Promise<{ success: boolean; result?: unknown; error?: string }> {
+    if (!this._config?.debug) {
+      return { success: false, error: "Debug mode not enabled" };
+    }
+
+    try {
+      // Try defineTool handler first
+      const definedTool = this._definedTools.get(toolName);
+      if (definedTool?.execute) {
+        const result = await definedTool.execute(input);
+        return { success: true, result };
+      }
+
+      // Try task handler
+      const taskHandler = this._taskHandlers.get(toolName);
+      if (taskHandler) {
+        const result = await taskHandler(input);
+        return { success: true, result };
+      }
+
+      return { success: false, error: `No handler found for tool: ${toolName}` };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**
@@ -1488,6 +1611,7 @@ export class Pillar {
 
     this._definedTools.set(schema.name, schema as ToolSchema);
     debug.log(`[Pillar] Defined tool: ${schema.name}`);
+    this._events.emit("tools:change", { action: "add", name: schema.name });
 
     // Register with WebMCP if enabled and available
     let webMCPRegistered = false;
@@ -1571,6 +1695,7 @@ export class Pillar {
 
     return () => {
       this._definedTools.delete(schema.name);
+      this._events.emit("tools:change", { action: "remove", name: schema.name });
 
       // Unregister from WebMCP if it was registered
       if (webMCPRegistered && navigator.modelContext) {
@@ -1635,6 +1760,7 @@ export class Pillar {
     });
 
     debug.log(`[Pillar] Registered tool: ${name}`);
+    this._events.emit("tools:change", { action: "add", name });
   }
 
   /** @deprecated Use registerTool instead */
