@@ -396,13 +396,18 @@ export class EdgeTrigger {
     });
 
     // Subscribe to hover mode changes (viewport crossing breakpoint)
-    this.unsubscribeHoverMode = isHoverMode.subscribe(() => {
-      // Update padding when hover mode changes (affects whether panel takes space)
+    let prevHoverMode = isHoverMode.value;
+    this.unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
+      if (inHoverMode === prevHoverMode) return;
+      prevHoverMode = inHoverMode;
       queueMicrotask(() => this.applyLayoutPadding());
     });
 
     // Subscribe to mobile mode changes (edge trigger hides on mobile)
+    let prevMobileMode = isMobileMode.value;
     this.unsubscribeMobileMode = isMobileMode.subscribe((inMobileMode) => {
+      if (inMobileMode === prevMobileMode) return;
+      prevMobileMode = inMobileMode;
       if (inMobileMode) {
         this.hide();
       } else {

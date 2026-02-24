@@ -182,12 +182,18 @@ export class MobileTrigger {
     mountTarget.appendChild(this.container);
 
     // Subscribe to mobile mode changes
-    this.unsubscribeMobileMode = isMobileMode.subscribe(() => {
+    let prevMobile = isMobileMode.value;
+    this.unsubscribeMobileMode = isMobileMode.subscribe((mobile) => {
+      if (mobile === prevMobile) return;
+      prevMobile = mobile;
       this.render();
     });
 
     // Subscribe to panel open state
-    this.unsubscribeOpen = isOpen.subscribe(() => {
+    let prevOpen = isOpen.value;
+    this.unsubscribeOpen = isOpen.subscribe((open) => {
+      if (open === prevOpen) return;
+      prevOpen = open;
       this.render();
     });
 

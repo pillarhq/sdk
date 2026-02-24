@@ -257,7 +257,10 @@ export class Pillar {
     // Clean up existing subscription if any
     this._unsubscribeHoverMode?.();
 
+    let prevHoverMode = isHoverMode.value;
     this._unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
+      if (inHoverMode === prevHoverMode) return;
+      prevHoverMode = inHoverMode;
       container.style.zIndex = inHoverMode ? "9999" : "1000";
     });
   }

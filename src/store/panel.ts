@@ -213,26 +213,33 @@ export const setActiveTab = (tabId: string) => {
 };
 
 /**
- * Initialize the viewport resize listener for responsive behavior
- * Should be called once during SDK initialization
+ * Initialize the viewport resize listener for responsive behavior.
+ * Throttled via requestAnimationFrame to avoid layout thrashing during
+ * continuous window resize (fires once per frame instead of dozens per second).
  */
 export const initViewportListener = () => {
   if (typeof window === 'undefined') return;
-  
+
   // Clean up existing listener if any
   resizeCleanup?.();
-  
+
+  let rafId: number | null = null;
+
   const handleResize = () => {
-    viewportWidth.value = window.innerWidth;
+    if (rafId !== null) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      viewportWidth.value = window.innerWidth;
+    });
   };
-  
+
   // Update initial value
   viewportWidth.value = window.innerWidth;
-  
-  // Add resize listener
+
   window.addEventListener('resize', handleResize);
-  
+
   resizeCleanup = () => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
     window.removeEventListener('resize', handleResize);
   };
 };

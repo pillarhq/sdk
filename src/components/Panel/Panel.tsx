@@ -475,7 +475,10 @@ export class Panel {
     });
 
     // Subscribe to isFullWidth changes (viewport below fullWidthBreakpoint)
+    let previousFullWidth = isFullWidth.value;
     const unsubscribeFullWidth = isFullWidth.subscribe((fullWidth) => {
+      if (fullWidth === previousFullWidth) return;
+      previousFullWidth = fullWidth;
       if (fullWidth) {
         this.panelElement?.classList.add(
           "_pillar-panel--full-width",
@@ -491,7 +494,10 @@ export class Panel {
 
     // Subscribe to isMobileMode changes (viewport below mobileBreakpoint)
     // Toggles bottom-sheet presentation instead of side-sliding
+    let previousMobile = isMobileMode.value;
     const unsubscribeMobile = isMobileMode.subscribe((mobile) => {
+      if (mobile === previousMobile) return;
+      previousMobile = mobile;
       if (mobile) {
         this.panelElement?.classList.add(
           "_pillar-panel--mobile",
@@ -503,7 +509,6 @@ export class Panel {
           "pillar-panel--mobile"
         );
       }
-      // Backdrop visibility may change with mobile mode, update UI
       updatePanelUI();
     });
 
