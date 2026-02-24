@@ -236,9 +236,6 @@ export interface PillarEvents {
 
   /** @deprecated Use 'sidebar:click' instead. Will be removed in next major version. */
   "support:request": { tabId: string };
-
-  /** A tool was added or removed. */
-  "tools:change": { action: "add" | "remove"; name: string };
 }
 
 export class EventEmitter {
