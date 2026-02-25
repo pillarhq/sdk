@@ -319,6 +319,26 @@ export interface MobileTriggerConfig {
   offset?: number;
 }
 
+/**
+ * Z-index configuration for the SDK root container.
+ * Controls stacking order relative to host app content.
+ */
+export interface ZIndexConfig {
+  /**
+   * Z-index when panel is in push mode (shifts content aside).
+   * Use a low value so the panel sits alongside content without
+   * dominating the stacking order.
+   * @default 1
+   */
+  push?: number;
+  /**
+   * Z-index when panel is in hover/overlay mode (floats over content).
+   * Use a high value so the panel floats above host app content.
+   * @default 9999
+   */
+  hover?: number;
+}
+
 export interface PillarConfig {
   /**
    * Your product key from the Pillar app.
@@ -402,6 +422,12 @@ export interface PillarConfig {
    * ```
    */
   customCSS?: string;
+  
+  /**
+   * Z-index configuration for the SDK root container.
+   * Controls stacking order relative to host app content.
+   */
+  zIndex?: ZIndexConfig;
   
   /** Called when the SDK is initialized and ready. */
   onReady?: () => void;
@@ -499,6 +525,7 @@ export interface ResolvedConfig {
   sidebarTabs: SidebarTabConfig[];
   theme: ResolvedThemeConfig;
   customCSS?: string;
+  zIndex: Required<ZIndexConfig>;
   
   onReady?: () => void;
   onError?: (error: Error) => void;
@@ -579,6 +606,11 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
     mode: 'auto',
     colors: {},
     darkColors: {},
+  },
+  
+  zIndex: {
+    push: 1,
+    hover: 9999,
   },
 };
 
@@ -679,6 +711,11 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     },
     
     customCSS: config.customCSS,
+    
+    zIndex: {
+      ...DEFAULT_CONFIG.zIndex,
+      ...config.zIndex,
+    },
     
     onReady: config.onReady,
     onError: config.onError,

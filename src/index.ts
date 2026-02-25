@@ -57,6 +57,7 @@ export {
   type ThemeConfig,
   type ThemeMode,
   type UrlParamsConfig,
+  type ZIndexConfig,
 } from "./core/config";
 
 // Context types

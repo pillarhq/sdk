@@ -60,7 +60,6 @@ import {
   type ToolType,
 } from "../tools";
 import { debug, debugLog, setDebugMode } from "../utils/debug";
-import { getTracer, initTracing, isTracingEnabled, type Span, SpanStatusCode } from "../utils/tracing";
 import { domReady } from "../utils/dom";
 import {
   buildSelectorFromRef,
@@ -68,6 +67,12 @@ import {
   isValidPillarRef,
 } from "../utils/dom-scanner";
 import { RouteObserver, type RouteInfo } from "../utils/route-observer";
+import {
+  getTracer,
+  initTracing,
+  SpanStatusCode,
+  type Span,
+} from "../utils/tracing";
 import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
   mergeServerConfig,
@@ -132,7 +137,7 @@ export interface ToolInfo {
 }
 
 export class Pillar {
-  static readonly version: string = '__SDK_VERSION__';
+  static readonly version: string = "__SDK_VERSION__";
 
   private static instance: Pillar | null = null;
 
@@ -220,16 +225,18 @@ export class Pillar {
   /**
    * Create or get the shared root container for all Pillar UI elements.
    * Uses isolation: isolate to create a new stacking context.
-   * Z-index varies by panel mode:
-   *   - Push mode: 1000 (above typical navbars but not extreme)
-   *   - Hover/overlay mode: 9999 (floats above host app content)
+   * Z-index varies by panel mode (configurable via zIndex option):
+   *   - Push mode: config.zIndex.push (default: 1)
+   *   - Hover/overlay mode: config.zIndex.hover (default: 9999)
    */
   private _createRootContainer(): HTMLElement {
+    const { push: pushZIndex, hover: hoverZIndex } = this._config!.zIndex;
+    
     // Check if container already exists
     let container = document.getElementById("pillar-root");
     if (container) {
       // Subscribe to hover mode changes to update z-index
-      this._subscribeToHoverModeForRoot(container);
+      this._subscribeToHoverModeForRoot(container, pushZIndex, hoverZIndex);
       return container;
     }
 
@@ -237,23 +244,27 @@ export class Pillar {
     container = document.createElement("div");
     container.id = "pillar-root";
     // Set initial z-index based on current mode
-    const initialZIndex = isHoverMode.value ? "9999" : "1000";
+    const initialZIndex = isHoverMode.value ? hoverZIndex : pushZIndex;
     container.style.cssText = `isolation: isolate; z-index: ${initialZIndex}; position: relative;`;
     document.body.appendChild(container);
 
     // Subscribe to hover mode changes to update z-index
-    this._subscribeToHoverModeForRoot(container);
+    this._subscribeToHoverModeForRoot(container, pushZIndex, hoverZIndex);
 
     return container;
   }
 
   /**
    * Subscribe to hover mode changes and update root container z-index.
-   * Push mode uses a moderate z-index (1000) so the panel sits alongside content
-   * without dominating the stacking order. Hover/overlay mode uses a high z-index
-   * (9999) so the panel floats above the host app.
+   * Push mode uses a low z-index so the panel sits alongside content without
+   * dominating the stacking order. Hover/overlay mode uses a high z-index
+   * so the panel floats above the host app.
    */
-  private _subscribeToHoverModeForRoot(container: HTMLElement): void {
+  private _subscribeToHoverModeForRoot(
+    container: HTMLElement,
+    pushZIndex: number,
+    hoverZIndex: number
+  ): void {
     // Clean up existing subscription if any
     this._unsubscribeHoverMode?.();
 
@@ -261,7 +272,7 @@ export class Pillar {
     this._unsubscribeHoverMode = isHoverMode.subscribe((inHoverMode) => {
       if (inHoverMode === prevHoverMode) return;
       prevHoverMode = inHoverMode;
-      container.style.zIndex = inHoverMode ? "9999" : "1000";
+      container.style.zIndex = String(inHoverMode ? hoverZIndex : pushZIndex);
     });
   }
 
@@ -460,7 +471,10 @@ export class Pillar {
         return { success: true, result };
       }
 
-      return { success: false, error: `No handler found for tool: ${toolName}` };
+      return {
+        success: false,
+        error: `No handler found for tool: ${toolName}`,
+      };
     } catch (error) {
       return {
         success: false,
@@ -1698,7 +1712,10 @@ export class Pillar {
 
     return () => {
       this._definedTools.delete(schema.name);
-      this._events.emit("tools:change", { action: "remove", name: schema.name });
+      this._events.emit("tools:change", {
+        action: "remove",
+        name: schema.name,
+      });
 
       // Unregister from WebMCP if it was registered
       if (webMCPRegistered && navigator.modelContext) {
@@ -2480,8 +2497,8 @@ export class Pillar {
 
     // OTel: span for query tool execution on client
     const _tracer = getTracer();
-    const _span: Span = _tracer.startSpan('query_tool.execute', {
-      attributes: { 'query_tool.name': toolName },
+    const _span: Span = _tracer.startSpan("query_tool.execute", {
+      attributes: { "query_tool.name": toolName },
     });
 
     // Defensive validation: ensure toolName is valid
@@ -2490,7 +2507,10 @@ export class Pillar {
         "[Pillar] executeQueryTool called with missing or invalid toolName:",
         toolName
       );
-      _span.setStatus({ code: SpanStatusCode.ERROR, message: 'invalid toolName' });
+      _span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: "invalid toolName",
+      });
       _span.end();
       return;
     }
@@ -2571,8 +2591,8 @@ export class Pillar {
         });
         await this.sendToolResult(toolName, result);
         const totalElapsed = Math.round(performance.now() - startTime);
-        _span.setAttribute('query_tool.duration_ms', totalElapsed);
-        _span.setAttribute('query_tool.success', true);
+        _span.setAttribute("query_tool.duration_ms", totalElapsed);
+        _span.setAttribute("query_tool.success", true);
         _span.end();
         debug.log(
           `[Pillar] Query tool "${toolName}" total time: ${totalElapsed}ms`
@@ -2593,7 +2613,7 @@ export class Pillar {
           `[Pillar] Query tool "${toolName}" returned undefined. ` +
             `Make sure your handler returns data for the agent.`
         );
-        _span.setAttribute('query_tool.success', false);
+        _span.setAttribute("query_tool.success", false);
         _span.end();
         await this.sendToolResult(toolName, {
           error: `Handler returned undefined`,
@@ -2602,7 +2622,10 @@ export class Pillar {
       }
     } catch (error) {
       const elapsed = Math.round(performance.now() - startTime);
-      _span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+      _span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: (error as Error).message,
+      });
       _span.end();
       debugLog.add({
         event: "handler:error",
@@ -2765,8 +2788,8 @@ export class Pillar {
       // Initialize OpenTelemetry tracing (opt-in via tracing: true or debug: true)
       if (this._config.tracing) {
         initTracing(this._config.apiBaseUrl, {
-          'pillar.product_key': this._config.productKey,
-          'pillar.platform': this._config.platform || 'web',
+          "pillar.product_key": this._config.productKey,
+          "pillar.platform": this._config.platform || "web",
         });
         debug.log("[Pillar] OpenTelemetry tracing enabled");
       }
