@@ -14,6 +14,7 @@
 import type { ProgressEvent } from '../../store/chat';
 import { ProgressRow } from './ProgressRow';
 import { ProgressGroup } from './ProgressGroup';
+import { SecretReveal } from './SecretReveal';
 
 export interface ProgressStackProps {
   events: ProgressEvent[];
@@ -26,6 +27,7 @@ export interface ProgressStackProps {
  */
 type Segment =
   | { type: 'thinking'; event: ProgressEvent }
+  | { type: 'secret_reveal'; event: ProgressEvent }
   | { type: 'tool_group'; events: ProgressEvent[]; summary: string };
 
 /**
@@ -65,10 +67,14 @@ function segmentEvents(events: ProgressEvent[]): Segment[] {
 
   for (const event of events) {
     const isThinking = event.kind === 'thinking' || event.kind === 'step_start';
+    const isSecretReveal = event.kind === 'secret_reveal';
 
     if (isThinking) {
       flushToolGroup();
       segments.push({ type: 'thinking', event });
+    } else if (isSecretReveal) {
+      flushToolGroup();
+      segments.push({ type: 'secret_reveal', event });
     } else if (TOOL_KINDS.has(event.kind)) {
       currentToolGroup.push(event);
     } else {
@@ -172,6 +178,15 @@ export function ProgressStack({ events, responseStarted = false }: ProgressStack
               isActive={segment.event.status === 'active'}
               isLast={idx === segments.length - 1}
               responseStarted={responseStarted}
+            />
+          ];
+        }
+
+        if (segment.type === 'secret_reveal') {
+          return [
+            <SecretReveal
+              key={segment.event.id || `secret-${idx}`}
+              event={segment.event}
             />
           ];
         }

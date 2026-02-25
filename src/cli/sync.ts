@@ -74,6 +74,7 @@ interface ToolManifestEntry {
   auto_complete?: boolean;
   returns_data?: boolean;
   data_schema?: ActionDataSchema;
+  output_schema?: { type: "object"; properties: Record<string, unknown> };
   default_data?: Record<string, unknown>;
   required_context?: Record<string, unknown>;
   parameter_examples?: Record<string, unknown>[];
@@ -295,6 +296,7 @@ interface ScannedTool {
   guidance?: string;
   type?: ToolType;
   inputSchema?: ActionDataSchema;
+  outputSchema?: { type: "object"; properties: Record<string, unknown> };
   examples?: string[];
   autoRun?: boolean;
   autoComplete?: boolean;
@@ -545,6 +547,7 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
                 guidance: typeof obj.guidance === 'string' ? obj.guidance : undefined,
                 type: toolType,
                 inputSchema: obj.inputSchema as ActionDataSchema | undefined,
+                outputSchema: obj.outputSchema as { type: "object"; properties: Record<string, unknown> } | undefined,
                 examples: obj.examples as string[] | undefined,
                 autoRun: obj.autoRun as boolean | undefined,
                 autoComplete: obj.autoComplete as boolean | undefined,
@@ -685,6 +688,7 @@ function buildManifestFromScan(
     // Unified tools always return data (the handler return value goes to the agent)
     entry.returns_data = true;
     if (tool.inputSchema) entry.data_schema = tool.inputSchema;
+    if (tool.outputSchema) entry.output_schema = tool.outputSchema;
 
     entries.push(entry);
   }

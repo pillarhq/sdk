@@ -662,6 +662,18 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
   };
 
   /**
+   * JSON Schema describing the tool's output fields.
+   *
+   * Properties with `"sensitive": true` are stripped from AI context,
+   * logs, and telemetry by Pillar's reasoning server and delivered
+   * directly to the user via a secure reveal UI.
+   */
+  outputSchema?: {
+    type: "object";
+    properties: Record<string, unknown>;
+  };
+
+  /**
    * Example user queries that should trigger this tool.
    * Used for semantic matching alongside the description.
    */

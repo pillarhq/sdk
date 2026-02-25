@@ -611,11 +611,12 @@ export class MCPClient {
                         message: progress.message,  // Legacy: display message
                         progress_id: progress.progress_id,  // Legacy: unique ID
                         metadata: {
-                          sources: progress.sources || progress.metadata?.sources,
-                          result_count: progress.result_count ?? progress.metadata?.result_count,
-                          query: progress.query || progress.metadata?.query,
-                          action_name: progress.action_name || progress.metadata?.action_name,
-                          no_sources_used: progress.no_sources_used ?? progress.metadata?.no_sources_used,
+                          ...progress.metadata,
+                          ...(progress.sources != null && { sources: progress.sources }),
+                          ...(progress.result_count != null && { result_count: progress.result_count }),
+                          ...(progress.query != null && { query: progress.query }),
+                          ...(progress.action_name != null && { action_name: progress.action_name }),
+                          ...(progress.no_sources_used != null && { no_sources_used: progress.no_sources_used }),
                         },
                       });
                     }
