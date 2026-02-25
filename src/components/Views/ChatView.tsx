@@ -122,6 +122,7 @@ export function ChatView() {
   const api = useAPI();
   const messagesRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const streamGenRef = useRef(0);
   const [isResuming, setIsResuming] = useState(false);
 
   // Shared action request handler — used by both handleInputSubmit and handleResume
@@ -423,10 +424,17 @@ export function ChatView() {
       history?: import("../../api/client").ChatMessage[];
       resume?: boolean;
     }) => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      const generation = ++streamGenRef.current;
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
       let receivedActions: TaskButtonData[] = [];
+      const isStale = () => streamGenRef.current !== generation;
 
       const response = await api.chat({
         message: opts.message,
@@ -437,12 +445,15 @@ export function ChatView() {
         resume: opts.resume,
         signal: controller.signal,
         onChunk: (chunk) => {
+          if (isStale()) return;
           appendTokenToSegments(chunk);
         },
         onActions: (actions) => {
+          if (isStale()) return;
           receivedActions = handleActionsReceived(actions);
         },
         onProgress: (progress: StoreProgressEvent) => {
+          if (isStale()) return;
           addProgressEvent(progress);
         },
         onConversationStarted: () => {
@@ -461,7 +472,7 @@ export function ChatView() {
         onRequestId: (id) => setActiveRequestId(id),
       });
 
-      return { response, receivedActions };
+      return { response, receivedActions, generation };
     },
     [api, handleActionsReceived, handleActionRequest]
   );
@@ -472,7 +483,7 @@ export function ChatView() {
       userContext?: UserContextItem[],
       images?: ChatImage[]
     ) => {
-      // Clear any previous error
+      clearInterruptedSession();
       clearChatError();
 
       // OTel: span wrapping the full send-message lifecycle
@@ -490,6 +501,7 @@ export function ChatView() {
       // Add placeholder assistant message
       addAssistantMessage("");
 
+      let generation = -1;
       try {
         const history = messages.value.slice(0, -1); // Exclude the empty assistant message
 
@@ -499,13 +511,14 @@ export function ChatView() {
           setConversationId(crypto.randomUUID());
         }
 
-        const { response, receivedActions } = await streamChat({
+        const { response, receivedActions, generation: gen } = await streamChat({
           message,
           conversationId: conversationId.value!,
           userContext,
           images,
           history,
         });
+        generation = gen;
 
         // Collect final actions (from streaming callback or response)
         let finalActions = receivedActions;
@@ -548,6 +561,7 @@ export function ChatView() {
           _msgSpan.end();
           return;
         }
+        generation = streamGenRef.current;
         debug.error("[Pillar] Chat error:", error);
         _msgSpan.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
         _msgSpan.end();
@@ -559,10 +573,12 @@ export function ChatView() {
           retryImages: images,
         });
       } finally {
-        setLoading(false);
-        clearProgressStatus();
-        setActiveRequestId(null);
-        abortControllerRef.current = null;
+        if (streamGenRef.current === generation) {
+          setLoading(false);
+          clearProgressStatus();
+          setActiveRequestId(null);
+          abortControllerRef.current = null;
+        }
       }
     },
     [api, streamChat, handleActionsReceived]
@@ -600,13 +616,15 @@ export function ChatView() {
     // Add placeholder assistant message for the resumed response
     addAssistantMessage("");
 
+    let generation = -1;
     try {
-      const { response, receivedActions } = await streamChat({
+      const { response, receivedActions, generation: gen } = await streamChat({
         message: "",
         conversationId: session.conversationId,
         userContext: resumeContext.length > 0 ? resumeContext : undefined,
         resume: true,
       });
+      generation = gen;
 
       // Handle actions from response
       let finalActions = receivedActions;
@@ -629,6 +647,7 @@ export function ChatView() {
         removeLastEmptyAssistantMessage();
         return;
       }
+      generation = streamGenRef.current;
       debug.error("[Pillar] Resume error:", error);
       removeLastEmptyAssistantMessage();
       setChatError({
@@ -640,21 +659,33 @@ export function ChatView() {
       clearActiveSession(siteId);
     } finally {
       setIsResuming(false);
-      setLoading(false);
-      clearProgressStatus();
-      setActiveRequestId(null);
-      abortControllerRef.current = null;
+      if (streamGenRef.current === generation) {
+        setLoading(false);
+        clearProgressStatus();
+        setActiveRequestId(null);
+        abortControllerRef.current = null;
+      }
     }
   }, [streamChat, handleActionsReceived]);
 
   // Auto-resume for quick reconnects (under 15 seconds)
   useEffect(() => {
     const session = interruptedSession.value;
-    if (session && session.elapsedMs < 15000) {
-      // Seamless resume - trigger automatically
+    if (session && session.elapsedMs < 15000 && !isLoading.value) {
       handleResume();
     }
   }, [interruptedSession.value, handleResume]);
+
+  // Abort the active stream when ChatView unmounts (e.g. user clicks "+" for new chat).
+  // Without this, the orphaned fetch connection keeps writing to shared signals.
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle stop button - cancel in-progress streaming
   const handleStop = useCallback(() => {
