@@ -59,6 +59,7 @@ import type {
 } from "../../types/user-context";
 import { generateContextId } from "../../types/user-context";
 import { debug } from "../../utils/debug";
+import { normalizeToolResult } from "../../utils/normalize-tool-result";
 import { getTracer, type Span, SpanStatusCode } from "../../utils/tracing";
 import type { ScanOptions } from "../../types/dom-scanner";
 import { scanPageDelta, scanPageDirect } from "../../utils/dom-scanner";
@@ -227,48 +228,42 @@ export function ChatView() {
 
           // Get handler for the action
           const handler = pillar.getHandler(request.action_name);
-          let result: unknown = undefined;
 
-          if (handler) {
-            // Execute the registered handler with parameters
-            result = await Promise.resolve(handler(request.parameters));
-          } else {
-            // Fall back to executeTask for built-in action types
-            await pillar.executeTask({
-              id: `action-${request.action_name}`,
-              name: request.action_name,
-              data: request.parameters,
-            });
+          if (!handler) {
+            throw new Error(
+              `No handler registered for action "${request.action_name}". ` +
+                `Register one with pillar.defineTool() or usePillarTool().`
+            );
           }
 
-          // Check if the handler result indicates failure
-          // (e.g. { success: false, error: "..." })
-          const resultObj =
-            result && typeof result === "object" && !Array.isArray(result)
-              ? (result as Record<string, unknown>)
-              : null;
-          const actionSuccess = resultObj?.success !== false;
+          const raw = await Promise.resolve(handler(request.parameters));
 
-          // Send result back to agent with correct success status
+          // Normalize the handler return into a clean payload for the
+          // backend. Handlers can return in any of these shapes:
+          //   { success: true, data: { ... } }  → extract data
+          //   { success: false, error: "..." }   → forward as error
+          //   { key: "value", ... }              → pass through as-is
+          const normalized = normalizeToolResult(raw);
+
           await api.mcp.sendActionResult(
             request.action_name,
-            actionSuccess
-              ? { success: true, result }
-              : { success: false, error: resultObj?.error || resultObj?.message || "Action failed" },
+            normalized,
             request.tool_call_id
           );
 
           const elapsed = Math.round(
             performance.now() - requestStartTime
           );
-          if (actionSuccess) {
+          const isError = normalized && typeof normalized === 'object' &&
+            !Array.isArray(normalized) && (normalized as Record<string, unknown>).success === false;
+          if (!isError) {
             debug.log(
               `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
             );
           } else {
             debug.error(
               `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
-              resultObj?.error || resultObj?.message
+              (normalized as Record<string, unknown>).error || (normalized as Record<string, unknown>).message
             );
           }
         } catch (error) {

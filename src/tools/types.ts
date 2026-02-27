@@ -610,19 +610,18 @@ export interface ToolExecuteResult {
  * @example
  * ```ts
  * pillar.defineTool({
- *   name: 'add_to_cart',
- *   description: 'Add a product to the shopping cart',
- *   inputSchema: {
+ *   name: 'get_signing_secret',
+ *   description: 'Retrieve the webhook signing secret',
+ *   outputSchema: {
  *     type: 'object',
  *     properties: {
- *       productId: { type: 'string', description: 'Product ID' },
- *       quantity: { type: 'number', description: 'Quantity to add' },
+ *       signing_secret: { type: 'string', sensitive: true },
+ *       algorithm: { type: 'string' },
  *     },
- *     required: ['productId', 'quantity'],
  *   },
- *   execute: async ({ productId, quantity }) => {
- *     await cartApi.add(productId, quantity);
- *     return { content: [{ type: 'text', text: 'Added to cart' }] };
+ *   execute: async () => {
+ *     const secret = await api.getSigningSecret();
+ *     return { signing_secret: secret.value, algorithm: 'HMAC-SHA256' };
  *   },
  * });
  * ```
@@ -692,19 +691,36 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
   autoComplete?: boolean;
 
   /**
+   * Context required for this tool to be available.
+   *
+   * When set, the tool is only offered to users whose current context
+   * (set via `pillar.setContext()`) matches every key/value pair.
+   *
+   * @example { userRole: 'admin' }
+   * @example { plan: 'enterprise', betaAccess: true }
+   */
+  requiredContext?: Record<string, unknown>;
+
+  /**
    * Handler function executed when the AI invokes this tool.
    *
-   * Can return:
-   * - A `ToolExecuteResult` with MCP-style content blocks
-   * - A plain object (SDK normalizes it for the agent)
-   * - `void` if the tool has no return value
+   * Return a plain object matching the `outputSchema`. The SDK sends
+   * it directly to the backend with no wrapping — what you return is
+   * what the agent sees.
+   *
+   * To signal failure, throw an error. The SDK catches it and sends
+   * `{ success: false, error: message }` to the agent automatically.
+   *
+   * For backward compatibility the SDK also accepts the legacy
+   * `{ success, data }` envelope and unwraps it, but new tools should
+   * return flat data.
    */
   execute: (
     input: TInput
   ) =>
-    | Promise<ToolExecuteResult | unknown | void>
+    | Promise<ToolExecuteResult | Record<string, unknown> | void>
     | ToolExecuteResult
-    | unknown
+    | Record<string, unknown>
     | void;
 
   /**

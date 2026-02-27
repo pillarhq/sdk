@@ -61,6 +61,7 @@ import {
 } from "../tools";
 import { debug, debugLog, setDebugMode } from "../utils/debug";
 import { domReady } from "../utils/dom";
+import { normalizeToolResult } from "../utils/normalize-tool-result";
 import {
   buildSelectorFromRef,
   isDestructiveElement,
@@ -1946,17 +1947,16 @@ export class Pillar {
             .then(async (resolvedResult) => {
               const duration = Math.round(performance.now() - handlerStartTime);
               if (resolvedResult !== undefined) {
-                await this.sendToolResult(name, resolvedResult);
+                const normalized = normalizeToolResult(resolvedResult);
+                await this.sendToolResult(name, normalized);
 
-                // Check if result indicates failure (e.g., {success: false, message: "..."})
-                // and emit task:complete with correct success status
                 let taskSuccess = true;
                 if (
-                  resolvedResult &&
-                  typeof resolvedResult === "object" &&
-                  !Array.isArray(resolvedResult)
+                  normalized &&
+                  typeof normalized === "object" &&
+                  !Array.isArray(normalized)
                 ) {
-                  const resultObj = resolvedResult as Record<string, unknown>;
+                  const resultObj = normalized as Record<string, unknown>;
                   if (resultObj.success === false) {
                     taskSuccess = false;
                   }
@@ -2589,7 +2589,8 @@ export class Pillar {
           source: "handler",
           level: "info",
         });
-        await this.sendToolResult(toolName, result);
+        const normalized = normalizeToolResult(result);
+        await this.sendToolResult(toolName, normalized);
         const totalElapsed = Math.round(performance.now() - startTime);
         _span.setAttribute("query_tool.duration_ms", totalElapsed);
         _span.setAttribute("query_tool.success", true);

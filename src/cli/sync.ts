@@ -300,6 +300,7 @@ interface ScannedTool {
   examples?: string[];
   autoRun?: boolean;
   autoComplete?: boolean;
+  requiredContext?: Record<string, unknown>;
   sourceFile: string;
   line: number;
 }
@@ -532,13 +533,34 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
           const lineNumber = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
           const relativePath = path.relative(process.cwd(), filePath);
 
-          // Helper to process a single tool object
-          const processToolObject = (obj: Record<string, unknown> | undefined, line: number) => {
+          const hasAstProperty = (
+            astNode: import('typescript').ObjectLiteralExpression,
+            propName: string,
+          ): boolean =>
+            astNode.properties.some(
+              (p) =>
+                ts.isPropertyAssignment(p) &&
+                ts.isIdentifier(p.name) &&
+                p.name.text === propName,
+            );
+
+          const processToolObject = (
+            obj: Record<string, unknown> | undefined,
+            line: number,
+            astNode?: import('typescript').ObjectLiteralExpression,
+          ) => {
             if (obj && typeof obj.name === 'string' && typeof obj.description === 'string') {
               // Normalize type: trigger_action -> trigger_tool for backwards compat
               let toolType = obj.type as ToolType | undefined;
               if (toolType === 'trigger_action') {
                 toolType = 'trigger_tool';
+              }
+
+              const hasExecute = astNode ? hasAstProperty(astNode, 'execute') : false;
+              if (hasExecute && !obj.outputSchema) {
+                console.warn(
+                  `[pillar-sync] ⚠ Tool "${obj.name}" has execute but no outputSchema (${relativePath}:${line})`
+                );
               }
 
               tools.push({
@@ -551,6 +573,7 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
                 examples: obj.examples as string[] | undefined,
                 autoRun: obj.autoRun as boolean | undefined,
                 autoComplete: obj.autoComplete as boolean | undefined,
+                requiredContext: obj.requiredContext as Record<string, unknown> | undefined,
                 sourceFile: relativePath,
                 line,
               });
@@ -566,14 +589,14 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
           if (ts.isObjectLiteralExpression(arg)) {
             // Single tool: usePillarTool({ name: '...', ... })
             const obj = evaluateNode(arg, ts) as Record<string, unknown> | undefined;
-            processToolObject(obj, lineNumber);
+            processToolObject(obj, lineNumber, arg);
           } else if (ts.isArrayLiteralExpression(arg)) {
             // Multiple tools: usePillarTool([{ name: '...', ... }, { name: '...', ... }])
             for (const element of arg.elements) {
               if (ts.isObjectLiteralExpression(element)) {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
                 const obj = evaluateNode(element, ts) as Record<string, unknown> | undefined;
-                processToolObject(obj, elementLine);
+                processToolObject(obj, elementLine, element);
               } else {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
                 console.warn(
@@ -689,6 +712,7 @@ function buildManifestFromScan(
     entry.returns_data = true;
     if (tool.inputSchema) entry.data_schema = tool.inputSchema;
     if (tool.outputSchema) entry.output_schema = tool.outputSchema;
+    if (tool.requiredContext) entry.required_context = tool.requiredContext;
 
     entries.push(entry);
   }
