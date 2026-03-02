@@ -40,6 +40,8 @@ export interface SuggestedQuestion {
   text: string;
   /** If true, this is an admin-configured suggestion that should rank first */
   manual?: boolean;
+  /** Path pattern for filtering (e.g., "/pricing", "/blog/*", "/docs/**") */
+  pathPattern?: string;
 }
 
 export interface ChatResponse {

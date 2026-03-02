@@ -40,12 +40,52 @@ export const hasSuggestions = computed(() => suggestions.value.length > 0);
 export const hasPool = computed(() => suggestionPool.value.length > 0);
 
 // ============================================================================
+// Path Pattern Matching
+// ============================================================================
+
+/**
+ * Check if a pathname matches a path pattern.
+ * Supports:
+ * - Exact match: "/pricing" matches only "/pricing"
+ * - Single wildcard: "/blog/*" matches "/blog/post-1" but not "/blog/a/b"
+ * - Deep wildcard: "/docs/**" matches "/docs/a/b/c"
+ * - No pattern: always matches (shows on all pages)
+ * 
+ * @param pattern - The path pattern to match against
+ * @param pathname - The current page pathname
+ * @returns true if pathname matches the pattern
+ */
+function matchesPathPattern(pattern: string | undefined, pathname: string): boolean {
+  if (!pattern) return true;
+  
+  // Exact match
+  if (pattern === pathname) return true;
+  
+  // Deep wildcard: "/docs/**" matches any depth under /docs
+  if (pattern.endsWith('/**')) {
+    const prefix = pattern.slice(0, -3);
+    return pathname === prefix || pathname.startsWith(prefix + '/');
+  }
+  
+  // Single wildcard: "/blog/*" matches one level under /blog
+  if (pattern.endsWith('/*')) {
+    const prefix = pattern.slice(0, -2);
+    if (!pathname.startsWith(prefix + '/')) return false;
+    const remainder = pathname.slice(prefix.length + 1);
+    return !remainder.includes('/');
+  }
+  
+  // Prefix match (pattern without trailing slash)
+  return pathname.startsWith(pattern);
+}
+
+// ============================================================================
 // Sorting Utilities
 // ============================================================================
 
 /**
  * Sort suggestions by relevance to the current page.
- * Uses keyword matching between page context and suggestion text.
+ * First filters by path pattern, then scores by keyword matching.
  * 
  * @param pool - Full pool of suggestions from backend
  * @param pathname - Current page pathname (e.g., '/dashboards/new')
@@ -61,11 +101,18 @@ export function sortByPageRelevance(
 ): SuggestedQuestion[] {
   if (pool.length === 0) return [];
 
+  // Filter by path pattern first
+  const matchingPool = pool.filter(suggestion => 
+    matchesPathPattern(suggestion.pathPattern, pathname)
+  );
+  
+  if (matchingPool.length === 0) return [];
+
   const keywords = extractKeywords(pathname, title);
   
   // Score each suggestion by keyword relevance
   // Manual suggestions (admin-configured) automatically get highest priority
-  const scored = pool.map(suggestion => ({
+  const scored = matchingPool.map(suggestion => ({
     suggestion,
     score: calculateRelevanceScore(suggestion, keywords)
   }));
