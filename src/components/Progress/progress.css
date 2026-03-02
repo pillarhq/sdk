@@ -538,7 +538,7 @@
   padding: 6px 12px;
   border: 1px solid var(--pillar-border, #e0e0e0);
   border-radius: 6px;
-  background: var(--pillar-surface, #fafafa);
+  background: var(--pillar-bg-secondary);
   color: var(--pillar-text, #333);
   cursor: pointer;
   font-size: 12px;
@@ -547,8 +547,8 @@
 }
 
 ._pillar-secret-reveal-btn:hover {
-  background: var(--pillar-surface-hover, #f0f0f0);
-  border-color: var(--pillar-border-hover, #ccc);
+  background: var(--pillar-bg-tertiary);
+  border-color: var(--pillar-border);
 }
 
 ._pillar-secret-reveal-loading {
@@ -574,7 +574,7 @@
   gap: 6px;
   padding: 4px 8px;
   border-radius: 6px;
-  background: var(--pillar-surface, #fafafa);
+  background: var(--pillar-bg-secondary);
   border: 1px solid var(--pillar-border, #e0e0e0);
   max-width: 100%;
 }
@@ -601,7 +601,7 @@
 
 ._pillar-secret-reveal-copy:hover {
   color: var(--pillar-text, #333);
-  background: var(--pillar-surface-hover, #f0f0f0);
+  background: var(--pillar-bg-tertiary);
 }
 
 ._pillar-secret-reveal-expired,
