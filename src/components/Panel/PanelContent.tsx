@@ -5,12 +5,14 @@
 
 import { activeTab } from "../../store/panel";
 import { currentView, type ViewType } from "../../store/router";
+import { useConfig } from "../context";
 import { ChatView, HomeView } from "../Views";
 import { Header } from "./Header";
 import { UnifiedChatInput } from "./UnifiedChatInput";
 import { ToolDebugPanel } from "../ToolDebugPanel";
 
 export function PanelContent() {
+  const config = useConfig();
   const view = currentView.value;
   const currentTab = activeTab.value;
 
@@ -85,7 +87,7 @@ export function PanelContent() {
       <div class="_pillar-content pillar-content">{renderAssistantView()}</div>
       {!isChatView && !isHomeView && (
         <div class="_pillar-chat-input-area pillar-chat-input-area">
-          <UnifiedChatInput placeholder="Ask a question..." />
+          <UnifiedChatInput placeholder={config.inputPlaceholder} />
         </div>
       )}
     </div>

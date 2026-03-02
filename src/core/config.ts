@@ -347,6 +347,18 @@ export interface PillarConfig {
   productKey?: string;
   
   /**
+   * Display name for the assistant shown in the sidebar tab.
+   * @default 'Assistant'
+   */
+  assistantDisplayName?: string;
+  
+  /**
+   * Placeholder text shown in the chat input field.
+   * @default 'Ask anything...'
+   */
+  inputPlaceholder?: string;
+  
+  /**
    * Platform identifier for code-first actions.
    * Used to filter actions by deployment platform.
    * @default 'web'
@@ -506,6 +518,10 @@ export interface ResolvedConfig {
   productKey: string;
   apiBaseUrl: string;
   
+  /** Display name for the assistant shown in the sidebar tab */
+  assistantDisplayName: string;
+  /** Placeholder text shown in the chat input field */
+  inputPlaceholder: string;
   /** Platform for code-first actions (default: 'web') */
   platform: Platform;
   /** App version for code-first actions (optional) */
@@ -533,6 +549,8 @@ export interface ResolvedConfig {
 
 export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
+  assistantDisplayName: 'Assistant',
+  inputPlaceholder: 'Ask anything...',
   platform: 'web',
   debug: false,
   tracing: false,
@@ -654,6 +672,8 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
   return {
     productKey: config.productKey,
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
+    assistantDisplayName: config.assistantDisplayName || DEFAULT_CONFIG.assistantDisplayName,
+    inputPlaceholder: config.inputPlaceholder || DEFAULT_CONFIG.inputPlaceholder,
     platform: config.platform || 'web',
     version: config.version,
     debug: config.debug ?? false,
@@ -726,6 +746,10 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
  * Server embed config type (matches backend response)
  */
 export interface ServerEmbedConfig {
+  /** Display name for the assistant (from config.ai.assistantName) */
+  assistantDisplayName?: string;
+  /** Placeholder text for the chat input (from config.ai.inputPlaceholder) */
+  inputPlaceholder?: string;
   panel?: {
     enabled?: boolean;
     position?: 'left' | 'right';
@@ -786,6 +810,16 @@ export function mergeServerConfig(
         ...localConfig.theme?.colors,
       },
     };
+  }
+  
+  // Assistant display name: server provides default, local overrides
+  if (serverConfig.assistantDisplayName && !localConfig.assistantDisplayName) {
+    merged.assistantDisplayName = serverConfig.assistantDisplayName;
+  }
+  
+  // Input placeholder: server provides default, local overrides
+  if (serverConfig.inputPlaceholder && !localConfig.inputPlaceholder) {
+    merged.inputPlaceholder = serverConfig.inputPlaceholder;
   }
   
   return merged;

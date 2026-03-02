@@ -692,6 +692,15 @@ export class EdgeTrigger {
     const position = this.getEdgePosition();
     let tabs = [...this.config.sidebarTabs];
 
+    // Apply assistantDisplayName to the assistant tab
+    const assistantTabIndex = tabs.findIndex(t => t.id === 'assistant');
+    if (assistantTabIndex !== -1) {
+      tabs[assistantTabIndex] = {
+        ...tabs[assistantTabIndex],
+        label: this.config.assistantDisplayName,
+      };
+    }
+
     // Inject tools tab when debug mode is enabled
     if (this.config.debug) {
       const hasToolsTab = tabs.some(t => t.id === 'tools');

@@ -835,7 +835,7 @@ export class Panel {
     if (!this.renderRoot) return;
 
     render(
-      <PillarProvider api={this.api} events={this.events}>
+      <PillarProvider api={this.api} events={this.events} config={this.config}>
         <PanelContent />
       </PillarProvider>,
       this.renderRoot

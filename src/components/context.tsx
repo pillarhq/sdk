@@ -1,16 +1,18 @@
 /**
  * Pillar Context
- * Provides API client and event emitter to components
+ * Provides API client, event emitter, and config to components
  */
 
 import { h, createContext, type ComponentChildren } from 'preact';
 import { useContext } from 'preact/hooks';
 import type { APIClient } from '../api/client';
+import type { ResolvedConfig } from '../core/config';
 import type { EventEmitter } from '../core/events';
 
 interface PillarContextValue {
   api: APIClient;
   events: EventEmitter;
+  config: ResolvedConfig;
 }
 
 const PillarContext = createContext<PillarContextValue | null>(null);
@@ -18,12 +20,13 @@ const PillarContext = createContext<PillarContextValue | null>(null);
 interface PillarProviderProps {
   api: APIClient;
   events: EventEmitter;
+  config: ResolvedConfig;
   children: ComponentChildren;
 }
 
-export function PillarProvider({ api, events, children }: PillarProviderProps) {
+export function PillarProvider({ api, events, config, children }: PillarProviderProps) {
   return (
-    <PillarContext.Provider value={{ api, events }}>
+    <PillarContext.Provider value={{ api, events, config }}>
       {children}
     </PillarContext.Provider>
   );
@@ -43,5 +46,9 @@ export function useAPI(): APIClient {
 
 export function useEvents(): EventEmitter {
   return usePillar().events;
+}
+
+export function useConfig(): ResolvedConfig {
+  return usePillar().config;
 }
 

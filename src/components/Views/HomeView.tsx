@@ -6,7 +6,7 @@
  * client-side based on the current page context (URL, title).
  */
 
-import { useSignal, useComputed } from '@preact/signals';
+import { useComputed } from '@preact/signals';
 import type { SuggestedQuestion } from '../../api/client';
 import { setPendingMessage } from '../../store/chat';
 import {
@@ -14,10 +14,13 @@ import {
   suggestionsLoading,
 } from '../../store/suggestions';
 import { navigateToChat } from '../../store/router';
+import { useConfig } from '../context';
 import { UnifiedChatInput } from '../Panel/UnifiedChatInput';
 import { QuestionChip, QuestionChipSkeleton } from '../shared';
 
 export function HomeView() {
+  const config = useConfig();
+  
   // Subscribe to suggestions store signals
   // These are automatically sorted for the current page by Pillar core
   const currentSuggestions = useComputed(() => suggestions.value);
@@ -56,7 +59,7 @@ export function HomeView() {
       </div>
 
       {/* Input Area */}
-      <UnifiedChatInput placeholder="Ask anything..." />
+      <UnifiedChatInput placeholder={config.inputPlaceholder} />
     </div>
   );
 }
