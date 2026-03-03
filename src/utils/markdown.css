@@ -358,7 +358,8 @@
 }
 
 ._pillar-md-table {
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -373,6 +374,7 @@
 ._pillar-md-th {
   background: var(--pillar-bg-secondary, #f9fafb);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Images */
