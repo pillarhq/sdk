@@ -141,6 +141,15 @@ export interface PanelConfig {
    * @default true
    */
   resizable?: boolean;
+  /**
+   * Target element for push mode padding.
+   * In push mode, padding is applied to this element to make room for the panel.
+   * - CSS selector string (e.g., '#main-content', 'body')
+   * - HTMLElement reference
+   * - undefined (default) applies padding to document.documentElement (html)
+   * @default undefined (document.documentElement)
+   */
+  pushTarget?: string | HTMLElement;
 }
 
 export interface UrlParamsConfig {
@@ -466,6 +475,8 @@ export interface ResolvedPanelConfig {
   initialOpen: boolean;
   /** Whether the panel can be resized by dragging its edge */
   resizable: boolean;
+  /** Target element for push mode padding (undefined = document.documentElement) */
+  pushTarget?: string | HTMLElement;
 }
 
 export interface ResolvedMobileTriggerConfig {

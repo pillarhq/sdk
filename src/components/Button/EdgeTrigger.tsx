@@ -444,6 +444,21 @@ export class EdgeTrigger {
   }
 
   /**
+   * Resolve the push target element from config.
+   * Returns the configured element or falls back to document.documentElement.
+   */
+  private getPushTargetElement(): HTMLElement {
+    const target = this.config.panel.pushTarget;
+    if (!target) {
+      return document.documentElement;
+    }
+    if (typeof target === "string") {
+      return document.querySelector<HTMLElement>(target) || document.documentElement;
+    }
+    return target;
+  }
+
+  /**
    * Apply padding to reserve space for trigger + panel (when open in push mode)
    * In hover mode, only reserve trigger width even when panel is open
    */
@@ -453,6 +468,7 @@ export class EdgeTrigger {
     const position = this.getEdgePosition();
     const currentPanelWidth = panelWidth.value;
     const inHoverMode = isHoverMode.value;
+    const targetElement = this.getPushTargetElement();
 
     // Calculate total width to reserve:
     // - When panel is closed: just trigger width
@@ -465,14 +481,14 @@ export class EdgeTrigger {
       totalWidth = currentPanelWidth + TRIGGER_WIDTH;
     }
 
-    document.documentElement.style.transition = "padding 0.3s ease";
+    targetElement.style.transition = "padding 0.3s ease";
 
     if (position === "right") {
-      document.documentElement.style.paddingRight = `${totalWidth}px`;
+      targetElement.style.paddingRight = `${totalWidth}px`;
       document.documentElement.style.setProperty("--pillar-inset-right", `${totalWidth}px`);
       document.documentElement.style.setProperty("--pillar-inset-left", "0px");
     } else {
-      document.documentElement.style.paddingLeft = `${totalWidth}px`;
+      targetElement.style.paddingLeft = `${totalWidth}px`;
       document.documentElement.style.setProperty("--pillar-inset-left", `${totalWidth}px`);
       document.documentElement.style.setProperty("--pillar-inset-right", "0px");
     }
@@ -483,10 +499,11 @@ export class EdgeTrigger {
    */
   private removeLayoutPadding(): void {
     const position = this.getEdgePosition();
+    const targetElement = this.getPushTargetElement();
     if (position === "right") {
-      document.documentElement.style.paddingRight = "";
+      targetElement.style.paddingRight = "";
     } else {
-      document.documentElement.style.paddingLeft = "";
+      targetElement.style.paddingLeft = "";
     }
     document.documentElement.style.removeProperty("--pillar-inset-right");
     document.documentElement.style.removeProperty("--pillar-inset-left");

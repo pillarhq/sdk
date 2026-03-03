@@ -565,22 +565,38 @@ export class Panel {
     }
   }
 
+  /**
+   * Resolve the push target element from config.
+   * Returns the configured element or falls back to document.documentElement.
+   */
+  private getPushTargetElement(): HTMLElement {
+    const target = this.config.panel.pushTarget;
+    if (!target) {
+      return document.documentElement;
+    }
+    if (typeof target === "string") {
+      return document.querySelector<HTMLElement>(target) || document.documentElement;
+    }
+    return target;
+  }
+
   private applyPushModeStyles(
     panelWidth: number,
     panelPosition: "left" | "right"
   ): void {
+    const targetElement = this.getPushTargetElement();
     // Use padding to shrink the content area next to the panel
     // The panel is position: fixed so it stays in place while content shrinks
-    document.documentElement.style.transition = "padding 0.3s ease";
+    targetElement.style.transition = "padding 0.3s ease";
     if (panelPosition === "right") {
-      document.documentElement.style.paddingRight = `${panelWidth}px`;
+      targetElement.style.paddingRight = `${panelWidth}px`;
       document.documentElement.style.setProperty(
         "--pillar-inset-right",
         `${panelWidth}px`
       );
       document.documentElement.style.setProperty("--pillar-inset-left", "0px");
     } else {
-      document.documentElement.style.paddingLeft = `${panelWidth}px`;
+      targetElement.style.paddingLeft = `${panelWidth}px`;
       document.documentElement.style.setProperty(
         "--pillar-inset-left",
         `${panelWidth}px`
@@ -590,14 +606,15 @@ export class Panel {
   }
 
   private removePushModeStyles(): void {
-    document.documentElement.style.paddingLeft = "";
-    document.documentElement.style.paddingRight = "";
+    const targetElement = this.getPushTargetElement();
+    targetElement.style.paddingLeft = "";
+    targetElement.style.paddingRight = "";
     document.documentElement.style.removeProperty("--pillar-inset-right");
     document.documentElement.style.removeProperty("--pillar-inset-left");
     // Remove transition after animation completes
     setTimeout(() => {
       if (!isOpen.value) {
-        document.documentElement.style.transition = "";
+        targetElement.style.transition = "";
       }
     }, 300);
   }
