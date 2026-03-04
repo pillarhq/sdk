@@ -355,11 +355,11 @@
 ._pillar-md-table-wrapper {
   overflow-x: auto;
   margin: 8px 0;
+  max-width: 100%;
 }
 
 ._pillar-md-table {
-  min-width: 100%;
-  width: max-content;
+  width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -369,12 +369,12 @@
   padding: 8px 12px;
   border: 1px solid var(--pillar-border, #e5e7eb);
   text-align: left;
+  min-width: 100px;
 }
 
 ._pillar-md-th {
   background: var(--pillar-bg-secondary, #f9fafb);
   font-weight: 600;
-  white-space: nowrap;
 }
 
 /* Images */

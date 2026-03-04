@@ -152,6 +152,7 @@
   line-height: 1.45;
   color: var(--pillar-text-secondary);
   overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 ._pillar-message-assistant p {
