@@ -34,6 +34,20 @@ export function HomeView() {
 
   return (
     <div class="_pillar-home-view pillar-home-view">
+      {/* Welcome Message — at the top */}
+      {config.welcomeMessage && (
+        <div 
+          class="_pillar-home-view-welcome pillar-home-view-welcome"
+          style={{
+            fontSize: '1.25rem',
+            fontWeight: 500,
+            padding: '16px 0',
+          }}
+        >
+          {config.welcomeMessage}
+        </div>
+      )}
+
       {/* Spacer pushes suggestions + input to the bottom */}
       <div style={{ flex: 1 }} />
 

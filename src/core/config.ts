@@ -368,6 +368,12 @@ export interface PillarConfig {
   inputPlaceholder?: string;
   
   /**
+   * Welcome message shown in the home view.
+   * @default 'Hi! How can I help you today?'
+   */
+  welcomeMessage?: string;
+  
+  /**
    * Platform identifier for code-first actions.
    * Used to filter actions by deployment platform.
    * @default 'web'
@@ -533,6 +539,8 @@ export interface ResolvedConfig {
   assistantDisplayName: string;
   /** Placeholder text shown in the chat input field */
   inputPlaceholder: string;
+  /** Welcome message shown in the home view */
+  welcomeMessage: string;
   /** Platform for code-first actions (default: 'web') */
   platform: Platform;
   /** App version for code-first actions (optional) */
@@ -562,6 +570,7 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
   assistantDisplayName: 'Assistant',
   inputPlaceholder: 'Ask anything...',
+  welcomeMessage: 'Hi! How can I help you today?',
   platform: 'web',
   debug: false,
   tracing: false,
@@ -685,6 +694,7 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     assistantDisplayName: config.assistantDisplayName || DEFAULT_CONFIG.assistantDisplayName,
     inputPlaceholder: config.inputPlaceholder || DEFAULT_CONFIG.inputPlaceholder,
+    welcomeMessage: config.welcomeMessage || DEFAULT_CONFIG.welcomeMessage,
     platform: config.platform || 'web',
     version: config.version,
     debug: config.debug ?? false,
@@ -761,6 +771,8 @@ export interface ServerEmbedConfig {
   assistantDisplayName?: string;
   /** Placeholder text for the chat input (from config.ai.inputPlaceholder) */
   inputPlaceholder?: string;
+  /** Welcome message shown in the home view (from config.ai.welcomeMessage) */
+  welcomeMessage?: string;
   panel?: {
     enabled?: boolean;
     position?: 'left' | 'right';
@@ -833,6 +845,78 @@ export function mergeServerConfig(
     merged.inputPlaceholder = serverConfig.inputPlaceholder;
   }
   
+  // Welcome message: server provides default, local overrides
+  if (serverConfig.welcomeMessage && !localConfig.welcomeMessage) {
+    merged.welcomeMessage = serverConfig.welcomeMessage;
+  }
+  
   return merged;
+}
+
+/**
+ * Warn about config mismatches between local and server config.
+ * 
+ * Helps developers notice when their code-defined settings differ
+ * from admin dashboard settings. Local config always takes precedence.
+ * 
+ * @param localConfig - Config passed to Pillar.init()
+ * @param serverConfig - Config fetched from server
+ */
+export function warnConfigMismatches(
+  localConfig: PillarConfig,
+  serverConfig: ServerEmbedConfig | null
+): void {
+  if (!serverConfig) return;
+  
+  const mismatches: string[] = [];
+  
+  // assistantDisplayName
+  if (
+    localConfig.assistantDisplayName &&
+    serverConfig.assistantDisplayName &&
+    localConfig.assistantDisplayName !== serverConfig.assistantDisplayName
+  ) {
+    mismatches.push(
+      `assistantDisplayName: local="${localConfig.assistantDisplayName}" vs server="${serverConfig.assistantDisplayName}"`
+    );
+  }
+  
+  // inputPlaceholder
+  if (
+    localConfig.inputPlaceholder &&
+    serverConfig.inputPlaceholder &&
+    localConfig.inputPlaceholder !== serverConfig.inputPlaceholder
+  ) {
+    mismatches.push(
+      `inputPlaceholder: local="${localConfig.inputPlaceholder}" vs server="${serverConfig.inputPlaceholder}"`
+    );
+  }
+  
+  // welcomeMessage
+  if (
+    localConfig.welcomeMessage &&
+    serverConfig.welcomeMessage &&
+    localConfig.welcomeMessage !== serverConfig.welcomeMessage
+  ) {
+    mismatches.push(
+      `welcomeMessage: local="${localConfig.welcomeMessage}" vs server="${serverConfig.welcomeMessage}"`
+    );
+  }
+  
+  // theme.colors.primary
+  const localPrimary = localConfig.theme?.colors?.primary;
+  const serverPrimary = serverConfig.theme?.colors?.primary;
+  if (localPrimary && serverPrimary && localPrimary !== serverPrimary) {
+    mismatches.push(
+      `theme.colors.primary: local="${localPrimary}" vs server="${serverPrimary}"`
+    );
+  }
+  
+  if (mismatches.length > 0) {
+    // Use console.warn directly so this always shows (not just in debug mode)
+    console.warn(
+      `[Pillar] Config mismatch detected (local config will take precedence):\n  - ${mismatches.join('\n  - ')}`
+    );
+  }
 }
 

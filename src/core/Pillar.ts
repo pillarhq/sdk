@@ -8,7 +8,6 @@ import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
 import { DebugPanel } from "../components/DebugPanel";
-import { PagePilotManager } from "../components/PagePilot/PagePilotManager";
 import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
 import {
@@ -78,6 +77,7 @@ import { clearPillarUrlParams, parsePillarUrlParams } from "../utils/urlParams";
 import {
   mergeServerConfig,
   resolveConfig,
+  warnConfigMismatches,
   type PillarConfig,
   type ResolvedConfig,
   type ThemeConfig,
@@ -147,7 +147,6 @@ export class Pillar {
   private _events: EventEmitter;
   private _api: APIClient | null = null;
   private _textSelectionManager: TextSelectionManager | null = null;
-  private _pagePilotManager: PagePilotManager | null = null;
   private _panel: Panel | null = null;
   private _edgeTrigger: EdgeTrigger | null = null;
   private _mobileTrigger: MobileTrigger | null = null;
@@ -626,13 +625,6 @@ export class Pillar {
 
     // Update panel theme
     this._panel?.setTheme(this._config.theme);
-
-    // Update page pilot banner primary color
-    if (this._config.theme.colors.primary) {
-      this._pagePilotManager?.setPrimaryColor(
-        this._config.theme.colors.primary
-      );
-    }
 
     // Emit event
     this._events.emit("theme:change", { theme: this._config.theme });
@@ -2755,6 +2747,9 @@ export class Pillar {
         );
       }
 
+      // Warn about mismatches before merging (helps developers notice conflicts)
+      warnConfigMismatches(config, serverConfig);
+
       // Merge configs with priority: DEFAULT_CONFIG < serverConfig < localConfig
       // Local config (passed to Pillar.init) always wins
       const mergedConfig = mergeServerConfig(config, serverConfig);
@@ -2845,14 +2840,6 @@ export class Pillar {
         );
         this._textSelectionManager.init();
       }
-
-      // Initialize page pilot manager for "Page being piloted by Agent" banner
-      // This is always initialized as it's needed for interact_with_page actions
-      this._pagePilotManager = new PagePilotManager();
-      this._pagePilotManager.init(
-        this._config.theme.colors.primary,
-        this._config.theme.mode
-      );
 
       this._state = "ready";
       this._events.emit("ready");
@@ -3243,7 +3230,6 @@ export class Pillar {
     resetSuggestions();
 
     this._textSelectionManager?.destroy();
-    this._pagePilotManager?.destroy();
     this._panel?.destroy();
     this._edgeTrigger?.destroy();
     this._mobileTrigger?.destroy();
@@ -3281,7 +3267,6 @@ export class Pillar {
     this._anyTaskHandler = null;
 
     this._textSelectionManager = null;
-    this._pagePilotManager = null;
     this._panel = null;
     this._edgeTrigger = null;
     this._mobileTrigger = null;
