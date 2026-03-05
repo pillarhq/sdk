@@ -2856,6 +2856,23 @@ export class Pillar {
         this._mountDebugPanel();
       }
 
+      // Initialize route observer (always runs — auto-sets context.currentPage)
+      this._routeObserver = new RouteObserver({
+        debounceMs: this._config.suggestions.debounceMs,
+      });
+
+      this._routeObserver.onRouteChange((route) => {
+        this._syncCurrentPage(route);
+        if (this._config?.suggestions.enabled) {
+          this._handleRouteChange(route);
+        }
+      });
+
+      this._routeObserver.start();
+
+      // Set currentPage for the initial route
+      this._syncCurrentPage(this._routeObserver.getCurrentRoute());
+
       // Initialize page-aware suggestions if enabled (non-blocking)
       // Fetch starts immediately but doesn't block SDK ready state
       if (this._config.suggestions.enabled) {
@@ -3148,8 +3165,16 @@ export class Pillar {
   // ============================================================================
 
   /**
+   * Sync context.currentPage from the route observer.
+   */
+  private _syncCurrentPage(route: RouteInfo): void {
+    this.setContext({ currentPage: route.pathname });
+  }
+
+  /**
    * Initialize page-aware suggestions.
-   * Fetches the suggestion pool from the backend and starts route observation.
+   * Fetches the suggestion pool from the backend. Route observation is
+   * handled by _doInit so currentPage context is always tracked.
    */
   private async _initSuggestions(): Promise<void> {
     if (!this._api || !this._config) return;
@@ -3165,22 +3190,11 @@ export class Pillar {
       this._suggestionPool = pool;
       setSuggestionPool(pool);
 
-      // Initialize route observer
-      this._routeObserver = new RouteObserver({
-        debounceMs: this._config.suggestions.debounceMs,
-      });
-
-      // Register route change handler
-      this._routeObserver.onRouteChange((route) => {
-        this._handleRouteChange(route);
-      });
-
-      // Start observing route changes
-      this._routeObserver.start();
-
       // Sort suggestions for the current page immediately
-      const currentRoute = this._routeObserver.getCurrentRoute();
-      this._handleRouteChange(currentRoute);
+      if (this._routeObserver) {
+        const currentRoute = this._routeObserver.getCurrentRoute();
+        this._handleRouteChange(currentRoute);
+      }
 
       setSuggestionsLoading(false);
     } catch (error) {

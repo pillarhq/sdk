@@ -42,7 +42,7 @@ Pillar understands the intent, builds a multi-step plan, and executes it client-
 
 ## Documentation
 
-**[View Full Documentation](https://trypillar.com/docs)** | [Getting Started](https://trypillar.com/docs/getting-started/quick-start) | [API Reference](https://trypillar.com/docs/reference/core)
+**[View Full Documentation](https://trypillar.com/docs)** | [Getting Started](https://trypillar.com/docs/get-started/quickstart) | [API Reference](https://trypillar.com/docs/reference/core)
 
 ## Installation
 
