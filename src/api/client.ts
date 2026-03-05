@@ -215,6 +215,22 @@ export class APIClient {
     this.mcpClient.setExternalUserId("");
   }
 
+  /**
+   * Regenerate the visitor ID.
+   * Called on logout to ensure the next user gets a fresh visitor record.
+   */
+  regenerateVisitorId(): void {
+    if (typeof window === "undefined") return;
+
+    const KEY = "pillar_visitor_id";
+    try {
+      const newId = crypto.randomUUID();
+      localStorage.setItem(KEY, newId);
+    } catch {
+      // localStorage might be unavailable
+    }
+  }
+
   // ============================================================================
   // Analytics Helpers
   // ============================================================================

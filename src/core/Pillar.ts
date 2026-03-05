@@ -1434,6 +1434,10 @@ export class Pillar {
     // Notify the API client and MCP client to stop sending the external user ID
     this._api?.clearExternalUserId();
 
+    // Regenerate visitor ID so the next user gets a fresh visitor record
+    // This prevents a new user from "taking over" the previous user's visitor
+    this._api?.regenerateVisitorId();
+
     // Reset current conversation unless preserveConversation is true
     if (!options?.preserveConversation) {
       resetChat();
