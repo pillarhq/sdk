@@ -8,7 +8,13 @@
  *   "string" / number / array          → passed through unchanged
  */
 export function normalizeToolResult(raw: unknown): unknown {
-  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+  // Void handlers (navigate, open_modal, etc.) return undefined/null.
+  // Always send a concrete payload so the backend doesn't confuse it with a timeout.
+  if (raw == null) {
+    return { success: true };
+  }
+
+  if (typeof raw !== "object" || Array.isArray(raw)) {
     return raw;
   }
 
