@@ -215,6 +215,9 @@ export class Pillar {
   // Route observer for SPA navigation detection (page-aware suggestions)
   private _routeObserver: RouteObserver | null = null;
 
+  // True when the current route matches an excludeRoutes pattern
+  private _isRouteExcluded = false;
+
   // Suggestion pool fetched from backend (cached for client-side sorting)
   private _suggestionPool: SuggestedQuestion[] = [];
 
@@ -502,7 +505,7 @@ export class Pillar {
     search?: string;
     focusInput?: boolean;
   }): void {
-    if (!this._panel) return;
+    if (!this._panel || this._isRouteExcluded) return;
 
     this._panel.open(options);
     this._events.emit("panel:open");
@@ -2863,6 +2866,7 @@ export class Pillar {
 
       this._routeObserver.onRouteChange((route) => {
         this._syncCurrentPage(route);
+        this._applyRouteExclusion(route.pathname);
         if (this._config?.suggestions.enabled) {
           this._handleRouteChange(route);
         }
@@ -2871,7 +2875,9 @@ export class Pillar {
       this._routeObserver.start();
 
       // Set currentPage for the initial route
-      this._syncCurrentPage(this._routeObserver.getCurrentRoute());
+      const initialRoute = this._routeObserver.getCurrentRoute();
+      this._syncCurrentPage(initialRoute);
+      this._applyRouteExclusion(initialRoute.pathname);
 
       // Initialize page-aware suggestions if enabled (non-blocking)
       // Fetch starts immediately but doesn't block SDK ready state
@@ -3169,6 +3175,42 @@ export class Pillar {
    */
   private _syncCurrentPage(route: RouteInfo): void {
     this.setContext({ currentPage: route.pathname });
+  }
+
+  /**
+   * Hide or restore all SDK UI based on the excludeRoutes config.
+   * A route matches if the pathname equals a pattern or starts with pattern + '/'.
+   */
+  private _applyRouteExclusion(pathname: string): void {
+    if (!this._config) return;
+
+    const excluded = this._config.excludeRoutes.some(
+      (pattern) =>
+        pathname === pattern || pathname.startsWith(pattern + "/")
+    );
+
+    if (excluded === this._isRouteExcluded) return;
+    this._isRouteExcluded = excluded;
+
+    if (excluded) {
+      this._panel?.close();
+      this._edgeTrigger?.hide();
+      this._mobileTrigger?.hide();
+      this._textSelectionManager?.destroy();
+      debug.log(`[Pillar] UI hidden — route "${pathname}" is excluded`);
+    } else {
+      this._edgeTrigger?.show();
+      this._mobileTrigger?.show();
+      if (this._config.textSelection.enabled && this._config.panel.enabled) {
+        this._textSelectionManager = new TextSelectionManager(
+          this._config,
+          this._events,
+          () => this.open()
+        );
+        this._textSelectionManager.init();
+      }
+      debug.log(`[Pillar] UI restored — route "${pathname}" is not excluded`);
+    }
   }
 
   /**

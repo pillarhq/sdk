@@ -456,6 +456,19 @@ export interface PillarConfig {
    */
   zIndex?: ZIndexConfig;
   
+  /**
+   * Route prefixes where the SDK UI is hidden.
+   * When the current pathname matches any entry (exact match or starts with
+   * the entry followed by `/`), the panel, edge trigger, mobile trigger,
+   * and text selection popover are all hidden. UI is restored when the user
+   * navigates to a non-excluded route.
+   *
+   * Pass an empty array to show the SDK on every route.
+   * @default ['/login', '/signup']
+   * @example ['/login', '/signup', '/onboarding']
+   */
+  excludeRoutes?: string[];
+  
   /** Called when the SDK is initialized and ready. */
   onReady?: () => void;
   /** Called when the SDK encounters an error. */
@@ -561,6 +574,8 @@ export interface ResolvedConfig {
   theme: ResolvedThemeConfig;
   customCSS?: string;
   zIndex: Required<ZIndexConfig>;
+  /** Route prefixes where the SDK UI is hidden */
+  excludeRoutes: string[];
   
   onReady?: () => void;
   onError?: (error: Error) => void;
@@ -650,6 +665,8 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
     push: 1,
     hover: 9999,
   },
+  
+  excludeRoutes: ['/login', '/signup'],
 };
 
 /**
@@ -757,6 +774,8 @@ export function resolveConfig(config: PillarConfig): ResolvedConfig {
       ...DEFAULT_CONFIG.zIndex,
       ...config.zIndex,
     },
+    
+    excludeRoutes: config.excludeRoutes ?? DEFAULT_CONFIG.excludeRoutes,
     
     onReady: config.onReady,
     onError: config.onError,
