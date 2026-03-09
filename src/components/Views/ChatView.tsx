@@ -561,11 +561,13 @@ export function ChatView() {
         _msgSpan.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
         _msgSpan.end();
         removeLastEmptyAssistantMessage();
+        const errData = (error as Error & { data?: Record<string, unknown> }).data;
         setChatError({
-          message: "Something went wrong. Please try again.",
+          message: (error as Error).message || "Something went wrong. Please try again.",
           retryMessage: message,
           retryContext: userContext,
           retryImages: images,
+          upgradeUrl: errData?.upgrade_url as string | undefined,
         });
       } finally {
         if (streamGenRef.current === generation) {
@@ -645,9 +647,11 @@ export function ChatView() {
       generation = streamGenRef.current;
       debug.error("[Pillar] Resume error:", error);
       removeLastEmptyAssistantMessage();
+      const resumeErrData = (error as Error & { data?: Record<string, unknown> }).data;
       setChatError({
-        message: "Failed to resume. Please try again.",
+        message: (error as Error).message || "Failed to resume. Please try again.",
         retryMessage: session.userMessage,
+        upgradeUrl: resumeErrData?.upgrade_url as string | undefined,
       });
       // Clear so user isn't stuck in a resume loop
       clearInterruptedSession();

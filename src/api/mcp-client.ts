@@ -142,8 +142,8 @@ export interface StreamCallbacks {
   onRegisteredTools?: (tools: Record<string, unknown>[]) => void;
   /** @deprecated Use onRegisteredTools instead */
   onRegisteredActions?: (actions: Record<string, unknown>[]) => void;
-  /** Called on error */
-  onError?: (error: string) => void;
+  /** Called on error, with optional structured data from the server */
+  onError?: (error: string, data?: Record<string, unknown>) => void;
   /** Called when conversation_started event is received (confirms conversation tracking) */
   onConversationStarted?: (conversationId: string, assistantMessageId?: string) => void;
   /** Called when stream is complete */
@@ -489,8 +489,11 @@ export class MCPClient {
               if (event.jsonrpc === '2.0') {
                 // Check for error
                 if (event.error) {
-                  callbacks.onError?.(event.error.message || 'Unknown error');
-                  throw new Error(event.error.message);
+                  const errorData = event.error.data as Record<string, unknown> | undefined;
+                  callbacks.onError?.(event.error.message || 'Unknown error', errorData);
+                  const err = new Error(event.error.message);
+                  (err as Error & { data?: Record<string, unknown> }).data = errorData;
+                  throw err;
                 }
 
                 // Handle streaming token events (notifications/progress)

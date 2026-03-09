@@ -166,6 +166,8 @@ export interface ChatError {
   retryMessage: string;
   retryContext?: UserContextItem[];
   retryImages?: ChatImage[];
+  /** If set, shows an upgrade link instead of retry (plan limit exceeded) */
+  upgradeUrl?: string;
 }
 
 export const chatError = signal<ChatError | null>(null);
