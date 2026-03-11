@@ -42,7 +42,7 @@ Pillar understands the intent, builds a multi-step plan, and executes it client-
 
 ## Documentation
 
-**[View Full Documentation](https://trypillar.com/docs)** | [Getting Started](https://trypillar.com/docs/get-started/quickstart) | [API Reference](https://trypillar.com/docs/reference/core)
+**[View Full Documentation](https://trypillar.com/docs)** | [Getting Started](https://trypillar.com/docs/get-started/quickstart) | [API Reference](https://trypillar.com/docs/reference)
 
 ## Installation
 
@@ -56,11 +56,9 @@ yarn add @pillar-ai/sdk
 
 ## Quick Start
 
-### 1. Get Your Product Key
+### 1. Get your product key
 
-> **⚠️ Beta Onboarding:** Cloud access is currently manual while we learn from early teams. Join the waitlist at [trypillar.com](https://trypillar.com), and we will reach out to onboard you.
->
-> By default, you'll get an engineer from Pillar to help with setup. If you prefer onboarding without engineering support, include that in your waitlist request and we will support that too.
+Sign up at [app.trypillar.com](https://app.trypillar.com) and grab your product key from the dashboard.
 
 ### 2. Initialize the SDK
 
@@ -156,7 +154,7 @@ const pillar = await Pillar.init({
 
 > **Note:** `Pillar.init()` and `Pillar.getInstance()` are static methods on the class. All other methods (lowercase `pillar`) are instance methods - call them on the instance returned from `init()` or `getInstance()`.
 
-For complete API documentation, see the [API Reference](https://trypillar.com/docs/reference/core).
+For complete API documentation, see the [API Reference](https://trypillar.com/docs/reference).
 
 ## Framework Integrations
 
