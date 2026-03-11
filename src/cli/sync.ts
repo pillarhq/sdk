@@ -343,11 +343,24 @@ function globFiles(dir: string, extensions: string[]): string[] {
 /**
  * Evaluate a TypeScript AST node to a JavaScript value.
  * Handles string literals, numeric literals, booleans, arrays, objects,
- * template literals (without expressions), and `as const` assertions.
+ * template literals (without expressions), `as const` assertions, and
+ * identifier references to file-level `const` declarations (via scope).
  * Returns undefined for anything it can't statically resolve.
  */
-function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
+function evaluateNode(
+  node: unknown,
+  ts: typeof import('typescript'),
+  scope?: Map<string, unknown>,
+): unknown {
   const n = node as import('typescript').Node;
+
+  // Identifier — resolve via file-level scope (top-level const declarations)
+  if (ts.isIdentifier(n) && scope) {
+    const name = (n as import('typescript').Identifier).text;
+    if (scope.has(name)) {
+      return scope.get(name);
+    }
+  }
 
   // String literal
   if (ts.isStringLiteral(n)) {
@@ -373,7 +386,7 @@ function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
   if (ts.isPrefixUnaryExpression(n)) {
     const expr = n as import('typescript').PrefixUnaryExpression;
     if (expr.operator === ts.SyntaxKind.MinusToken) {
-      const operand = evaluateNode(expr.operand, ts);
+      const operand = evaluateNode(expr.operand, ts, scope);
       if (typeof operand === 'number') return -operand;
     }
   }
@@ -383,7 +396,7 @@ function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
     const arr = n as import('typescript').ArrayLiteralExpression;
     const result: unknown[] = [];
     for (const elem of arr.elements) {
-      const val = evaluateNode(elem, ts);
+      const val = evaluateNode(elem, ts, scope);
       if (val === undefined) return undefined; // Can't resolve element
       result.push(val);
     }
@@ -404,7 +417,7 @@ function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
               : undefined
           : undefined;
         if (!key) continue;
-        const val = evaluateNode(prop.initializer, ts);
+        const val = evaluateNode(prop.initializer, ts, scope);
         // Skip properties we can't resolve (like execute functions)
         if (val !== undefined) {
           result[key] = val;
@@ -420,20 +433,20 @@ function evaluateNode(node: unknown, ts: typeof import('typescript')): unknown {
 
   // Type assertion (e.g., 'navigate' as const, { ... } as const)
   if (ts.isAsExpression(n)) {
-    return evaluateNode((n as import('typescript').AsExpression).expression, ts);
+    return evaluateNode((n as import('typescript').AsExpression).expression, ts, scope);
   }
 
   // Parenthesized expression
   if (ts.isParenthesizedExpression(n)) {
-    return evaluateNode((n as import('typescript').ParenthesizedExpression).expression, ts);
+    return evaluateNode((n as import('typescript').ParenthesizedExpression).expression, ts, scope);
   }
 
   // Binary expression for string concatenation (description: "foo " + "bar")
   if (ts.isBinaryExpression(n)) {
     const bin = n as import('typescript').BinaryExpression;
     if (bin.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-      const left = evaluateNode(bin.left, ts);
-      const right = evaluateNode(bin.right, ts);
+      const left = evaluateNode(bin.left, ts, scope);
+      const right = evaluateNode(bin.right, ts, scope);
       if (typeof left === 'string' && typeof right === 'string') {
         return left + right;
       }
@@ -513,6 +526,25 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
         : ts.ScriptKind.TS
     );
 
+    // Pre-scan: collect top-level const declarations into a scope map
+    // so that identifier references (e.g. outputSchema: myConst) can be resolved.
+    const fileScope = new Map<string, unknown>();
+    for (const stmt of sourceFile.statements) {
+      if (
+        ts.isVariableStatement(stmt) &&
+        stmt.declarationList.flags & ts.NodeFlags.Const
+      ) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name) && decl.initializer) {
+            const val = evaluateNode(decl.initializer, ts, fileScope);
+            if (val !== undefined) {
+              fileScope.set(decl.name.text, val);
+            }
+          }
+        }
+      }
+    }
+
     // Walk the AST looking for call expressions
     function visit(node: import('typescript').Node): void {
       if (ts.isCallExpression(node)) {
@@ -588,14 +620,14 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
 
           if (ts.isObjectLiteralExpression(arg)) {
             // Single tool: usePillarTool({ name: '...', ... })
-            const obj = evaluateNode(arg, ts) as Record<string, unknown> | undefined;
+            const obj = evaluateNode(arg, ts, fileScope) as Record<string, unknown> | undefined;
             processToolObject(obj, lineNumber, arg);
           } else if (ts.isArrayLiteralExpression(arg)) {
             // Multiple tools: usePillarTool([{ name: '...', ... }, { name: '...', ... }])
             for (const element of arg.elements) {
               if (ts.isObjectLiteralExpression(element)) {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;
-                const obj = evaluateNode(element, ts) as Record<string, unknown> | undefined;
+                const obj = evaluateNode(element, ts, fileScope) as Record<string, unknown> | undefined;
                 processToolObject(obj, elementLine, element);
               } else {
                 const elementLine = sourceFile.getLineAndCharacterOfPosition(element.getStart()).line + 1;

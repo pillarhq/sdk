@@ -18,7 +18,6 @@ import {
   destroyViewportListener,
   effectiveMode,
   hoverBackdrop,
-  initViewportListener,
   isFullWidth,
   isHoverMode,
   isMobileMode,
@@ -125,9 +124,6 @@ export class Panel {
     } else {
       setWidth(this.config.panel.width);
     }
-
-    // Initialize viewport listener for responsive behavior
-    initViewportListener();
 
     this.createHost();
     // Skip backdrop in manual mode - user handles all UI
@@ -821,7 +817,13 @@ export class Panel {
       ? " _pillar-panel--manual pillar-panel--manual"
       : "";
     const positionClass = `_pillar-panel--${position.value} pillar-panel--${position.value}`;
-    this.panelElement.className = `_pillar-panel pillar-panel ${positionClass}${manualClass}`;
+    const mobileClass = isMobileMode.value
+      ? " _pillar-panel--mobile pillar-panel--mobile"
+      : "";
+    const fullWidthClass = isFullWidth.value
+      ? " _pillar-panel--full-width pillar-panel--full-width"
+      : "";
+    this.panelElement.className = `_pillar-panel pillar-panel ${positionClass}${manualClass}${mobileClass}${fullWidthClass}`;
     this.panelElement.style.setProperty(
       "--pillar-panel-width",
       `${width.value}px`

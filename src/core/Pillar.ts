@@ -25,6 +25,7 @@ import {
   setUserProfile as storeSetUserProfile,
 } from "../store/context";
 import {
+  initViewportListener,
   isHoverMode,
   isOpen as panelIsOpen,
   resetPanel,
@@ -2804,6 +2805,9 @@ export class Pillar {
       // Set breakpoints for responsive behavior
       setMobileBreakpoint(this._config.mobileTrigger.breakpoint);
       setFullWidthBreakpoint(this._config.panel.fullWidthBreakpoint);
+
+      // Initialize viewport listener for responsive behavior (must run before EdgeTrigger/MobileTrigger)
+      initViewportListener();
 
       // Initialize panel if enabled
       if (this._config.panel.enabled) {
