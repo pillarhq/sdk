@@ -62,12 +62,14 @@
   max-height: 90dvh;
   border-left: none;
   border-right: none;
-  border-top: 1px solid var(--pillar-border);
-  border-radius: 16px 16px 0 0;
+  border-top: none;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   transform: translateY(100%);
-  /* iOS-style spring curve: slow start, fast middle, gentle settle */
-  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+  /* iOS spring animation: fast acceleration, gradual deceleration with subtle settle */
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
 }
 
 ._pillar-panel--mobile._pillar-panel--open {
@@ -103,13 +105,14 @@
 ._pillar-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
   transition:
-    opacity var(--pillar-transition-normal),
-    visibility var(--pillar-transition-normal);
+    opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1),
+    visibility 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   z-index: 99998;
+  -webkit-tap-highlight-color: transparent;
 }
 
 ._pillar-backdrop--visible {

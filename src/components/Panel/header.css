@@ -33,7 +33,7 @@
   right: 0;
   display: flex;
   justify-content: center;
-  padding: 8px 0 0;
+  padding: 6px 0 0;
   pointer-events: none;
 }
 
@@ -42,7 +42,7 @@
   height: 5px;
   border-radius: 2.5px;
   background: var(--pillar-text-muted);
-  opacity: 0.35;
+  opacity: 0.4;
 }
 
 ._pillar-header-left {
