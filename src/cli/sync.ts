@@ -765,6 +765,11 @@ function buildManifestFromScan(
 }
 
 async function main(): Promise<void> {
+  console.log(
+    '[pillar-sync] Note: pillar-sync in @pillar-ai/sdk is deprecated. ' +
+    'Use pillar-cli instead: npx pillar-cli sync'
+  );
+
   const args = parseArgs(process.argv.slice(2));
 
   // Show help
