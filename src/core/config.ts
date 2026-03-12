@@ -357,7 +357,7 @@ export interface PillarConfig {
   
   /**
    * Display name for the assistant shown in the sidebar tab.
-   * @default 'Assistant'
+   * @default 'Copilot'
    */
   assistantDisplayName?: string;
   
@@ -583,7 +583,7 @@ export interface ResolvedConfig {
 
 export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'productKey'> = {
   apiBaseUrl: 'https://help-api.trypillar.com',
-  assistantDisplayName: 'Assistant',
+  assistantDisplayName: 'Copilot',
   inputPlaceholder: 'Ask anything...',
   welcomeMessage: 'Hi! How can I help you today?',
   platform: 'web',
