@@ -31,7 +31,7 @@ Pillar understands the intent, builds a multi-step plan, and executes it client-
 - **Multi-Step Plans** — Chain actions into workflows for complex tasks
 - **Context-Aware** — Knows current page, user state, and selected text
 - **Knowledge Sync** — Trained on your docs, Zendesk, Intercom, and more
-- **Custom Action Cards** — Render interactive UI for confirmations and data input
+- **Render Custom Components** — Render your own interactive UI in the chat
 - **Framework Bindings** — First-class support for React, Vue, and Svelte
 
 ## Why Pillar?
@@ -142,15 +142,15 @@ const pillar = await Pillar.init({
 
 ## API Reference
 
-| Method | Description |
-|--------|-------------|
-| `Pillar.init(config)` | Initialize the SDK, returns the instance |
-| `Pillar.getInstance()` | Get the initialized SDK instance |
-| `pillar.open()` | Open the co-pilot panel |
-| `pillar.close()` | Close the co-pilot panel |
-| `pillar.toggle()` | Toggle the co-pilot panel |
-| `pillar.setContext(context)` | Update the user/product context |
-| `pillar.on(event, callback)` | Subscribe to SDK events |
+| Method                       | Description                              |
+| ---------------------------- | ---------------------------------------- |
+| `Pillar.init(config)`        | Initialize the SDK, returns the instance |
+| `Pillar.getInstance()`       | Get the initialized SDK instance         |
+| `pillar.open()`              | Open the co-pilot panel                  |
+| `pillar.close()`             | Close the co-pilot panel                 |
+| `pillar.toggle()`            | Toggle the co-pilot panel                |
+| `pillar.setContext(context)` | Update the user/product context          |
+| `pillar.on(event, callback)` | Subscribe to SDK events                  |
 
 > **Note:** `Pillar.init()` and `Pillar.getInstance()` are static methods on the class. All other methods (lowercase `pillar`) are instance methods - call them on the instance returned from `init()` or `getInstance()`.
 
@@ -160,11 +160,11 @@ For complete API documentation, see the [API Reference](https://trypillar.com/do
 
 For idiomatic integration with your framework, use our framework-specific packages:
 
-| Framework | Package | Installation |
-|-----------|---------|--------------|
-| React | [@pillar-ai/react](https://github.com/pillarhq/sdk-react) | `npm install @pillar-ai/react` |
-| Vue | [@pillar-ai/vue](https://github.com/pillarhq/sdk-vue) | `npm install @pillar-ai/vue` |
-| Svelte | [@pillar-ai/svelte](https://github.com/pillarhq/sdk-svelte) | `npm install @pillar-ai/svelte` |
+| Framework | Package                                                     | Installation                    |
+| --------- | ----------------------------------------------------------- | ------------------------------- |
+| React     | [@pillar-ai/react](https://github.com/pillarhq/sdk-react)   | `npm install @pillar-ai/react`  |
+| Vue       | [@pillar-ai/vue](https://github.com/pillarhq/sdk-vue)       | `npm install @pillar-ai/vue`    |
+| Svelte    | [@pillar-ai/svelte](https://github.com/pillarhq/sdk-svelte) | `npm install @pillar-ai/svelte` |
 
 ## License
 
