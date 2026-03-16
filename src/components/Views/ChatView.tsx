@@ -8,6 +8,7 @@ import { getPillarInstance } from "../../core/instance";
 import {
   activeRequestId,
   addAssistantMessage,
+  addCardSegment,
   addOptimisticConversation,
   addProgressEvent,
   addUserMessage,
@@ -117,6 +118,59 @@ function getScanOptions(): ScanOptions {
       ? `#pillar-root, ${userExclude}`
       : "#pillar-root",
   };
+}
+
+/**
+ * Renders a card segment using the registered card renderer.
+ * The renderer is called with a container div, and cleanup is handled on unmount.
+ */
+function CardSegmentRenderer({
+  cardType,
+  data,
+}: {
+  cardType: string;
+  data: Record<string, unknown>;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const pillar = getPillarInstance();
+    const renderer = pillar?.getCardRenderer(cardType);
+
+    if (renderer && containerRef.current) {
+      const cleanup = renderer(
+        containerRef.current,
+        data,
+        {
+          onConfirm: () => {
+            debug.log(`[Pillar] Card "${cardType}" confirmed`);
+          },
+          onCancel: () => {
+            debug.log(`[Pillar] Card "${cardType}" cancelled`);
+          },
+          onStateChange: (state: "loading" | "success" | "error", message?: string) => {
+            debug.log(`[Pillar] Card "${cardType}" state: ${state}${message ? ` - ${message}` : ''}`);
+          },
+        }
+      );
+      cleanupRef.current = cleanup || null;
+    }
+
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
+  }, [cardType, data]);
+
+  return (
+    <div
+      ref={containerRef}
+      class="_pillar-card-segment pillar-card-segment"
+    />
+  );
 }
 
 export function ChatView() {
@@ -260,6 +314,16 @@ export function ChatView() {
             debug.log(
               `[Pillar] Action "${request.action_name}" completed in ${elapsed}ms`
             );
+
+            // Check if the result has a card_type and a registered renderer
+            if (normalized && typeof normalized === 'object' && !Array.isArray(normalized)) {
+              const resultData = normalized as Record<string, unknown>;
+              const cardType = resultData.card_type as string | undefined;
+              if (cardType && pillar.hasCardRenderer(cardType)) {
+                debug.log(`[Pillar] Rendering card for type "${cardType}"`);
+                addCardSegment(cardType, resultData);
+              }
+            }
           } else {
             debug.error(
               `[Pillar] Action "${request.action_name}" failed after ${elapsed}ms:`,
@@ -943,7 +1007,7 @@ export function ChatView() {
             ) : (
               <div class="_pillar-message-assistant-wrapper pillar-message-assistant-wrapper">
                 <div class="_pillar-message-assistant-content pillar-message-assistant-content">
-                  {/* Segment-based interleaved rendering (text and progress blocks in chronological order) */}
+                  {/* Segment-based interleaved rendering (text, progress, and card blocks in chronological order) */}
                   {msg.segments && msg.segments.length > 0 ? (
                     msg.segments.map((segment, segIdx) => {
                       if (segment.type === "progress") {
@@ -953,6 +1017,15 @@ export function ChatView() {
                             key={`seg-${segIdx}`}
                             events={segment.events}
                             responseStarted={hasFollowingText || Boolean(msg.content)}
+                          />
+                        );
+                      }
+                      if (segment.type === "card") {
+                        return (
+                          <CardSegmentRenderer
+                            key={`seg-${segIdx}`}
+                            cardType={segment.cardType}
+                            data={segment.data}
                           />
                         );
                       }

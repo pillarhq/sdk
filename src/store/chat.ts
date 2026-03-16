@@ -26,10 +26,12 @@ export interface ActionStatus {
  *
  * - "text": Model-generated content tokens (narration or final response)
  * - "progress": A group of progress events (thinking, search, tool calls)
+ * - "card": A tool result card to be rendered inline
  */
 export type MessageSegment =
   | { type: "text"; content: string }
-  | { type: "progress"; events: ProgressEvent[] };
+  | { type: "progress"; events: ProgressEvent[] }
+  | { type: "card"; cardType: string; data: Record<string, unknown> };
 
 // Extended chat message with server-assigned ID for feedback
 export interface StoredChatMessage extends ChatMessage {
@@ -468,6 +470,24 @@ export const appendTokenToSegments = (token: string) => {
   messages.value = [
     ...msgs.slice(0, -1),
     { ...lastMsg, segments, content: (lastMsg.content || "") + token },
+  ];
+};
+
+/**
+ * Add a card segment to the last assistant message.
+ * Used when a tool returns data with a card_type that has a registered renderer.
+ */
+export const addCardSegment = (cardType: string, data: Record<string, unknown>) => {
+  const msgs = messages.value;
+  if (msgs.length === 0 || msgs[msgs.length - 1].role !== "assistant") return;
+  const lastMsg = msgs[msgs.length - 1];
+  const segments = [...(lastMsg.segments || [])];
+
+  segments.push({ type: "card", cardType, data });
+
+  messages.value = [
+    ...msgs.slice(0, -1),
+    { ...lastMsg, segments },
   ];
 };
 

@@ -25,6 +25,8 @@
  * ```
  */
 
+import type { CardRenderer } from "../core/events";
+
 /**
  * Supported tool types.
  *
@@ -736,6 +738,27 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
    * @default false
    */
   webMCP?: boolean;
+
+  /**
+   * Optional card renderer for displaying tool results inline in the chat.
+   *
+   * When provided, the SDK automatically registers this as a card renderer
+   * using the tool name as the card type. The card is rendered when the
+   * tool's execute function returns data with a matching `card_type` or
+   * when the tool name matches.
+   *
+   * For framework-specific SDKs (React, Vue, Angular), pass a component
+   * instead - the framework SDK will convert it to a CardRenderer.
+   *
+   * @example Vanilla JS
+   * ```ts
+   * render: (container, data, { onConfirm, onCancel }) => {
+   *   container.innerHTML = `<div>${data.items.length} results</div>`;
+   *   return () => { container.innerHTML = ''; }; // cleanup
+   * }
+   * ```
+   */
+  render?: CardRenderer;
 }
 
 // ============================================================================

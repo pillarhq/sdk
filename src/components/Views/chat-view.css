@@ -600,3 +600,12 @@
 .pillar-action-status {}
 .pillar-action-status-indicator {}
 .pillar-message-assistant-content {}
+
+/* Card segment (inline tool result cards) */
+._pillar-card-segment {
+  margin: 8px 0;
+  border-radius: var(--pillar-radius-lg, 12px);
+  overflow: hidden;
+}
+
+.pillar-card-segment {}
