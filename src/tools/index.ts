@@ -55,6 +55,9 @@ export type {
   TypedPillarMethods,
   // Unified tool schema (new API)
   ToolExecuteResult,
+  ToolSchemaBase,
+  InlineUIToolSchema,
+  ExecutableToolSchema,
   ToolSchema,
   // Backwards compatibility aliases (deprecated)
   ActionType,

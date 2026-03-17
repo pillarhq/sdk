@@ -91,6 +91,9 @@ export {
   type ToolType,
   type ToolTypeDataMap,
   type ToolExecuteResult,
+  type ToolSchemaBase,
+  type InlineUIToolSchema,
+  type ExecutableToolSchema,
   type ToolSchema,
   // Type utilities for typed onTask
   type ClientInfo,

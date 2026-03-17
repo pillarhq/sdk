@@ -402,13 +402,16 @@ export class Pillar {
     // From _definedTools (defineTool API - has both metadata and handler)
     for (const [name, schema] of this._definedTools) {
       seenNames.add(name);
+      const isInlineUI = schema.type === "inline_ui";
       tools.push({
         name,
         description: schema.description,
         type: schema.type,
         inputSchema: schema.inputSchema,
         source: "defined",
-        hasHandler: typeof schema.execute === "function",
+        hasHandler: isInlineUI
+          ? this._cardRenderers.has(name)
+          : typeof schema.execute === "function",
       });
     }
 
@@ -463,9 +466,17 @@ export class Pillar {
     try {
       // Try defineTool handler first
       const definedTool = this._definedTools.get(toolName);
-      if (definedTool?.execute) {
-        const result = await definedTool.execute(input);
-        return { success: true, result };
+      if (definedTool) {
+        if (definedTool.type === "inline_ui") {
+          return {
+            success: false,
+            error: `Tool "${toolName}" is an inline_ui tool. It renders UI via its card renderer instead of executing a handler.`,
+          };
+        }
+        if (definedTool.execute) {
+          const result = await definedTool.execute(input);
+          return { success: true, result };
+        }
       }
 
       // Try task handler
@@ -1631,9 +1642,17 @@ export class Pillar {
     debug.log(`[Pillar] Defined tool: ${schema.name}`);
     this._events.emit("tools:change", { action: "add", name: schema.name });
 
-    // Register with WebMCP if enabled and available
+    const unsubscribes: Array<() => void> = [];
+
+    // For inline_ui tools, register the card renderer from the schema
+    if (schema.type === "inline_ui" && schema.render) {
+      unsubscribes.push(this.registerCard(schema.name, schema.render));
+    }
+
+    // Register with WebMCP if enabled, available, and tool has execute
     let webMCPRegistered = false;
-    if (schema.webMCP) {
+    if (schema.webMCP && schema.type !== "inline_ui" && "execute" in schema && schema.execute) {
+      const executableSchema = schema as import("../tools/types").ExecutableToolSchema<TInput>;
       if (typeof navigator !== "undefined" && navigator.modelContext) {
         try {
           navigator.modelContext.registerTool({
@@ -1647,7 +1666,7 @@ export class Pillar {
               let result: unknown;
 
               try {
-                result = await schema.execute(params as TInput);
+                result = await executableSchema.execute(params as TInput);
 
                 // Check if result indicates failure
                 if (
@@ -1717,6 +1736,8 @@ export class Pillar {
         action: "remove",
         name: schema.name,
       });
+
+      unsubscribes.forEach((unsub) => unsub());
 
       // Unregister from WebMCP if it was registered
       if (webMCPRegistered && navigator.modelContext) {
@@ -1829,8 +1850,20 @@ export class Pillar {
   ): ((data: Record<string, unknown>) => unknown) | undefined {
     // 1. Check unified tool schemas (registered via defineTool)
     const definedTool = this._definedTools.get(toolName);
-    if (definedTool?.execute) {
-      return definedTool.execute as (data: Record<string, unknown>) => unknown;
+    if (definedTool) {
+      if (definedTool.execute) {
+        return definedTool.execute as (
+          data: Record<string, unknown>
+        ) => unknown;
+      }
+      // inline_ui tools have no execute — return a pass-through handler
+      // that feeds the LLM-provided data to the card renderer
+      if (definedTool.type === "inline_ui" && this._cardRenderers.has(toolName)) {
+        return (data: Record<string, unknown>) => ({
+          ...data,
+          card_type: toolName,
+        });
+      }
     }
 
     // 2. Check code-first tool registry (synced via CLI)

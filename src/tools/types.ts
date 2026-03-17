@@ -601,34 +601,12 @@ export interface ToolExecuteResult {
 }
 
 /**
- * Unified tool definition that co-locates metadata and handler.
+ * Shared fields for all tool schemas (both executable and inline_ui).
  *
- * Use with `pillar.defineTool()` or the `usePillarTool()` React hook.
- * The CLI scanner (`npx pillar-sync --scan ./src`) discovers these
- * definitions automatically — no barrel file needed.
- *
- * @template TInput - Type of the input object passed to `execute`
- *
- * @example
- * ```ts
- * pillar.defineTool({
- *   name: 'get_signing_secret',
- *   description: 'Retrieve the webhook signing secret',
- *   outputSchema: {
- *     type: 'object',
- *     properties: {
- *       signing_secret: { type: 'string', sensitive: true },
- *       algorithm: { type: 'string' },
- *     },
- *   },
- *   execute: async () => {
- *     const secret = await api.getSigningSecret();
- *     return { signing_secret: secret.value, algorithm: 'HMAC-SHA256' };
- *   },
- * });
- * ```
+ * @template TInput - Type of the input object passed to `execute` or
+ *   provided by the AI agent to the `render` component.
  */
-export interface ToolSchema<TInput = Record<string, unknown>> {
+export interface ToolSchemaBase<TInput = Record<string, unknown>> {
   /** Unique tool name (e.g., 'add_to_cart') */
   name: string;
 
@@ -646,11 +624,6 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
    * Action model so the agent sees it without runtime code.
    */
   guidance?: string;
-
-  /**
-   * Type of tool - determines how the SDK handles it and organizes it in the UI.
-   */
-  type?: ToolType;
 
   /**
    * JSON Schema describing the input parameters.
@@ -704,6 +677,92 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
   requiredContext?: Record<string, unknown>;
 
   /**
+   * Whether to also register this tool with WebMCP (navigator.modelContext).
+   *
+   * When true, the tool will be exposed to browser-native AI agents and
+   * assistive technologies via the W3C WebMCP API. The tool is registered
+   * on mount and unregistered on unmount (or when the tool is removed).
+   *
+   * Only works in browser contexts where `navigator.modelContext` is available
+   * (either natively or via polyfill).
+   *
+   * @default false
+   */
+  webMCP?: boolean;
+}
+
+/**
+ * Tool schema for `inline_ui` tools that render a component in the chat.
+ *
+ * The AI agent provides data directly to the `render` function —
+ * there is no `execute` handler.
+ *
+ * @template TInput - Type of the data the AI agent provides to the render component
+ *
+ * @example Vanilla JS
+ * ```ts
+ * pillar.defineTool({
+ *   name: 'show_results',
+ *   description: 'Display search results inline',
+ *   type: 'inline_ui',
+ *   render: (container, data, { onConfirm, onCancel }) => {
+ *     container.innerHTML = `<div>${data.items.length} results</div>`;
+ *     return () => { container.innerHTML = ''; };
+ *   },
+ * });
+ * ```
+ */
+export interface InlineUIToolSchema<TInput = Record<string, unknown>>
+  extends ToolSchemaBase<TInput> {
+  type: "inline_ui";
+
+  /**
+   * Card renderer for displaying tool results inline in the chat.
+   *
+   * The AI agent provides structured data matching `inputSchema` directly
+   * to this renderer. The SDK automatically registers this as a card
+   * renderer using the tool name as the card type.
+   *
+   * For framework-specific SDKs (React, Vue, Angular), pass a component
+   * instead — the framework SDK will convert it to a CardRenderer.
+   */
+  render: CardRenderer;
+
+  /** Not applicable for inline_ui tools. Use `render` instead. */
+  execute?: never;
+}
+
+/**
+ * Tool schema for executable tools (all types except `inline_ui`).
+ *
+ * The `execute` handler runs when the AI invokes this tool.
+ *
+ * @template TInput - Type of the input object passed to `execute`
+ *
+ * @example
+ * ```ts
+ * pillar.defineTool({
+ *   name: 'get_signing_secret',
+ *   description: 'Retrieve the webhook signing secret',
+ *   outputSchema: {
+ *     type: 'object',
+ *     properties: {
+ *       signing_secret: { type: 'string', sensitive: true },
+ *       algorithm: { type: 'string' },
+ *     },
+ *   },
+ *   execute: async () => {
+ *     const secret = await api.getSigningSecret();
+ *     return { signing_secret: secret.value, algorithm: 'HMAC-SHA256' };
+ *   },
+ * });
+ * ```
+ */
+export interface ExecutableToolSchema<TInput = Record<string, unknown>>
+  extends ToolSchemaBase<TInput> {
+  type?: Exclude<ToolType, "inline_ui">;
+
+  /**
    * Handler function executed when the AI invokes this tool.
    *
    * Return a plain object matching the `outputSchema`. The SDK sends
@@ -725,41 +784,26 @@ export interface ToolSchema<TInput = Record<string, unknown>> {
     | Record<string, unknown>
     | void;
 
-  /**
-   * Whether to also register this tool with WebMCP (navigator.modelContext).
-   *
-   * When true, the tool will be exposed to browser-native AI agents and
-   * assistive technologies via the W3C WebMCP API. The tool is registered
-   * on mount and unregistered on unmount (or when the tool is removed).
-   *
-   * Only works in browser contexts where `navigator.modelContext` is available
-   * (either natively or via polyfill).
-   *
-   * @default false
-   */
-  webMCP?: boolean;
-
-  /**
-   * Optional card renderer for displaying tool results inline in the chat.
-   *
-   * When provided, the SDK automatically registers this as a card renderer
-   * using the tool name as the card type. The card is rendered when the
-   * tool's execute function returns data with a matching `card_type` or
-   * when the tool name matches.
-   *
-   * For framework-specific SDKs (React, Vue, Angular), pass a component
-   * instead - the framework SDK will convert it to a CardRenderer.
-   *
-   * @example Vanilla JS
-   * ```ts
-   * render: (container, data, { onConfirm, onCancel }) => {
-   *   container.innerHTML = `<div>${data.items.length} results</div>`;
-   *   return () => { container.innerHTML = ''; }; // cleanup
-   * }
-   * ```
-   */
-  render?: CardRenderer;
+  /** Not applicable for executable tools. Only `inline_ui` tools use `render`. */
+  render?: never;
 }
+
+/**
+ * Unified tool definition that co-locates metadata and handler.
+ *
+ * Use with `pillar.defineTool()` or the `usePillarTool()` React hook.
+ * The CLI scanner (`npx pillar-sync --scan ./src`) discovers these
+ * definitions automatically — no barrel file needed.
+ *
+ * - For `type: 'inline_ui'` tools: provide `render` (no `execute`).
+ * - For all other tool types: provide `execute` (no `render`).
+ *
+ * @template TInput - Type of the input object passed to `execute`
+ *   or provided to the `render` component by the AI agent.
+ */
+export type ToolSchema<TInput = Record<string, unknown>> =
+  | InlineUIToolSchema<TInput>
+  | ExecutableToolSchema<TInput>;
 
 // ============================================================================
 // Backwards Compatibility Aliases (deprecated)
