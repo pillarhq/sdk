@@ -24,6 +24,7 @@ export {
   EventEmitter,
   type CardCallbacks,
   type CardRenderer,
+  type ToolCardContext,
   type PillarEvents,
   type TaskExecutePayload,
 } from "./core/events";

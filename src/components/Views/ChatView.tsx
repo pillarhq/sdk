@@ -9,6 +9,7 @@ import {
   activeRequestId,
   addAssistantMessage,
   addCardSegment,
+  addHiddenUserMessage,
   addOptimisticConversation,
   addProgressEvent,
   addUserMessage,
@@ -17,6 +18,7 @@ import {
   clearInterruptedSession,
   setInterruptedSession,
   clearPendingImagesForNavigation,
+  clearPendingHiddenMessage,
   clearPendingMessage,
   clearPendingUserContext,
   clearProgressStatus,
@@ -26,6 +28,7 @@ import {
   isLoading,
   isLoadingHistory,
   messages,
+  pendingHiddenMessage,
   pendingImagesForNavigation,
   pendingMessage,
   pendingUserContext,
@@ -120,6 +123,23 @@ function getScanOptions(): ScanOptions {
   };
 }
 
+function computeIsLatestCard(
+  msgs: import("../../store/chat").StoredChatMessage[],
+  msgIndex: number,
+  segIndex: number,
+): boolean {
+  for (let m = msgs.length - 1; m >= 0; m--) {
+    const segs = msgs[m].segments;
+    if (!segs) continue;
+    for (let s = segs.length - 1; s >= 0; s--) {
+      if (segs[s].type === "card") {
+        return m === msgIndex && s === segIndex;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Renders a card segment using the registered card renderer.
  * The renderer is called with a container div, and cleanup is handled on unmount.
@@ -127,9 +147,13 @@ function getScanOptions(): ScanOptions {
 function CardSegmentRenderer({
   cardType,
   data,
+  messageIndex,
+  segmentIndex,
 }: {
   cardType: string;
   data: Record<string, unknown>;
+  messageIndex: number;
+  segmentIndex: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -139,20 +163,27 @@ function CardSegmentRenderer({
     const renderer = pillar?.getCardRenderer(cardType);
 
     if (renderer && containerRef.current) {
+      const isLatest = computeIsLatestCard(messages.value, messageIndex, segmentIndex);
+      const context = {
+        isLatest,
+        messageIndex,
+        segmentIndex,
+        toolName: cardType,
+      };
+
       const cleanup = renderer(
         containerRef.current,
         data,
         {
-          onConfirm: () => {
-            debug.log(`[Pillar] Card "${cardType}" confirmed`);
-          },
-          onCancel: () => {
-            debug.log(`[Pillar] Card "${cardType}" cancelled`);
+          sendResult: (result: Record<string, unknown>) => {
+            pillar?.sendToolResultAsMessage(cardType, result);
+            return Promise.resolve();
           },
           onStateChange: (state: "loading" | "success" | "error", message?: string) => {
             debug.log(`[Pillar] Card "${cardType}" state: ${state}${message ? ` - ${message}` : ''}`);
           },
-        }
+        },
+        context
       );
       cleanupRef.current = cleanup || null;
     }
@@ -163,7 +194,7 @@ function CardSegmentRenderer({
         cleanupRef.current = null;
       }
     };
-  }, [cardType, data]);
+  }, [cardType, data, messageIndex, segmentIndex]);
 
   return (
     <div
@@ -645,6 +676,72 @@ export function ChatView() {
     [api, streamChat, handleActionsReceived]
   );
 
+  // Send a hidden message (not shown in the UI) that triggers a new LLM turn.
+  // Used by sendToolResultAsMessage for inline_ui card results.
+  const sendHiddenMessage = useCallback(
+    async (message: string) => {
+      clearChatError();
+
+      // Add hidden user message (included in history for the LLM but not rendered)
+      addHiddenUserMessage(message);
+
+      setLoading(true);
+      addAssistantMessage("");
+
+      let generation = -1;
+      try {
+        const history = messages.value.slice(0, -1);
+
+        if (!conversationId.value) {
+          setConversationId(crypto.randomUUID());
+        }
+
+        const { response, receivedActions, generation: gen } = await streamChat({
+          message,
+          conversationId: conversationId.value!,
+          history,
+        });
+        generation = gen;
+
+        let finalActions = receivedActions;
+        if (response.actions && response.actions.length > 0) {
+          finalActions = handleActionsReceived(response.actions);
+        }
+
+        updateLastAssistantMessage(
+          response.message,
+          response.messageId,
+          finalActions,
+          response.sources
+        );
+
+        if (response.conversationId) {
+          setConversationId(response.conversationId);
+        }
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          removeLastEmptyAssistantMessage();
+          return;
+        }
+        generation = streamGenRef.current;
+        debug.error("[Pillar] Hidden message error:", error);
+        removeLastEmptyAssistantMessage();
+        setChatError({
+          message: (error as Error).message || "Something went wrong. Please try again.",
+          retryMessage: "",
+        });
+      } finally {
+        if (streamGenRef.current === generation) {
+          setLoading(false);
+          clearProgressStatus();
+          setActiveRequestId(null);
+          abortControllerRef.current = null;
+        }
+      }
+    },
+    [streamChat, handleActionsReceived]
+  );
+
   // Handle resuming an interrupted session
   const handleResume = useCallback(async () => {
     const session = interruptedSession.value;
@@ -877,6 +974,13 @@ export function ChatView() {
   // This works whether ChatView is already mounted or just mounting
   // Routes through handleInputSubmit to ensure DOM scanning is applied
   useEffect(() => {
+    const pendingHidden = pendingHiddenMessage.value;
+    if (pendingHidden) {
+      clearPendingHiddenMessage();
+      sendHiddenMessage(pendingHidden);
+      return;
+    }
+
     const pending = pendingMessage.value;
     const pendingContext = pendingUserContext.value;
     const pendingImages = pendingImagesForNavigation.value;
@@ -887,7 +991,7 @@ export function ChatView() {
       // Route through handleInputSubmit so DOM scanning logic is applied
       handleInputSubmit(pending, pendingContext, pendingImages);
     }
-  }, [submitPendingTrigger.value, handleInputSubmit]);
+  }, [submitPendingTrigger.value, handleInputSubmit, sendHiddenMessage]);
 
   // Sources are displayed but not clickable (article views have been removed)
   // TODO: Consider linking sources to external URLs if available
@@ -979,7 +1083,9 @@ export function ChatView() {
             </div>
           )}
 
-        {messages.value.map((msg, index) => (
+        {messages.value.map((msg, index) => {
+          if (msg.hidden) return null;
+          return (
           <div
             key={index}
             class={`_pillar-chat-view-message pillar-chat-view-message _pillar-chat-view-message--${msg.role} pillar-chat-view-message--${msg.role}`}
@@ -1026,6 +1132,8 @@ export function ChatView() {
                             key={`seg-${segIdx}`}
                             cardType={segment.cardType}
                             data={segment.data}
+                            messageIndex={index}
+                            segmentIndex={segIdx}
                           />
                         );
                       }
@@ -1117,7 +1225,8 @@ export function ChatView() {
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
 
         {/* Error row - shown when MCP request fails */}
         {chatError.value && (

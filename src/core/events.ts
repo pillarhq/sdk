@@ -40,19 +40,33 @@ export interface TaskExecutePayload {
  * Callbacks provided to custom card renderers.
  */
 export interface CardCallbacks {
-  /**
-   * Called when user confirms the action. Pass modified data if needed.
-   * WARNING: Data passed here flows through the SDK pipeline (telemetry,
-   * agent context, logs). Never include secrets, tokens, or PII.
-   */
-  onConfirm: (modifiedData?: Record<string, unknown>) => void;
-  /** Called when user cancels the action */
-  onCancel: () => void;
+  /** Confirm the action — triggers the tool's `execute` handler. Only present when the tool has `needsConfirmation`. */
+  onConfirm?: (modifiedData?: Record<string, unknown>) => void;
+  /** Cancel the action — dismisses the card. Only present when the tool has `needsConfirmation`. */
+  onCancel?: () => void;
+  /** Send a result back to the AI agent so it can continue reasoning. */
+  sendResult?: (result: Record<string, unknown>) => Promise<void>;
   /** Called to report card state changes (for analytics/confirmation) */
   onStateChange?: (
     state: "loading" | "success" | "error",
     message?: string
   ) => void;
+}
+
+/**
+ * Context about a card's position in the chat.
+ * Passed to card renderers so they can adapt their UI
+ * (e.g., collapse when no longer the latest card).
+ */
+export interface ToolCardContext {
+  /** True when this is the last card segment across all messages. */
+  isLatest: boolean;
+  /** Zero-based index of the message containing this card. */
+  messageIndex: number;
+  /** Zero-based index of this segment within its message's segments array. */
+  segmentIndex: number;
+  /** The tool name / card type. */
+  toolName: string;
 }
 
 /**
@@ -112,8 +126,6 @@ export interface CardRegistrationOptions {
   /** Theme/styling options */
   theme?: {
     variant?: "default" | "compact" | "wide";
-    confirmLabel?: string;
-    cancelLabel?: string;
   };
 }
 
@@ -128,17 +140,18 @@ export interface RegisteredCard {
 
 /**
  * Card renderer function signature.
- * Customers register these to render custom confirmation cards.
+ * Customers register these to render custom inline UI cards.
  *
  * @param container - DOM element to render the card into
  * @param data - Action data including extracted values from AI
- * @param callbacks - Callbacks for confirm/cancel actions
+ * @param callbacks - Callbacks for state reporting
  * @returns Optional cleanup function called when card is unmounted
  */
 export type CardRenderer = (
   container: HTMLElement,
   data: Record<string, unknown>,
-  callbacks: CardCallbacks
+  callbacks: CardCallbacks,
+  context?: ToolCardContext
 ) => (() => void) | void;
 
 export interface PillarEvents {

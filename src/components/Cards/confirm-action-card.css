@@ -29,7 +29,6 @@
   border: 1px solid var(--pillar-border, #e5e7eb);
   border-radius: 8px;
   padding: 12px;
-  margin-bottom: 12px;
 }
 
 .pillar-confirm-card__data-row {
@@ -53,9 +52,11 @@
   word-break: break-word;
 }
 
+/* Confirmation buttons */
 .pillar-confirm-card__actions {
   display: flex;
   gap: 8px;
+  margin-top: 12px;
   justify-content: flex-end;
 }
 
@@ -63,78 +64,63 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
+  padding: 6px 14px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  font-family: inherit;
-  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border: 1px solid transparent;
+  border: 1px solid var(--pillar-border, #e5e7eb);
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 
 .pillar-confirm-card__btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.pillar-confirm-card__btn svg {
-  width: 16px;
-  height: 16px;
+.pillar-confirm-card__btn--cancel {
+  background: var(--pillar-bg-primary, #ffffff);
+  color: var(--pillar-text-secondary, #6b7280);
 }
 
-.pillar-confirm-card__btn--primary {
+.pillar-confirm-card__btn--cancel:hover:not(:disabled) {
+  background: var(--pillar-bg-secondary, #f9fafb);
+  border-color: var(--pillar-text-secondary, #6b7280);
+}
+
+.pillar-confirm-card__btn--confirm {
   background: var(--pillar-primary, #2563eb);
   color: #ffffff;
   border-color: var(--pillar-primary, #2563eb);
 }
 
-.pillar-confirm-card__btn--primary:hover:not(:disabled) {
-  background: var(--pillar-primary-hover, #1d4ed8);
-  border-color: var(--pillar-primary-hover, #1d4ed8);
+.pillar-confirm-card__btn--confirm:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
-.pillar-confirm-card__btn--secondary {
-  background: var(--pillar-bg-primary, #ffffff);
-  color: var(--pillar-text-secondary, #6b7280);
-  border-color: var(--pillar-border, #e5e7eb);
-}
-
-.pillar-confirm-card__btn--secondary:hover:not(:disabled) {
-  background: var(--pillar-bg-secondary, #f9fafb);
-}
-
-.pillar-confirm-card__success {
-  display: flex;
+/* Status indicators */
+.pillar-confirm-card__status {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px;
-  color: var(--pillar-success);
-  font-weight: 500;
-}
-
-.pillar-confirm-card__success-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.pillar-confirm-card__error {
-  background: var(--pillar-error-light);
-  border: 1px solid var(--pillar-error-border);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-  color: var(--pillar-error);
+  gap: 6px;
   font-size: 13px;
+  font-weight: 500;
+  padding: 6px 0;
+}
+
+.pillar-confirm-card__status--success {
+  color: var(--pillar-success, #16a34a);
+}
+
+.pillar-confirm-card__status--error {
+  color: var(--pillar-error, #dc2626);
+}
+
+/* Spinner animation */
+@keyframes pillar-spin {
+  to { transform: rotate(360deg); }
 }
 
 .pillar-confirm-card__spinner {
-  display: inline-flex;
-  animation: pillar-spin 1s linear infinite;
-}
-
-@keyframes pillar-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  animation: pillar-spin 0.8s linear infinite;
 }

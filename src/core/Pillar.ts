@@ -15,6 +15,8 @@ import {
   messages as chatMessages,
   historyInvalidationCounter,
   resetChat,
+  setPendingHiddenMessage,
+  triggerSubmitPending,
 } from "../store/chat";
 import {
   resetContext,
@@ -1651,7 +1653,7 @@ export class Pillar {
 
     // Register with WebMCP if enabled, available, and tool has execute
     let webMCPRegistered = false;
-    if (schema.webMCP && schema.type !== "inline_ui" && "execute" in schema && schema.execute) {
+    if (schema.webMCP && schema.type !== "inline_ui" && "execute" in schema) {
       const executableSchema = schema as import("../tools/types").ExecutableToolSchema<TInput>;
       if (typeof navigator !== "undefined" && navigator.modelContext) {
         try {
@@ -2245,10 +2247,8 @@ export class Pillar {
    *     <div class="invite-card">
    *       <h3>Invite Team Members</h3>
    *       ${data.emails.map(e => `<div>${e}</div>`).join('')}
-   *       <button id="confirm">Send Invites</button>
    *     </div>
    *   `;
-   *   container.querySelector('#confirm').onclick = callbacks.onConfirm;
    *   return () => container.innerHTML = ''; // cleanup
    * });
    */
@@ -2274,6 +2274,46 @@ export class Pillar {
    */
   hasCardRenderer(cardType: string): boolean {
     return this._cardRenderers.has(cardType);
+  }
+
+  /**
+   * Get the position (messageIndex, segmentIndex) of the last card segment
+   * in the current message list. Returns null if there are no card segments.
+   */
+  getLatestCardPosition(): { messageIndex: number; segmentIndex: number } | null {
+    const msgs = chatMessages.value;
+    for (let m = msgs.length - 1; m >= 0; m--) {
+      const segs = msgs[m].segments;
+      if (!segs) continue;
+      for (let s = segs.length - 1; s >= 0; s--) {
+        if (segs[s].type === "card") {
+          return { messageIndex: m, segmentIndex: s };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a given message position is in the latest message.
+   * This becomes false as soon as any new message is added (including hidden
+   * messages from sendResult). Segment position within the same message is
+   * ignored — text segments after a card in the same assistant turn don't
+   * make the card "stale".
+   */
+  isPositionLatest(messageIndex: number, _segmentIndex: number): boolean {
+    const msgs = chatMessages.value;
+    // Card is "latest" if it's in the last message
+    return messageIndex === msgs.length - 1;
+  }
+
+  /**
+   * Subscribe to message list changes (for reactive card context).
+   * Returns an unsubscribe function.
+   */
+  subscribeToMessages(callback: () => void): () => void {
+    // Preact signals: subscribe to the messages signal
+    return chatMessages.subscribe(callback);
   }
 
   // ============================================================================
@@ -2508,6 +2548,35 @@ export class Pillar {
     toolCallId?: string
   ): Promise<void> {
     return this.sendToolResult(actionName, result, toolCallId);
+  }
+
+  /**
+   * Send a tool result as a new chat message, triggering a fresh LLM turn.
+   *
+   * Unlike `sendToolResult` (which responds to a pending tool call via `action/result`),
+   * this method injects the data as a new user message so the LLM can reason about it
+   * and decide what to do next (e.g., call another tool like `display_checkout`).
+   *
+   * Use this for results from already-rendered inline_ui cards where the original
+   * tool call has already completed and there is no pending `tool_call_id`.
+   *
+   * @param toolName - The name of the tool that generated the result
+   * @param result - Structured data to send to the LLM
+   */
+  sendToolResultAsMessage(
+    toolName: string,
+    result: Record<string, unknown>
+  ): void {
+    debug.log(
+      `[Pillar] Sending tool result as message for "${toolName}":`,
+      result
+    );
+
+    const formattedMessage = `[Tool result from ${toolName}]: ${JSON.stringify(result)}`;
+    setPendingHiddenMessage(formattedMessage);
+    triggerSubmitPending();
+
+    this._events.emit("tool:result", { toolName, result });
   }
 
   /**

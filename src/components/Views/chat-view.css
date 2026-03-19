@@ -606,6 +606,7 @@
   margin: 8px 0;
   border-radius: var(--pillar-radius-lg, 12px);
   overflow: hidden;
+  width: 100%;
 }
 
 .pillar-card-segment {}

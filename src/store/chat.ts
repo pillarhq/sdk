@@ -44,6 +44,7 @@ export interface StoredChatMessage extends ChatMessage {
   images?: ChatImage[]; // Images attached to user messages
   progressEvents?: ProgressEvent[]; // Thinking steps stored per-message for history
   segments?: MessageSegment[]; // Ordered timeline of text blocks and progress blocks
+  hidden?: boolean; // Hidden from the UI (e.g., tool result messages sent via sendResult)
 }
 
 // Chat messages history
@@ -514,6 +515,9 @@ export const prefillText = signal<string>("");
 // Pending message to be sent after navigation to chat view
 export const pendingMessage = signal<string | null>(null);
 
+// Pending hidden message (from sendResult) — sent as a chat turn but not shown in the UI
+export const pendingHiddenMessage = signal<string | null>(null);
+
 // Signal to trigger processing of pending message (incremented to trigger effect)
 // This decouples message sending from ChatView's mount lifecycle
 export const submitPendingTrigger = signal<number>(0);
@@ -617,6 +621,13 @@ export const addUserMessage = (
         userContext && userContext.length > 0 ? userContext : undefined,
       images: images && images.length > 0 ? images : undefined,
     },
+  ];
+};
+
+export const addHiddenUserMessage = (content: string) => {
+  messages.value = [
+    ...messages.value,
+    { role: "user", content, hidden: true },
   ];
 };
 
@@ -935,6 +946,14 @@ export const clearPendingMessage = () => {
   pendingMessage.value = null;
 };
 
+export const setPendingHiddenMessage = (message: string) => {
+  pendingHiddenMessage.value = message;
+};
+
+export const clearPendingHiddenMessage = () => {
+  pendingHiddenMessage.value = null;
+};
+
 // Trigger ChatView to process any pending message
 // This works whether ChatView is already mounted or will mount soon
 export const triggerSubmitPending = () => {
@@ -992,6 +1011,7 @@ export const resetChat = () => {
   currentActions.value = [];
   prefillText.value = "";
   pendingMessage.value = null;
+  pendingHiddenMessage.value = null;
   submitPendingTrigger.value = 0;
   userContext.value = [];
   pendingUserContext.value = [];

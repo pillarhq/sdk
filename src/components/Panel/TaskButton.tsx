@@ -31,6 +31,8 @@ export interface TaskButtonData {
   autoRun?: boolean;
   /** If true, action completes without waiting for host confirmation */
   autoComplete?: boolean;
+  /** If true, show a confirmation card before executing */
+  needsConfirmation?: boolean;
 }
 
 interface TaskButtonProps {
@@ -141,6 +143,12 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
       toggleInlineCard();
       return;
     }
+
+    // For executable tools with needsConfirmation, show a confirmation card
+    if (task.needsConfirmation) {
+      toggleConfirmationCard();
+      return;
+    }
     
     // For other actions, execute directly
     if (pillar) {
@@ -181,37 +189,7 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
       inlineCardContainer = document.createElement('div');
       inlineCardContainer.className = 'pillar-task-btn-inline-card';
       
-      const card = createConfirmActionCard(
-        task,
-        // onConfirm callback
-        (data) => {
-          if (pillar) {
-            pillar.executeTask({
-              id: task.id,
-              name: task.name,
-              taskType: task.taskType,
-              data: data || task.data || {},
-            });
-          }
-          // Collapse card after confirmation
-          if (inlineCardContainer) {
-            inlineCardContainer.style.display = 'none';
-            isCardVisible = false;
-            button.classList.remove('pillar-task-btn--active');
-          }
-          onExecute?.();
-        },
-        // onCancel callback
-        () => {
-          debug.log('[Pillar] Inline_ui action cancelled:', task.name);
-          // Collapse card on cancel
-          if (inlineCardContainer) {
-            inlineCardContainer.style.display = 'none';
-            isCardVisible = false;
-            button.classList.remove('pillar-task-btn--active');
-          }
-        }
-      );
+      const card = createConfirmActionCard(task);
       
       inlineCardContainer.appendChild(card);
       
@@ -230,6 +208,69 @@ export function createTaskButton(props: TaskButtonProps): HTMLButtonElement {
     isCardVisible = true;
     button.classList.add('pillar-task-btn--active');
     debug.log('[Pillar] Expanded inline_ui card:', task.name);
+  }
+
+  /**
+   * Toggle a confirmation card for executable tools with needsConfirmation.
+   * The card shows Confirm/Cancel buttons that gate execution.
+   */
+  function toggleConfirmationCard(): void {
+    const pillar = getPillarInstance();
+
+    if (isCardVisible && inlineCardContainer) {
+      inlineCardContainer.style.display = 'none';
+      isCardVisible = false;
+      button.classList.remove('pillar-task-btn--active');
+      debug.log('[Pillar] Collapsed confirmation card:', task.name);
+      return;
+    }
+
+    if (!inlineCardContainer) {
+      inlineCardContainer = document.createElement('div');
+      inlineCardContainer.className = 'pillar-task-btn-inline-card';
+
+      const card = createConfirmActionCard(task, {
+        needsConfirmation: true,
+        onConfirm: () => {
+          if (pillar) {
+            const data = task.data || {};
+            const payload: TaskExecutePayload = {
+              id: task.id,
+              name: task.name,
+              data: data,
+              taskType: task.taskType,
+              path: data.path as string | undefined,
+              externalUrl: data.url as string | undefined,
+            };
+            pillar.executeTask(payload);
+          }
+          onExecute?.();
+        },
+        onCancel: () => {
+          if (inlineCardContainer) {
+            inlineCardContainer.style.display = 'none';
+            isCardVisible = false;
+            button.classList.remove('pillar-task-btn--active');
+          }
+          debug.log('[Pillar] Cancelled confirmation for:', task.name);
+        },
+      });
+
+      inlineCardContainer.appendChild(card);
+
+      const buttonGroup = button.parentElement;
+      if (buttonGroup && buttonGroup.parentElement) {
+        buttonGroup.parentElement.insertBefore(inlineCardContainer, buttonGroup.nextSibling);
+      }
+
+      debug.log('[Pillar] Created confirmation card for:', task.name);
+    } else {
+      inlineCardContainer.style.display = 'block';
+    }
+
+    isCardVisible = true;
+    button.classList.add('pillar-task-btn--active');
+    debug.log('[Pillar] Expanded confirmation card:', task.name);
   }
 
   return button;

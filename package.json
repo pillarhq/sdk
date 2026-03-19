@@ -1,6 +1,6 @@
 {
   "name": "@pillar-ai/sdk",
-  "version": "0.1.33",
+  "version": "0.1.34",
   "description": "Product copilot SDK for SaaS and web apps — AI assistant that executes tasks, not just answers questions",
   "type": "module",
   "main": "./dist/pillar.esm.js",

@@ -705,7 +705,7 @@ export interface ToolSchemaBase<TInput = Record<string, unknown>> {
  *   name: 'show_results',
  *   description: 'Display search results inline',
  *   type: 'inline_ui',
- *   render: (container, data, { onConfirm, onCancel }) => {
+ *   render: (container, data) => {
  *     container.innerHTML = `<div>${data.items.length} results</div>`;
  *     return () => { container.innerHTML = ''; };
  *   },
@@ -786,6 +786,14 @@ export interface ExecutableToolSchema<TInput = Record<string, unknown>>
 
   /** Not applicable for executable tools. Only `inline_ui` tools use `render`. */
   render?: never;
+
+  /**
+   * When true, the SDK shows a confirmation UI before calling `execute`.
+   * The user must click Confirm to proceed, or Cancel to dismiss.
+   *
+   * @default false
+   */
+  needsConfirmation?: boolean;
 }
 
 /**
