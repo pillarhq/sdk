@@ -166,6 +166,7 @@ function CardSegmentRenderer({
       const isLatest = computeIsLatestCard(messages.value, messageIndex, segmentIndex);
       const context = {
         isLatest,
+        isReady: !isLoading.value,
         messageIndex,
         segmentIndex,
         toolName: cardType,

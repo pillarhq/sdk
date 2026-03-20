@@ -61,6 +61,8 @@ export interface CardCallbacks {
 export interface ToolCardContext {
   /** True when this is the last card segment across all messages. */
   isLatest: boolean;
+  /** True when no message is being streamed — safe to call sendResult. */
+  isReady: boolean;
   /** Zero-based index of the message containing this card. */
   messageIndex: number;
   /** Zero-based index of this segment within its message's segments array. */

@@ -12,6 +12,7 @@ import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
 import {
   conversationId as chatConversationId,
+  isLoading as chatIsLoading,
   messages as chatMessages,
   historyInvalidationCounter,
   resetChat,
@@ -2316,6 +2317,21 @@ export class Pillar {
     return chatMessages.subscribe(callback);
   }
 
+  /**
+   * Whether the chat is currently streaming a response.
+   */
+  get isChatLoading(): boolean {
+    return chatIsLoading.value;
+  }
+
+  /**
+   * Subscribe to chat loading-state changes (for reactive `isReady` in card context).
+   * Returns an unsubscribe function.
+   */
+  subscribeToLoadingState(callback: () => void): () => void {
+    return chatIsLoading.subscribe(callback);
+  }
+
   // ============================================================================
   // Workflow API - Multi-step action sequences
   // ============================================================================
@@ -2567,6 +2583,13 @@ export class Pillar {
     toolName: string,
     result: Record<string, unknown>
   ): void {
+    if (chatIsLoading.value) {
+      debug.warn(
+        `[Pillar] sendResult for "${toolName}" ignored — a message is still being processed. Wait for context.isReady before calling sendResult.`
+      );
+      return;
+    }
+
     debug.log(
       `[Pillar] Sending tool result as message for "${toolName}":`,
       result
