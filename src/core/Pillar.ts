@@ -1647,9 +1647,21 @@ export class Pillar {
 
     const unsubscribes: Array<() => void> = [];
 
-    // For inline_ui tools, register the card renderer from the schema
-    if (schema.type === "inline_ui" && schema.render) {
-      unsubscribes.push(this.registerCard(schema.name, schema.render));
+    // For inline_ui tools, require a render prop (or a pre-registered card renderer
+    // from a framework SDK that calls registerCard before defineTool).
+    if (schema.type === "inline_ui") {
+      const toolName = (schema as { name: string }).name;
+      if (!schema.render && !this._cardRenderers.has(toolName)) {
+        debug.warn(
+          `[Pillar] Tool "${toolName}" has type 'inline_ui' but no render prop. ` +
+            `Inline UI tools require a render component to display in the chat. ` +
+            `The tool will not be registered.`
+        );
+        return () => {};
+      }
+      if (schema.render) {
+        unsubscribes.push(this.registerCard(toolName, schema.render));
+      }
     }
 
     // Register with WebMCP if enabled, available, and tool has execute
