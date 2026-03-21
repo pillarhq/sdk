@@ -56,9 +56,9 @@ yarn add @pillar-ai/sdk
 
 ## Quick Start
 
-### 1. Get your product key
+### 1. Get your agent slug
 
-Sign up at [app.trypillar.com](https://app.trypillar.com) and grab your product key from the dashboard.
+Sign up at [app.trypillar.com](https://app.trypillar.com) and grab your agent slug from the dashboard.
 
 ### 2. Initialize the SDK
 
@@ -67,7 +67,7 @@ import { Pillar } from "@pillar-ai/sdk";
 
 // Initialize and get the instance
 const pillar = await Pillar.init({
-  productKey: "your-product-key", // Provided during onboarding
+  agentSlug: "your-agent-slug", // Provided during onboarding
 });
 
 // Now you can use instance methods
@@ -93,7 +93,7 @@ Use `onTask` to handle actions when the AI executes them:
 
 ```javascript
 const pillar = await Pillar.init({
-  productKey: "your-product-key",
+  agentSlug: "your-agent-slug",
 });
 
 // Handle navigation
@@ -120,7 +120,7 @@ For production, define tools in code and sync them via the `pillar-sync` CLI dur
 
 ```javascript
 const pillar = await Pillar.init({
-  productKey: "your-product-key",
+  agentSlug: "your-agent-slug",
 
   panel: {
     position: "right", // 'left' | 'right'

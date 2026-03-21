@@ -291,8 +291,8 @@ export class Pillar {
    * Initialize the Pillar SDK
    */
   static async init(config: PillarConfig): Promise<Pillar> {
-    if (!config.productKey) {
-      throw new Error("[Pillar] productKey is required");
+    if (!config.agentSlug && !config.productKey) {
+      throw new Error("[Pillar] agentSlug (or productKey) is required");
     }
 
     // Create singleton if doesn't exist
@@ -1666,7 +1666,7 @@ export class Pillar {
 
     // Register with WebMCP if enabled, available, and tool has execute
     let webMCPRegistered = false;
-    if (schema.webMCP && schema.type !== "inline_ui" && "execute" in schema) {
+    if (schema.webMCP && schema.type !== "inline_ui" && "execute" in schema && typeof schema.execute === "function") {
       const executableSchema = schema as import("../tools/types").ExecutableToolSchema<TInput>;
       if (typeof navigator !== "undefined" && navigator.modelContext) {
         try {

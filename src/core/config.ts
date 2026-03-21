@@ -350,8 +350,14 @@ export interface ZIndexConfig {
 
 export interface PillarConfig {
   /**
-   * Your product key from the Pillar app.
+   * Your agent slug from the Pillar dashboard.
+   * This is the primary identifier for your copilot agent.
    * Get it at app.trypillar.com
+   */
+  agentSlug?: string;
+
+  /**
+   * @deprecated Use `agentSlug` instead. Will be removed in a future version.
    */
   productKey?: string;
   
@@ -546,6 +552,7 @@ export interface ResolvedSuggestionsConfig {
 
 export interface ResolvedConfig {
   productKey: string;
+  agentSlug?: string;
   apiBaseUrl: string;
   
   /** Display name for the assistant shown in the sidebar tab */
@@ -702,12 +709,14 @@ function mergeSidebarTabs(userTabs?: SidebarTabConfig[]): SidebarTabConfig[] {
 }
 
 export function resolveConfig(config: PillarConfig): ResolvedConfig {
-  if (!config.productKey) {
-    throw new Error('[Pillar] productKey is required');
+  const resolvedKey = config.agentSlug ?? config.productKey;
+  if (!resolvedKey) {
+    throw new Error('[Pillar] agentSlug (or productKey) is required');
   }
   
   return {
-    productKey: config.productKey,
+    productKey: resolvedKey,
+    agentSlug: config.agentSlug,
     apiBaseUrl: config.apiBaseUrl || DEFAULT_CONFIG.apiBaseUrl,
     assistantDisplayName: config.assistantDisplayName || DEFAULT_CONFIG.assistantDisplayName,
     inputPlaceholder: config.inputPlaceholder || DEFAULT_CONFIG.inputPlaceholder,

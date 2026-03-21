@@ -24,6 +24,13 @@ export function normalizeToolResult(raw: unknown): unknown {
     return { success: false, error: obj.error || obj.message || "Action failed" };
   }
 
+  // Structured result with summary/actions — pass through as-is so the
+  // backend receives the full shape (summary, data, actions).
+  if (("summary" in obj || "actions" in obj) && "data" in obj) {
+    return raw;
+  }
+
+  // Legacy { success: true, data: {...} } envelope — unwrap to just data.
   if ("data" in obj && obj.data != null && typeof obj.data === "object") {
     return obj.data;
   }

@@ -63,8 +63,6 @@ export interface ToolResult {
     actions?: ToolData[];
     /** Registered tools for dynamic tool invocations (persisted across turns) */
     registered_tools?: Record<string, unknown>[];
-    /** @deprecated Use registered_tools instead */
-    registered_actions?: Record<string, unknown>[];
   };
   _meta?: {
     conversation_id?: string;
@@ -271,23 +269,23 @@ export class MCPClient {
       'x-page-url': this.getPageUrl(),
     };
 
-    // Add session ID for request correlation (critical for query actions)
+    if (this.config.agentSlug) {
+      headers['x-agent-slug'] = this.config.agentSlug;
+    }
+
     const sessionId = this.getSessionId();
     if (sessionId) {
       headers['Mcp-Session-Id'] = sessionId;
     }
 
-    // Add external user ID header for authenticated users (enables cross-device history)
     if (this._externalUserId) {
       headers['x-external-user-id'] = this._externalUserId;
     }
 
-    // Add browser language for multilingual AI responses
     if (typeof navigator !== 'undefined') {
       headers['Accept-Language'] = navigator.language || navigator.languages?.[0] || 'en';
     }
 
-    // Add platform/version headers for code-first action filtering
     if (this.config.platform) {
       headers['X-Pillar-Platform'] = this.config.platform;
     }
@@ -295,7 +293,6 @@ export class MCPClient {
       headers['X-Pillar-Action-Version'] = this.config.version;
     }
 
-    // Inject W3C traceparent if tracing is active
     if (isTracingEnabled()) {
       injectTraceHeaders(headers);
     }
@@ -642,8 +639,7 @@ export class MCPClient {
                     callbacks.onActions?.(tools); // Backwards compat
                   }
 
-                  // Extract registered tools (with backwards compat for registered_actions)
-                  const registeredTools = finalResult.structuredContent?.registered_tools || finalResult.structuredContent?.registered_actions;
+                  const registeredTools = finalResult.structuredContent?.registered_tools;
                   if (registeredTools) {
                     callbacks.onRegisteredTools?.(registeredTools);
                     callbacks.onRegisteredActions?.(registeredTools); // Backwards compat
@@ -801,7 +797,7 @@ export class MCPClient {
     // Pass registered tools for dynamic tool invocations (multi-turn persistence)
     const registeredTools = options?.registeredTools || options?.registeredActions;
     if (registeredTools && registeredTools.length > 0) {
-      args.registered_actions = registeredTools; // Keep wire format as registered_actions for backend compat
+      args.registered_tools = registeredTools;
     }
 
     if (options?.resume) {
@@ -1098,8 +1094,6 @@ export interface ConversationStatus {
   partial_response?: string;
   display_trace?: DisplayStep[];
   registered_tools?: Record<string, unknown>[];
-  /** @deprecated Use registered_tools instead */
-  registered_actions?: Record<string, unknown>[];
 }
 
 /**

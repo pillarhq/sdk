@@ -288,18 +288,20 @@ export class APIClient {
   private get headers(): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-customer-id": this.config.productKey, // Product key for middleware resolution
+      "x-customer-id": this.config.productKey,
       "x-visitor-id": this.getVisitorId(),
       "x-session-id": this.getSessionId(),
       "x-page-url": this.getPageUrl(),
     };
 
-    // Add external user ID header for authenticated users (enables cross-device history)
+    if (this.config.agentSlug) {
+      headers["x-agent-slug"] = this.config.agentSlug;
+    }
+
     if (this._externalUserId) {
       headers["x-external-user-id"] = this._externalUserId;
     }
 
-    // Add platform/version headers for code-first action filtering
     if (this.config.platform) {
       headers["X-Pillar-Platform"] = this.config.platform;
     }
@@ -373,8 +375,11 @@ export class APIClient {
    */
   async fetchEmbedConfig(): Promise<ServerEmbedConfig | null> {
     try {
+      const embedUrl = this.config.agentSlug
+        ? `${this.config.apiBaseUrl}/api/public/agents/${this.config.agentSlug}/embed-config/`
+        : `${this.config.apiBaseUrl}/api/public/products/${this.config.productKey}/embed-config/`;
       const response = await resilientFetch(
-        `${this.config.apiBaseUrl}/api/public/products/${this.config.productKey}/embed-config/`,
+        embedUrl,
         {
           method: "GET",
           headers: {

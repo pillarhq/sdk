@@ -6,7 +6,7 @@
  * <script src="https://cdn.trypillar.com/sdk/pillar.min.js"></script>
  * <script>
  *   Pillar.init({
- *     productKey: 'your-product-key',
+ *     agentSlug: 'your-agent-slug',
  *   });
  * </script>
  *
@@ -15,7 +15,7 @@
  * import { Pillar } from '@pillar-ai/sdk';
  *
  * await Pillar.init({
- *   productKey: 'your-product-key',
+ *   agentSlug: 'your-agent-slug',
  * });
  */
 
@@ -28,7 +28,8 @@ export {
   type PillarEvents,
   type TaskExecutePayload,
 } from "./core/events";
-export { Pillar, type ChatContext, type PillarState, type ToolInfo } from "./core/Pillar";
+export { Pillar, getApiClient, type ChatContext, type PillarState, type ToolInfo } from "./core/Pillar";
+export { getPillarInstance } from "./core/instance";
 
 // Configuration
 export {
@@ -157,6 +158,9 @@ export {
   actionToTaskButton,
 } from "./api/mcp-client";
 
+// Utilities
+export { normalizeToolResult } from "./utils/normalize-tool-result";
+
 // DOM Scanner types
 export {
   DEFAULT_SCAN_OPTIONS,
@@ -202,11 +206,12 @@ if (typeof window !== "undefined") {
   // Make Pillar available globally for script tag usage
   (window as unknown as { Pillar: typeof Pillar }).Pillar = Pillar;
 
-  // Support auto-initialization via data-product-key attribute
+  // Support auto-initialization via data-agent-slug (or legacy data-product-key)
   const autoInit = () => {
     const script = document.currentScript as HTMLScriptElement | null;
-    if (script?.dataset.productKey) {
-      Pillar.init({ productKey: script.dataset.productKey }).catch(debug.error);
+    const slug = script?.dataset.agentSlug ?? script?.dataset.productKey;
+    if (slug) {
+      Pillar.init({ agentSlug: slug }).catch(debug.error);
     }
   };
 
@@ -214,15 +219,12 @@ if (typeof window !== "undefined") {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", autoInit);
   } else {
-    // Script is being executed after DOM is ready (async/defer)
-    // Try to find the script tag with our data attribute
-    const scripts = document.querySelectorAll("script[data-product-key]");
+    const scripts = document.querySelectorAll("script[data-agent-slug], script[data-product-key]");
     if (scripts.length > 0) {
       const script = scripts[scripts.length - 1] as HTMLScriptElement;
-      if (script.dataset.productKey) {
-        Pillar.init({ productKey: script.dataset.productKey }).catch(
-          debug.error
-        );
+      const slug = script.dataset.agentSlug ?? script.dataset.productKey;
+      if (slug) {
+        Pillar.init({ agentSlug: slug }).catch(debug.error);
       }
     }
   }
