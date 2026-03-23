@@ -391,10 +391,16 @@ function parseLogArgs(args: unknown[]): {
     args = args.slice(1);
   }
 
-  // Collect string parts as event, last object as data
+  // Collect string parts as event, last object as data.
+  // Error objects get their .message appended to the event text so the
+  // forwarded log line contains the actual error detail instead of just
+  // serializing to "{}".
   for (const arg of args) {
     if (typeof arg === 'string') {
       eventParts.push(arg);
+    } else if (arg instanceof Error) {
+      if (arg.message) eventParts.push(arg.message);
+      data = arg;
     } else if (typeof arg === 'object' && arg !== null) {
       data = arg;
     }
