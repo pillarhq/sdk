@@ -194,6 +194,7 @@ export class MCPClient {
   private config: ResolvedConfig;
   private requestId = 0;
   private _externalUserId: string = '';
+  private _userApiToken: string = '';
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -205,6 +206,15 @@ export class MCPClient {
    */
   setExternalUserId(userId: string): void {
     this._externalUserId = userId;
+  }
+
+  /**
+   * Set a user API token for passthrough to OpenAPI tool sources.
+   * When set, this token is forwarded as-is to customer APIs,
+   * bypassing the per-user OAuth linking flow.
+   */
+  setUserApiToken(token: string): void {
+    this._userApiToken = token;
   }
 
   /**
@@ -280,6 +290,10 @@ export class MCPClient {
 
     if (this._externalUserId) {
       headers['x-external-user-id'] = this._externalUserId;
+    }
+
+    if (this._userApiToken) {
+      headers['x-user-api-token'] = this._userApiToken;
     }
 
     if (typeof navigator !== 'undefined') {

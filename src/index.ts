@@ -111,6 +111,9 @@ export {
   type TypedOnTask,
   type TypedPillarMethods,
   type TypedTaskHandler,
+  // Skills
+  defineSkill,
+  type SkillDefinition,
   // Backwards compatibility aliases (deprecated)
   getActionCount,
   getActionDefinition,

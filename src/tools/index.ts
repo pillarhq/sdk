@@ -79,6 +79,10 @@ export type {
   ActionSchema,
 } from './types';
 
+// Skills
+export { defineSkill } from './skill';
+export type { SkillDefinition } from './skill';
+
 // Registry
 export {
   setClientInfo,

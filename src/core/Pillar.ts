@@ -1365,6 +1365,8 @@ export class Pillar {
       name?: string;
       email?: string;
       metadata?: Record<string, unknown>;
+      /** API token to forward as Bearer to OpenAPI tool sources, bypassing OAuth linking. */
+      apiToken?: string;
     },
     options?: { preserveConversation?: boolean }
   ): Promise<void> {
@@ -1385,6 +1387,10 @@ export class Pillar {
       this._externalUserId !== null &&
       String(this._externalUserId) === String(userId)
     ) {
+      // Still update the API token if provided (token may rotate)
+      if (profile?.apiToken) {
+        this._api.mcp.setUserApiToken(profile.apiToken);
+      }
       debug.log("[Pillar] Already identified as this user, skipping");
       return;
     }
@@ -1407,6 +1413,11 @@ export class Pillar {
 
       // Notify the API client and MCP client of the identity change
       this._api.setExternalUserId(userId);
+
+      // Forward user API token for OpenAPI tool passthrough
+      if (profile?.apiToken) {
+        this._api.mcp.setUserApiToken(profile.apiToken);
+      }
 
       // Reset current conversation unless preserveConversation is true
       if (!options?.preserveConversation) {
@@ -1456,6 +1467,9 @@ export class Pillar {
     // Notify the API client and MCP client to stop sending the external user ID
     this._api?.clearExternalUserId();
 
+    // Clear any user API token (OpenAPI tool passthrough)
+    this._api?.mcp.setUserApiToken('');
+
     // Regenerate visitor ID so the next user gets a fresh visitor record
     // This prevents a new user from "taking over" the previous user's visitor
     this._api?.regenerateVisitorId();
@@ -1483,6 +1497,28 @@ export class Pillar {
    */
   get isIdentified(): boolean {
     return this._externalUserId !== null;
+  }
+
+  /**
+   * Pass the user's existing API token for direct forwarding to OpenAPI tool sources.
+   *
+   * When set, Pillar uses this token as a Bearer token for API calls made
+   * on behalf of the user, bypassing the per-user OAuth linking flow.
+   * Useful when the user is already authenticated in your app.
+   *
+   * @param token - The user's API/OAuth token, or empty string to clear
+   *
+   * @example
+   * ```typescript
+   * // After user logs in to your app
+   * pillar.setUserApiToken(accessToken);
+   *
+   * // Clear on logout
+   * pillar.setUserApiToken('');
+   * ```
+   */
+  setUserApiToken(token: string): void {
+    this._api?.mcp.setUserApiToken(token);
   }
 
   /**
@@ -2982,6 +3018,11 @@ export class Pillar {
         this._externalUserId = storedUserId;
         this._api.setExternalUserId(storedUserId);
         debug.log("[Pillar] Restored external user ID from localStorage");
+      }
+
+      // Apply user API token if provided at init (OpenAPI tool passthrough)
+      if (config.userApiToken) {
+        this._api.mcp.setUserApiToken(config.userApiToken);
       }
 
       // Configure debug logger to forward logs to server (for debugging client-server issues)

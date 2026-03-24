@@ -689,6 +689,9 @@ export interface ToolSchemaBase<TInput = Record<string, unknown>> {
    * @default false
    */
   webMCP?: boolean;
+
+  /** Channels this tool is available on. Client-side tools default to ["web", "api"]. */
+  channelCompatibility?: string[];
 }
 
 /**

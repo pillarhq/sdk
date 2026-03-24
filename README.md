@@ -122,6 +122,9 @@ For production, define tools in code and sync them via the `pillar-sync` CLI dur
 const pillar = await Pillar.init({
   agentSlug: "your-agent-slug",
 
+  // Forward an existing auth token to API tool sources (optional)
+  // userApiToken: accessToken,
+
   panel: {
     position: "right", // 'left' | 'right'
     mode: "push", // 'overlay' | 'push'
@@ -150,6 +153,9 @@ const pillar = await Pillar.init({
 | `pillar.close()`             | Close the co-pilot panel                 |
 | `pillar.toggle()`            | Toggle the co-pilot panel                |
 | `pillar.setContext(context)` | Update the user/product context          |
+| `pillar.identify(userId, profile?)` | Associate a user with the session. Profile: `name`, `email`, `apiToken` |
+| `pillar.setUserApiToken(token)` | Forward a Bearer token to API tool sources |
+| `pillar.logout(options?)`    | Clear user identity and API token        |
 | `pillar.on(event, callback)` | Subscribe to SDK events                  |
 
 > **Note:** `Pillar.init()` and `Pillar.getInstance()` are static methods on the class. All other methods (lowercase `pillar`) are instance methods - call them on the instance returned from `init()` or `getInstance()`.

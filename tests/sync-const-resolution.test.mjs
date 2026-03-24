@@ -285,4 +285,47 @@ describe('pillar-sync const identifier resolution', () => {
       );
     });
   });
+
+  // ========================================================================
+  // 9. defineSkill scanning
+  // ========================================================================
+  describe('defineSkill scanning', () => {
+    let result;
+    before(() => {
+      result = runSync('skill-defs');
+    });
+
+    it('finds 2 skills', () => {
+      const combined = result.stdout + '\n' + result.stderr;
+      const match = combined.match(/(\d+) skills/);
+      assert.ok(match, 'Should report skill count');
+      assert.equal(parseInt(match[1], 10), 2);
+    });
+
+    it('discovers each skill by name', () => {
+      const combined = result.stdout + '\n' + result.stderr;
+      assert.ok(combined.includes('skill: billing-setup'), 'Should find billing-setup skill');
+      assert.ok(combined.includes('skill: migration-guide'), 'Should find migration-guide skill');
+    });
+  });
+
+  // ========================================================================
+  // 10. Mixed tools and skills scanning
+  // ========================================================================
+  describe('mixed tools and skills scanning', () => {
+    let result;
+    before(() => {
+      result = runSync('mixed-tools-skills');
+    });
+
+    it('finds both tools and skills', () => {
+      const combined = result.stdout + '\n' + result.stderr;
+      const toolMatch = combined.match(/(\d+) tools and/);
+      const skillMatch = combined.match(/(\d+) skills/);
+      assert.ok(toolMatch, 'Should report tool count');
+      assert.ok(skillMatch, 'Should report skill count');
+      assert.equal(parseInt(toolMatch[1], 10), 1);
+      assert.equal(parseInt(skillMatch[1], 10), 1);
+    });
+  });
 });

@@ -475,6 +475,14 @@ export interface PillarConfig {
    */
   excludeRoutes?: string[];
   
+  /**
+   * User's API token for OpenAPI tool passthrough.
+   * When set, Pillar forwards this as a Bearer token to API tool sources,
+   * bypassing per-user OAuth linking. Useful when the user is already
+   * authenticated in your app.
+   */
+  userApiToken?: string;
+  
   /** Called when the SDK is initialized and ready. */
   onReady?: () => void;
   /** Called when the SDK encounters an error. */

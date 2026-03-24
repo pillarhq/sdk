@@ -305,6 +305,14 @@ interface ScannedTool {
   line: number;
 }
 
+interface ScannedSkill {
+  name: string;
+  description: string;
+  content: string;
+  sourceFile: string;
+  line: number;
+}
+
 // Backwards compat alias
 type ScannedAction = ScannedTool;
 
@@ -458,10 +466,10 @@ function evaluateNode(
 }
 
 /**
- * Scan a directory for defineTool / usePillarTool calls and extract metadata.
+ * Scan a directory for defineTool / usePillarTool / defineSkill calls and extract metadata.
  * Also supports legacy defineAction / usePillarAction for backwards compatibility.
  */
-async function scanTools(scanDir: string): Promise<ScannedTool[]> {
+async function scanTools(scanDir: string): Promise<{ tools: ScannedTool[]; skills: ScannedSkill[] }> {
   const absoluteDir = path.resolve(process.cwd(), scanDir);
 
   if (!fs.existsSync(absoluteDir)) {
@@ -492,10 +500,10 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
   const files = globFiles(absoluteDir, ['.ts', '.tsx', '.js', '.jsx', '.mjs']);
   console.log(`[pillar-sync] Scanning ${files.length} files in ${scanDir}`);
 
-  // 2. Quick filter: only parse files that mention tool/action patterns
-  // New patterns: defineTool, usePillarTool, injectPillarTool (Angular)
+  // 2. Quick filter: only parse files that mention tool/action/skill patterns
+  // New patterns: defineTool, usePillarTool, injectPillarTool (Angular), defineSkill
   // Legacy patterns: defineAction, usePillarAction, injectPillarAction (for backwards compat)
-  const PATTERNS = [
+  const TOOL_PATTERNS = [
     'defineTool',
     'usePillarTool',
     'injectPillarTool',
@@ -503,15 +511,18 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
     'usePillarAction',
     'injectPillarAction',
   ];
+  const SKILL_PATTERN = 'defineSkill';
+  const ALL_PATTERNS = [...TOOL_PATTERNS, SKILL_PATTERN];
   const candidateFiles = files.filter((file) => {
     const content = fs.readFileSync(file, 'utf-8');
-    return PATTERNS.some((p) => content.includes(p));
+    return ALL_PATTERNS.some((p) => content.includes(p));
   });
 
-  console.log(`[pillar-sync] Found ${candidateFiles.length} files with tool definitions`);
+  console.log(`[pillar-sync] Found ${candidateFiles.length} files with tool/skill definitions`);
 
-  // 3. Parse each candidate and extract tool metadata
+  // 3. Parse each candidate and extract tool + skill metadata
   const tools: ScannedTool[] = [];
+  const skills: ScannedSkill[] = [];
 
   for (const filePath of candidateFiles) {
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -549,18 +560,47 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
     function visit(node: import('typescript').Node): void {
       if (ts.isCallExpression(node)) {
         const callee = node.expression;
-        let isTargetCall = false;
+        let isToolCall = false;
+        let isSkillCall = false;
 
-        // Match: defineTool(...), usePillarTool(...), defineAction(...), usePillarAction(...)
         if (ts.isIdentifier(callee)) {
-          isTargetCall = PATTERNS.includes(callee.text);
-        }
-        // Match: pillar.defineTool(...), pillar.defineAction(...), etc.
-        else if (ts.isPropertyAccessExpression(callee)) {
-          isTargetCall = callee.name.text === 'defineTool' || callee.name.text === 'defineAction';
+          isToolCall = TOOL_PATTERNS.includes(callee.text);
+          isSkillCall = callee.text === SKILL_PATTERN;
+        } else if (ts.isPropertyAccessExpression(callee)) {
+          isToolCall = callee.name.text === 'defineTool' || callee.name.text === 'defineAction';
+          isSkillCall = callee.name.text === 'defineSkill';
         }
 
-        if (isTargetCall && node.arguments.length > 0) {
+        if (isSkillCall && node.arguments.length > 0) {
+          const arg = node.arguments[0];
+          const lineNumber = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+          const relativePath = path.relative(process.cwd(), filePath);
+
+          if (ts.isObjectLiteralExpression(arg)) {
+            const obj = evaluateNode(arg, ts, fileScope) as Record<string, unknown> | undefined;
+            if (obj && typeof obj.name === 'string' && typeof obj.description === 'string' && typeof obj.content === 'string') {
+              skills.push({
+                name: obj.name,
+                description: obj.description,
+                content: obj.content,
+                sourceFile: relativePath,
+                line: lineNumber,
+              });
+              console.log(`[pillar-sync]   skill: ${obj.name} (${relativePath}:${lineNumber})`);
+            } else if (obj) {
+              console.warn(
+                `[pillar-sync] ⚠ Skipping skill at ${relativePath}:${lineNumber} — missing name, description, or content`
+              );
+            }
+          } else {
+            console.warn(
+              `[pillar-sync] ⚠ Skipping skill at ${relativePath}:${lineNumber} — ` +
+              `argument is not an inline object literal`
+            );
+          }
+        }
+
+        if (isToolCall && node.arguments.length > 0) {
           const arg = node.arguments[0];
           const lineNumber = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
           const relativePath = path.relative(process.cwd(), filePath);
@@ -678,7 +718,32 @@ async function scanTools(scanDir: string): Promise<ScannedTool[]> {
     deduplicatedTools.push(instances[0]);
   }
 
-  return deduplicatedTools;
+  // Deduplicate skills by name
+  const skillsByName = new Map<string, ScannedSkill[]>();
+  for (const skill of skills) {
+    const existing = skillsByName.get(skill.name);
+    if (existing) {
+      existing.push(skill);
+    } else {
+      skillsByName.set(skill.name, [skill]);
+    }
+  }
+
+  const deduplicatedSkills: ScannedSkill[] = [];
+  for (const [name, instances] of skillsByName) {
+    if (instances.length > 1) {
+      const locations = instances
+        .map((s) => `${s.sourceFile}:${s.line}`)
+        .join(', ');
+      console.warn(
+        `[pillar-sync] ⚠ Duplicate skill "${name}" found in ${instances.length} locations: ${locations}`
+      );
+      console.warn(`[pillar-sync]   Using first definition from ${instances[0].sourceFile}:${instances[0].line}`);
+    }
+    deduplicatedSkills.push(instances[0]);
+  }
+
+  return { tools: deduplicatedTools, skills: deduplicatedSkills };
 }
 
 // Backwards compat alias
@@ -812,24 +877,28 @@ async function main(): Promise<void> {
   const version = process.env.PILLAR_VERSION || getPackageVersion();
   const gitSha = process.env.GIT_SHA || getGitSha();
 
-  // Scan for tools
-  console.log(`[pillar-sync] Scanning for tools in: ${scanDir}`);
+  // Scan for tools and skills
+  console.log(`[pillar-sync] Scanning for tools and skills in: ${scanDir}`);
   let scannedTools: ScannedTool[];
+  let scannedSkills: ScannedSkill[];
   try {
-    scannedTools = await scanTools(scanDir);
+    const scanResult = await scanTools(scanDir);
+    scannedTools = scanResult.tools;
+    scannedSkills = scanResult.skills;
   } catch (error) {
-    console.error(`[pillar-sync] Failed to scan tools:`, error);
+    console.error(`[pillar-sync] Failed to scan:`, error);
     process.exit(1);
   }
 
   const toolCount = scannedTools.length;
-  console.log(`[pillar-sync] Found ${toolCount} tools`);
+  const skillCount = scannedSkills.length;
+  console.log(`[pillar-sync] Found ${toolCount} tools and ${skillCount} skills`);
 
   // Look for AGENT_GUIDANCE.md inside the scan directory
   const agentGuidance = findAgentGuidance(scanDir);
 
-  if (toolCount === 0) {
-    console.warn('[pillar-sync] No tools found. Nothing to sync.');
+  if (toolCount === 0 && skillCount === 0) {
+    console.warn('[pillar-sync] No tools or skills found. Nothing to sync.');
     process.exit(0);
   }
 
@@ -858,6 +927,14 @@ async function main(): Promise<void> {
 
   if (manifest.agentGuidance) {
     requestBody.agent_guidance = manifest.agentGuidance;
+  }
+
+  if (scannedSkills.length > 0) {
+    requestBody.skills = scannedSkills.map((s) => ({
+      name: s.name,
+      description: s.description,
+      content: s.content,
+    }));
   }
 
   const forceSync = args.force === true;
