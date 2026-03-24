@@ -249,6 +249,9 @@ export interface PillarEvents {
   /** A tool was registered or unregistered. */
   "tools:change": { action: "add" | "remove"; name: string };
 
+  /** A needsConfirmation tool was invoked via MCP streaming and needs a card rendered. */
+  "confirmation:request": { toolName: string; data: Record<string, unknown> };
+
   /** @deprecated Use 'sidebar:click' instead. Will be removed in next major version. */
   "support:request": { tabId: string };
 }

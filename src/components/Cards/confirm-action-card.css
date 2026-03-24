@@ -1,91 +1,72 @@
-/* Confirm Action Card */
+/* Confirm Action Card — compact single-row layout */
 .pillar-confirm-card-wrapper {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .pillar-confirm-card {
   background: var(--pillar-bg-secondary, #f9fafb);
   border: 1px solid var(--pillar-border, #e5e7eb);
-  border-radius: 12px;
-  overflow: hidden;
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.pillar-confirm-card__content {
-  padding: 16px;
-}
-
-.pillar-confirm-card__header {
-  margin-bottom: 12px;
-}
-
-.pillar-confirm-card__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--pillar-text-primary, #111827);
-}
-
-.pillar-confirm-card__data {
-  background: var(--pillar-bg-primary, #ffffff);
-  border: 1px solid var(--pillar-border, #e5e7eb);
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.pillar-confirm-card__data-row {
+.pillar-confirm-card__row {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.pillar-confirm-card__label {
   font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.pillar-confirm-card__data-row:last-child {
-  margin-bottom: 0;
-}
-
-.pillar-confirm-card__data-key {
-  color: var(--pillar-text-secondary, #6b7280);
-  flex-shrink: 0;
-}
-
-.pillar-confirm-card__data-value {
+  font-weight: 500;
   color: var(--pillar-text-primary, #111827);
-  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Confirmation buttons */
+.pillar-confirm-card__label--muted {
+  color: var(--pillar-text-secondary, #9ca3af);
+}
+
+/* Buttons */
 .pillar-confirm-card__actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .pillar-confirm-card__btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid var(--pillar-border, #e5e7eb);
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+  line-height: 1;
 }
 
 .pillar-confirm-card__btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .pillar-confirm-card__btn--cancel {
-  background: var(--pillar-bg-primary, #ffffff);
+  background: transparent;
   color: var(--pillar-text-secondary, #6b7280);
+  border-color: var(--pillar-border, #e5e7eb);
 }
 
 .pillar-confirm-card__btn--cancel:hover:not(:disabled) {
-  background: var(--pillar-bg-secondary, #f9fafb);
-  border-color: var(--pillar-text-secondary, #6b7280);
+  background: var(--pillar-bg-primary, #ffffff);
+  border-color: var(--pillar-text-secondary, #9ca3af);
 }
 
 .pillar-confirm-card__btn--confirm {
@@ -95,32 +76,35 @@
 }
 
 .pillar-confirm-card__btn--confirm:hover:not(:disabled) {
-  opacity: 0.9;
+  opacity: 0.88;
 }
 
-/* Status indicators */
-.pillar-confirm-card__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 0;
+/* Done / error / cancelled states */
+.pillar-confirm-card--done {
+  border-color: var(--pillar-border, #e5e7eb);
+  background: var(--pillar-bg-secondary, #f9fafb);
 }
 
-.pillar-confirm-card__status--success {
+.pillar-confirm-card__row--done .pillar-confirm-card__done-icon {
   color: var(--pillar-success, #16a34a);
+  display: flex;
 }
 
-.pillar-confirm-card__status--error {
+.pillar-confirm-card__row--error .pillar-confirm-card__done-icon {
   color: var(--pillar-error, #dc2626);
+  display: flex;
 }
 
-/* Spinner animation */
+.pillar-confirm-card__row--cancelled {
+  justify-content: center;
+  padding: 8px 14px;
+}
+
+/* Spinner */
 @keyframes pillar-spin {
   to { transform: rotate(360deg); }
 }
 
 .pillar-confirm-card__spinner {
-  animation: pillar-spin 0.8s linear infinite;
+  animation: pillar-spin 0.7s linear infinite;
 }

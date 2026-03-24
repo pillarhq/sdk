@@ -1,26 +1,20 @@
 /**
  * ConfirmActionCard Component
- * 
- * Renders inline_ui type actions as inline cards in the chat.
- * If a custom card renderer is registered for the card_type, it's used.
- * Otherwise, a default preview card is rendered.
  *
- * When `needsConfirmation` is set, the default card includes Confirm / Cancel
- * buttons that gate execution of the tool's `execute` handler.
+ * Default confirmation UI for needsConfirmation tools.
+ * Shows the action name with Confirm / Cancel buttons.
  */
 
 import { getPillarInstance } from '../../core/instance';
 import type { CardCallbacks } from '../../core/events';
 import type { TaskButtonData } from '../Panel/TaskButton';
+import { isLoading, messages } from '../../store/chat';
 import { debug } from '../../utils/debug';
 
 const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>`;
 const X_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 const LOADER_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="pillar-confirm-card__spinner"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
-/**
- * Derive a human-readable title from a card_type or action name.
- */
 function deriveTitle(name: string): string {
   return name
     .split('_')
@@ -29,64 +23,35 @@ function deriveTitle(name: string): string {
 }
 
 /**
- * Render data as a simple key-value list.
- */
-function renderDataPreview(data: Record<string, unknown>): string {
-  const entries = Object.entries(data)
-    .filter(([key]) => key !== 'card_type') // Don't show card_type
-    .slice(0, 5); // Limit to 5 entries
-  
-  if (entries.length === 0) return '';
-  
-  return `
-    <div class="pillar-confirm-card__data">
-      ${entries.map(([key, value]) => {
-        const displayValue = Array.isArray(value) 
-          ? value.join(', ') 
-          : String(value);
-        return `
-          <div class="pillar-confirm-card__data-row">
-            <span class="pillar-confirm-card__data-key">${deriveTitle(key)}:</span>
-            <span class="pillar-confirm-card__data-value">${displayValue}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-/**
- * Create the default card for inline_ui actions.
- * When callbacks include onConfirm/onCancel, confirm/cancel buttons are shown.
+ * Create the default confirmation card.
+ * Shows the action name and Confirm / Cancel buttons.
+ * Buttons are disabled while the chat is streaming (isLoading)
+ * and hidden entirely when the card is no longer in the latest message.
+ *
+ * @param messageIndex - The message index this card belongs to. When the
+ *   message list grows past this index the buttons are removed.
+ * @returns The card element. Attach `_cleanup` to unsubscribe from signals.
  */
 export function createDefaultConfirmCard(
   action: TaskButtonData,
-  callbacks: CardCallbacks
+  callbacks: CardCallbacks,
+  messageIndex?: number
 ): HTMLDivElement {
   const container = document.createElement('div');
   container.className = 'pillar-confirm-card';
-  
+
   const cardType = (action.data?.card_type as string) || action.name;
   const title = deriveTitle(cardType);
   const data = action.data || {};
   const hasConfirmation = typeof callbacks.onConfirm === 'function';
 
   container.innerHTML = `
-    <div class="pillar-confirm-card__content">
-      <div class="pillar-confirm-card__header">
-        <span class="pillar-confirm-card__title">${title}</span>
-      </div>
-      ${renderDataPreview(data)}
+    <div class="pillar-confirm-card__row">
+      <span class="pillar-confirm-card__label">${title}</span>
       ${hasConfirmation ? `
         <div class="pillar-confirm-card__actions">
-          <button class="pillar-confirm-card__btn pillar-confirm-card__btn--cancel" type="button">
-            ${X_ICON}
-            <span>Cancel</span>
-          </button>
-          <button class="pillar-confirm-card__btn pillar-confirm-card__btn--confirm" type="button">
-            ${CHECK_ICON}
-            <span>Confirm</span>
-          </button>
+          <button class="pillar-confirm-card__btn pillar-confirm-card__btn--cancel" type="button">Cancel</button>
+          <button class="pillar-confirm-card__btn pillar-confirm-card__btn--confirm" type="button">${CHECK_ICON} Run</button>
         </div>
       ` : ''}
     </div>
@@ -95,37 +60,79 @@ export function createDefaultConfirmCard(
   if (hasConfirmation) {
     const confirmBtn = container.querySelector('.pillar-confirm-card__btn--confirm') as HTMLButtonElement | null;
     const cancelBtn = container.querySelector('.pillar-confirm-card__btn--cancel') as HTMLButtonElement | null;
+    const actionsEl = container.querySelector('.pillar-confirm-card__actions') as HTMLElement | null;
+    let settled = false;
+    const unsubs: Array<() => void> = [];
+
+    const syncDisabled = (loading: boolean) => {
+      if (settled) return;
+      if (confirmBtn) confirmBtn.disabled = loading;
+      if (cancelBtn) cancelBtn.disabled = loading;
+    };
+
+    // Disable buttons while the chat is still streaming
+    syncDisabled(isLoading.value);
+    unsubs.push(isLoading.subscribe(syncDisabled));
+
+    // Hide buttons when this card is no longer in the latest message
+    if (messageIndex !== undefined) {
+      const syncStale = () => {
+        if (settled) return;
+        const isLatest = messageIndex === messages.value.length - 1;
+        if (!isLatest && actionsEl) {
+          actionsEl.style.display = 'none';
+        } else if (isLatest && actionsEl) {
+          actionsEl.style.display = '';
+        }
+      };
+      syncStale();
+      unsubs.push(messages.subscribe(syncStale));
+    }
+
+    const cleanup = () => unsubs.forEach(u => u());
+    (container as unknown as { _cleanup?: () => void })._cleanup = cleanup;
 
     confirmBtn?.addEventListener('click', async () => {
       if (!confirmBtn || confirmBtn.disabled) return;
+      settled = true;
+      cleanup();
 
-      // Switch to loading state
       confirmBtn.disabled = true;
       cancelBtn?.setAttribute('disabled', '');
-      confirmBtn.innerHTML = `${LOADER_ICON}<span>Confirming…</span>`;
+      confirmBtn.innerHTML = `${LOADER_ICON} Running…`;
       container.classList.add('pillar-confirm-card--loading');
 
       try {
         callbacks.onConfirm!(data);
         container.classList.remove('pillar-confirm-card--loading');
-        container.classList.add('pillar-confirm-card--success');
-
-        const actionsEl = container.querySelector('.pillar-confirm-card__actions');
-        if (actionsEl) {
-          actionsEl.innerHTML = `<span class="pillar-confirm-card__status pillar-confirm-card__status--success">${CHECK_ICON} Confirmed</span>`;
-        }
+        container.classList.add('pillar-confirm-card--done');
+        container.innerHTML = `
+          <div class="pillar-confirm-card__row pillar-confirm-card__row--done">
+            <span class="pillar-confirm-card__done-icon">${CHECK_ICON}</span>
+            <span class="pillar-confirm-card__label">${title}</span>
+          </div>
+        `;
       } catch {
         container.classList.remove('pillar-confirm-card--loading');
         container.classList.add('pillar-confirm-card--error');
-
-        const actionsEl = container.querySelector('.pillar-confirm-card__actions');
-        if (actionsEl) {
-          actionsEl.innerHTML = `<span class="pillar-confirm-card__status pillar-confirm-card__status--error">${X_ICON} Failed</span>`;
-        }
+        container.innerHTML = `
+          <div class="pillar-confirm-card__row pillar-confirm-card__row--error">
+            <span class="pillar-confirm-card__done-icon">${X_ICON}</span>
+            <span class="pillar-confirm-card__label">${title} failed</span>
+          </div>
+        `;
       }
     });
 
     cancelBtn?.addEventListener('click', () => {
+      settled = true;
+      cleanup();
+      container.classList.add('pillar-confirm-card--done');
+      container.innerHTML = `
+        <div class="pillar-confirm-card__row pillar-confirm-card__row--cancelled">
+          <span class="pillar-confirm-card__label pillar-confirm-card__label--muted">Cancelled</span>
+        </div>
+      `;
       callbacks.onCancel?.();
     });
   }
@@ -142,9 +149,6 @@ export interface ConfirmActionCardOptions {
 /**
  * Create a card for an inline_ui type action.
  * Uses custom renderer if registered, otherwise uses default.
- *
- * When `options.needsConfirmation` is true, the card includes Confirm/Cancel
- * buttons that call the provided `onConfirm`/`onCancel` callbacks.
  */
 export function createConfirmActionCard(
   action: TaskButtonData,
@@ -152,11 +156,11 @@ export function createConfirmActionCard(
 ): HTMLDivElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'pillar-confirm-card-wrapper';
-  
+
   const cardType = (action.data?.card_type as string) || action.name;
   const pillar = getPillarInstance();
   const customRenderer = pillar?.getCardRenderer(cardType);
-  
+
   const callbacks: CardCallbacks = {
     onConfirm: options?.needsConfirmation ? options.onConfirm : undefined,
     onCancel: options?.needsConfirmation ? options.onCancel : undefined,
@@ -170,7 +174,7 @@ export function createConfirmActionCard(
       debug.log(`[Pillar] Card state changed to ${state}${message ? `: ${message}` : ''}`);
     },
   };
-  
+
   if (customRenderer) {
     try {
       const cleanup = customRenderer(wrapper, action.data || {}, callbacks);
@@ -182,8 +186,6 @@ export function createConfirmActionCard(
     const defaultCard = createDefaultConfirmCard(action, callbacks);
     wrapper.appendChild(defaultCard);
   }
-  
+
   return wrapper;
 }
-
-// Styles have been moved to confirm-action-card.css

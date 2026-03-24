@@ -158,6 +158,9 @@ export {
   actionToTaskButton,
 } from "./api/mcp-client";
 
+// Confirmation card (used by framework SDKs for needsConfirmation default UI)
+export { createDefaultConfirmCard } from "./components/Cards/ConfirmActionCard";
+
 // Utilities
 export { normalizeToolResult } from "./utils/normalize-tool-result";
 

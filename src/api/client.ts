@@ -455,6 +455,7 @@ export class APIClient {
     onActions?: (actions: TaskButtonData[]) => void;
     userContext?: UserContextItem[];
     images?: ChatImage[];
+    isHidden?: boolean;
     onProgress?: (progress: ProgressEvent) => void;
     onConversationStarted?: (
       conversationId: string,
@@ -533,6 +534,7 @@ export class APIClient {
           articleSlug: opts.articleSlug,
           userContext: opts.userContext,
           images: opts.images,
+          isHidden: opts.isHidden,
           history: opts.history,
           // Pass registered actions from previous turns for dynamic action tools
           registeredActions: getRegisteredActions(),

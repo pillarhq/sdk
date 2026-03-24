@@ -213,6 +213,10 @@ export class Pillar {
   // Card renderers for inline_ui type actions
   private _cardRenderers: Map<string, CardRenderer> = new Map();
 
+  // Tools currently awaiting user confirmation. While any tool is pending,
+  // handleActionRequest blocks subsequent tool calls so the LLM can't run ahead.
+  private _pendingConfirmationTools = new Set<string>();
+
   // Debug panel container
   private _debugPanelContainer: HTMLElement | null = null;
 
@@ -1879,6 +1883,29 @@ export class Pillar {
           card_type: toolName,
         });
       }
+      // needsConfirmation tools have execute stripped by the framework SDK.
+      // Return immediately with a "pending" status so the backend doesn't
+      // time out waiting. The card renderer will send the actual result as
+      // a new chat message (via sendToolResultAsMessage) after the user
+      // confirms or cancels. Meanwhile, hasPendingConfirmation() gates
+      // subsequent tool calls so the LLM can't run ahead.
+      if (
+        "needsConfirmation" in definedTool &&
+        definedTool.needsConfirmation &&
+        this._cardRenderers.has(toolName)
+      ) {
+        return (data: Record<string, unknown>) => {
+          this._pendingConfirmationTools.add(toolName);
+          this._events.emit("confirmation:request", {
+            toolName,
+            data,
+          });
+          return {
+            awaiting_confirmation: true,
+            message: `Showing confirmation dialog for "${toolName}". The user must confirm before this action executes. Do NOT proceed with any further tool calls — wait for the user to respond.`,
+          };
+        };
+      }
     }
 
     // 2. Check code-first tool registry (synced via CLI)
@@ -2579,6 +2606,31 @@ export class Pillar {
   }
 
   /**
+   * Check if any tool is currently awaiting user confirmation.
+   * Used by handleActionRequest to gate subsequent tool calls.
+   */
+  hasPendingConfirmation(): boolean {
+    return this._pendingConfirmationTools.size > 0;
+  }
+
+  /**
+   * Clear a pending tool confirmation after the user confirms or cancels.
+   * Called by framework SDKs (React/Vue) from the confirmation card's
+   * confirm/cancel handlers.
+   */
+  clearPendingConfirmation(toolName: string): void {
+    this._pendingConfirmationTools.delete(toolName);
+  }
+
+  /**
+   * Clear all pending confirmations. Called when a new user message arrives
+   * so stale confirmations don't block subsequent tool calls.
+   */
+  clearAllPendingConfirmations(): void {
+    this._pendingConfirmationTools.clear();
+  }
+
+  /**
    * Send a tool result as a new chat message, triggering a fresh LLM turn.
    *
    * Unlike `sendToolResult` (which responds to a pending tool call via `action/result`),
@@ -2596,11 +2648,25 @@ export class Pillar {
     result: Record<string, unknown>
   ): void {
     if (chatIsLoading.value) {
-      debug.warn(
-        `[Pillar] sendResult for "${toolName}" ignored — a message is still being processed. Wait for context.isReady before calling sendResult.`
+      debug.log(
+        `[Pillar] Chat is loading — queuing sendResult for "${toolName}" until ready.`
       );
+      const unsub = chatIsLoading.subscribe(() => {
+        if (!chatIsLoading.value) {
+          unsub();
+          this._sendToolResultNow(toolName, result);
+        }
+      });
       return;
     }
+
+    this._sendToolResultNow(toolName, result);
+  }
+
+  private _sendToolResultNow(
+    toolName: string,
+    result: Record<string, unknown>
+  ): void {
 
     debug.log(
       `[Pillar] Sending tool result as message for "${toolName}":`,

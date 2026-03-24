@@ -758,6 +758,7 @@ export class MCPClient {
       articleSlug?: string;
       userContext?: UserContextItem[];
       images?: ChatImage[];
+      isHidden?: boolean;
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
       /** Registered tools from previous turns (for dynamic tool invocations) */
       registeredTools?: Record<string, unknown>[];
@@ -788,6 +789,10 @@ export class MCPClient {
 
     if (options?.images && options.images.length > 0) {
       args.images = options.images;
+    }
+
+    if (options?.isHidden) {
+      args.is_hidden = true;
     }
 
     if (options?.history && options.history.length > 0) {

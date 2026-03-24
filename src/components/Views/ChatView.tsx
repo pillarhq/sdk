@@ -312,6 +312,22 @@ export function ChatView() {
             return;
           }
 
+          // If a needsConfirmation tool is awaiting user response, block all
+          // subsequent tool calls so the LLM can't run ahead.
+          if (pillar.hasPendingConfirmation()) {
+            await api.mcp.sendActionResult(
+              request.action_name,
+              {
+                success: false,
+                error:
+                  "A tool is awaiting user confirmation. Do NOT call any more tools. " +
+                  "Wait for the user to confirm or cancel before proceeding.",
+              },
+              request.tool_call_id
+            );
+            return;
+          }
+
           // Get handler for the action
           const handler = pillar.getHandler(request.action_name);
 
@@ -428,6 +444,23 @@ export function ChatView() {
     return unsubscribe;
   }, []);
 
+  // Listen for needsConfirmation tool invocations from the MCP streaming path.
+  // When getHandler returns a Promise-based handler for a confirmation tool,
+  // it emits this event so the card can be rendered in the chat.
+  useEffect(() => {
+    const pillar = getPillarInstance();
+    if (!pillar) return;
+
+    const unsubscribe = pillar.on(
+      "confirmation:request",
+      ({ toolName, data }: { toolName: string; data: Record<string, unknown> }) => {
+        addCardSegment(toolName, data);
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
   /**
    * Handle actions received from the AI.
    * Auto-executes actions with autoRun=true, returns buttons for the rest.
@@ -514,6 +547,7 @@ export function ChatView() {
       images?: ChatImage[];
       history?: import("../../api/client").ChatMessage[];
       resume?: boolean;
+      isHidden?: boolean;
     }) => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -534,6 +568,7 @@ export function ChatView() {
         userContext: opts.userContext,
         images: opts.images,
         resume: opts.resume,
+        isHidden: opts.isHidden,
         signal: controller.signal,
         onChunk: (chunk) => {
           if (isStale()) return;
@@ -576,6 +611,10 @@ export function ChatView() {
     ) => {
       clearInterruptedSession();
       clearChatError();
+
+      // A new user message supersedes any pending confirmation dialogs
+      const pillarInst = getPillarInstance();
+      pillarInst?.clearAllPendingConfirmations();
 
       // OTel: span wrapping the full send-message lifecycle
       const _tracer = getTracer();
@@ -683,6 +722,10 @@ export function ChatView() {
     async (message: string) => {
       clearChatError();
 
+      // A new message (including tool results) supersedes any pending confirmations
+      const pillarInst = getPillarInstance();
+      pillarInst?.clearAllPendingConfirmations();
+
       // Add hidden user message (included in history for the LLM but not rendered)
       addHiddenUserMessage(message);
 
@@ -701,6 +744,7 @@ export function ChatView() {
           message,
           conversationId: conversationId.value!,
           history,
+          isHidden: true,
         });
         generation = gen;
 
