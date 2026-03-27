@@ -8,6 +8,7 @@
 import { h, VNode, Fragment, ComponentChildren } from 'preact';
 import { marked, Token, Tokens } from 'marked';
 import { debug } from './debug';
+import { escapeHtml } from './dom';
 import {
   CollapsibleSection,
   CodeBlock,
@@ -367,8 +368,12 @@ function renderHtml(token: Tokens.HTML, key: number): VNode {
     }
   }
 
-  // Fallback: render as raw HTML (use sparingly)
-  return <span key={key} dangerouslySetInnerHTML={{ __html: token.raw }} />;
+  // Fallback: escape HTML to prevent XSS from LLM-generated content.
+  // Only allow simple self-closing <br> / <br/> tags through.
+  if (/^<br\s*\/?>$/i.test(token.raw.trim())) {
+    return <br key={key} />;
+  }
+  return <span key={key}>{escapeHtml(token.raw)}</span>;
 }
 
 // ============================================================================

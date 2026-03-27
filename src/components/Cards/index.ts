@@ -8,3 +8,5 @@ export {
   createConfirmActionCard,
   createDefaultConfirmCard,
 } from './ConfirmActionCard';
+
+export { renderChart } from './ChartCard';

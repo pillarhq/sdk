@@ -163,6 +163,11 @@ function CardSegmentRenderer({
     const renderer = pillar?.getCardRenderer(cardType);
 
     if (renderer && containerRef.current) {
+      // Guard against null/malformed data from history or malicious LLM responses
+      const safeData = (data && typeof data === 'object' && !Array.isArray(data))
+        ? data
+        : {};
+
       const isLatest = computeIsLatestCard(messages.value, messageIndex, segmentIndex);
       const context = {
         isLatest,
@@ -174,7 +179,7 @@ function CardSegmentRenderer({
 
       const cleanup = renderer(
         containerRef.current,
-        data,
+        safeData,
         {
           sendResult: (result: Record<string, unknown>) => {
             pillar?.sendToolResultAsMessage(cardType, result);
@@ -328,10 +333,31 @@ export function ChatView() {
             return;
           }
 
+          // Built-in render_chart: render inline card, send lightweight
+          // success back to the agent. Handled separately because the
+          // chart params contain a `data` key that normalizeToolResult
+          // would unwrap, stripping card_type.
+          if (request.action_name === "render_chart") {
+            addCardSegment("render_chart", request.parameters);
+            await api.mcp.sendActionResult(
+              request.action_name,
+              { success: true, rendered: true },
+              request.tool_call_id
+            );
+            debug.log(
+              `[Pillar] render_chart rendered in ${Math.round(performance.now() - requestStartTime)}ms`
+            );
+            return;
+          }
+
           // Get handler for the action
           const handler = pillar.getHandler(request.action_name);
 
           if (!handler) {
+            console.warn(
+              `[Pillar] Tool "${request.action_name}" was called by the agent but has no frontend handler. ` +
+                `Register one with pillar.defineTool() or usePillarTool().`
+            );
             throw new Error(
               `No handler registered for action "${request.action_name}". ` +
                 `Register one with pillar.defineTool() or usePillarTool().`

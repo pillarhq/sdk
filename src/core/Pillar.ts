@@ -7,6 +7,7 @@ import { h, render } from "preact";
 import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
+import { renderChart } from "../components/Cards/ChartCard";
 import { DebugPanel } from "../components/DebugPanel";
 import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
@@ -59,6 +60,7 @@ import {
   hasTool,
   setClientInfo,
   validateToolName,
+  type ToolExecuteResult,
   type ToolSchema,
   type ToolType,
 } from "../tools";
@@ -2319,17 +2321,26 @@ export class Pillar {
    * @example
    * // Vanilla JS
    * pillar.registerCard('invite_members', (container, data, callbacks) => {
-   *   container.innerHTML = `
-   *     <div class="invite-card">
-   *       <h3>Invite Team Members</h3>
-   *       ${data.emails.map(e => `<div>${e}</div>`).join('')}
-   *     </div>
-   *   `;
-   *   return () => container.innerHTML = ''; // cleanup
+   *   const card = document.createElement('div');
+   *   card.className = 'invite-card';
+   *   const heading = document.createElement('h3');
+   *   heading.textContent = 'Invite Team Members';
+   *   card.appendChild(heading);
+   *   const emails = Array.isArray(data.emails) ? data.emails : [];
+   *   emails.forEach(e => {
+   *     const div = document.createElement('div');
+   *     div.textContent = String(e); // Use textContent, never innerHTML with LLM data
+   *     card.appendChild(div);
+   *   });
+   *   container.appendChild(card);
+   *   return () => { container.innerHTML = ''; }; // cleanup
    * });
    */
   registerCard(cardType: string, renderer: CardRenderer): () => void {
     this._cardRenderers.set(cardType, renderer);
+    import("../store/chat").then(({ rebuildCardSegments }) => {
+      rebuildCardSegments();
+    }).catch(() => {});
     return () => this._cardRenderers.delete(cardType);
   }
 
@@ -2681,7 +2692,7 @@ export class Pillar {
    */
   sendToolResultAsMessage(
     toolName: string,
-    result: Record<string, unknown>
+    result: ToolExecuteResult | Record<string, unknown>
   ): void {
     if (chatIsLoading.value) {
       debug.log(
@@ -2701,7 +2712,7 @@ export class Pillar {
 
   private _sendToolResultNow(
     toolName: string,
-    result: Record<string, unknown>
+    result: ToolExecuteResult | Record<string, unknown>
   ): void {
 
     debug.log(
@@ -3095,6 +3106,14 @@ export class Pillar {
         );
         this._textSelectionManager.init();
       }
+
+      // Register built-in inline_ui tools
+      this.registerCard('render_chart', renderChart);
+      this._definedTools.set('render_chart', {
+        name: 'render_chart',
+        description: 'Render an interactive chart or graph inline',
+        type: 'inline_ui',
+      } as ToolSchema);
 
       this._state = "ready";
       this._events.emit("ready");

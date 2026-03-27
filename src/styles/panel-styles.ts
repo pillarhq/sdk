@@ -5,6 +5,7 @@
  */
 
 import confirmCard from "../components/Cards/confirm-action-card.css";
+import chartCard from "../components/Cards/chart-card.css";
 import chatInput from "../components/Panel/chat-input.css";
 import contextTag from "../components/Panel/context-tag.css";
 import header from "../components/Panel/header.css";
@@ -41,5 +42,6 @@ export const ALL_PANEL_STYLES = [
   loading,
   progress,
   confirmCard,
+  chartCard,
   markdown,
 ].join("\n");

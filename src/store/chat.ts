@@ -9,6 +9,7 @@ import type { ChatImage } from "../api/mcp-client";
 import type { TaskButtonData } from "../components/Panel/TaskButton";
 import type { UserContextItem } from "../types/user-context";
 import { generateContextId } from "../types/user-context";
+import { getPillarInstance } from "../core/instance";
 
 // Re-export ChatImage for convenience
 export type { ChatImage } from "../api/mcp-client";
@@ -44,6 +45,7 @@ export interface StoredChatMessage extends ChatMessage {
   images?: ChatImage[]; // Images attached to user messages
   progressEvents?: ProgressEvent[]; // Thinking steps stored per-message for history
   segments?: MessageSegment[]; // Ordered timeline of text blocks and progress blocks
+  displayTrace?: DisplayStep[]; // Raw display trace for re-deriving segments when card renderers register late
   hidden?: boolean; // Hidden from the UI (e.g., tool result messages sent via sendResult)
 }
 
@@ -1115,6 +1117,17 @@ function buildSegmentsFromTrace(
       } else {
         segments.push({ type: 'text', content: text });
       }
+    } else if (
+      step.step_type === 'tool_result' &&
+      step.tool &&
+      step.arguments &&
+      getPillarInstance()?.hasCardRenderer(step.tool)
+    ) {
+      segments.push({
+        type: 'card',
+        cardType: step.tool,
+        data: step.arguments as Record<string, unknown>,
+      });
     } else {
       // Convert to ProgressEvent and add to progress segment
       const evt = mapStepToProgressEvent(step);
@@ -1149,6 +1162,7 @@ export const loadConversation = (
     content: msg.content,
     id: msg.id,
     images: msg.role === 'user' && msg.images?.length ? msg.images : undefined,
+    displayTrace: msg.role === 'assistant' ? msg.display_trace : undefined,
     segments: msg.role === 'assistant'
       ? buildSegmentsFromTrace(msg.display_trace)
       : undefined,
@@ -1162,6 +1176,36 @@ export const loadConversation = (
 
   // Increment history invalidation counter
   historyInvalidationCounter.value += 1;
+};
+
+/**
+ * Re-derive card segments for loaded history messages.
+ * Called when a new CardRenderer is registered after conversation load,
+ * so that inline_ui tools whose renderer wasn't available at load time
+ * can now render from the stored display_trace.
+ */
+export const rebuildCardSegments = () => {
+  const msgs = messages.value;
+  if (msgs.length === 0) return;
+
+  let changed = false;
+  const updated = msgs.map((msg) => {
+    if (msg.role !== 'assistant' || !msg.displayTrace) return msg;
+
+    const rebuilt = buildSegmentsFromTrace(msg.displayTrace);
+    const oldCardCount = (msg.segments || []).filter(s => s.type === 'card').length;
+    const newCardCount = (rebuilt || []).filter(s => s.type === 'card').length;
+
+    if (newCardCount > oldCardCount) {
+      changed = true;
+      return { ...msg, segments: rebuilt };
+    }
+    return msg;
+  });
+
+  if (changed) {
+    messages.value = updated;
+  }
 };
 
 /**
