@@ -333,9 +333,9 @@ export function ChatView() {
             return;
           }
 
-          // Built-in render_chart: render inline card, send lightweight
-          // success back to the agent. Handled separately because the
-          // chart params contain a `data` key that normalizeToolResult
+          // Built-in render_chart / render_table / render_metric: render inline
+          // card, send lightweight success back to the agent. Handled separately
+          // because the params contain a `data` key that normalizeToolResult
           // would unwrap, stripping card_type.
           if (request.action_name === "render_chart") {
             addCardSegment("render_chart", request.parameters);
@@ -346,6 +346,32 @@ export function ChatView() {
             );
             debug.log(
               `[Pillar] render_chart rendered in ${Math.round(performance.now() - requestStartTime)}ms`
+            );
+            return;
+          }
+
+          if (request.action_name === "render_table") {
+            addCardSegment("render_table", request.parameters);
+            await api.mcp.sendActionResult(
+              request.action_name,
+              { success: true, rendered: true },
+              request.tool_call_id
+            );
+            debug.log(
+              `[Pillar] render_table rendered in ${Math.round(performance.now() - requestStartTime)}ms`
+            );
+            return;
+          }
+
+          if (request.action_name === "render_metric") {
+            addCardSegment("render_metric", request.parameters);
+            await api.mcp.sendActionResult(
+              request.action_name,
+              { success: true, rendered: true },
+              request.tool_call_id
+            );
+            debug.log(
+              `[Pillar] render_metric rendered in ${Math.round(performance.now() - requestStartTime)}ms`
             );
             return;
           }

@@ -6,6 +6,8 @@
 
 import confirmCard from "../components/Cards/confirm-action-card.css";
 import chartCard from "../components/Cards/chart-card.css";
+import metricCard from "../components/Cards/metric-card.css";
+import tableCard from "../components/Cards/table-card.css";
 import chatInput from "../components/Panel/chat-input.css";
 import contextTag from "../components/Panel/context-tag.css";
 import header from "../components/Panel/header.css";
@@ -20,6 +22,7 @@ import resumePrompt from "../components/Views/resume-prompt.css";
 import loading from "../components/shared/loading.css";
 import questionChip from "../components/shared/question-chip.css";
 import markdown from "../utils/markdown.css";
+import syntaxHighlight from "../utils/syntax-highlight.css";
 import base from "./base.css";
 import scrollbar from "./scrollbar.css";
 import variables from "./variables.css";
@@ -43,5 +46,8 @@ export const ALL_PANEL_STYLES = [
   progress,
   confirmCard,
   chartCard,
+  metricCard,
+  tableCard,
   markdown,
+  syntaxHighlight,
 ].join("\n");

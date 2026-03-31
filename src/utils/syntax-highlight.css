@@ -1,0 +1,93 @@
+/* Syntax Highlighting Theme — scoped to pillar code blocks.
+ * Palette inspired by One Dark / VS Code Dark+ for the existing
+ * dark code block background (--pillar-bg-code: #1e1e1e).
+ */
+
+._pillar-code-content .hljs-keyword,
+._pillar-code-content .hljs-selector-tag,
+._pillar-code-content .hljs-deletion {
+  color: #c678dd;
+}
+
+._pillar-code-content .hljs-string,
+._pillar-code-content .hljs-regexp,
+._pillar-code-content .hljs-addition {
+  color: #98c379;
+}
+
+._pillar-code-content .hljs-number,
+._pillar-code-content .hljs-literal,
+._pillar-code-content .hljs-boolean {
+  color: #d19a66;
+}
+
+._pillar-code-content .hljs-built_in,
+._pillar-code-content .hljs-type {
+  color: #56b6c2;
+}
+
+._pillar-code-content .hljs-title,
+._pillar-code-content .hljs-title\.function_,
+._pillar-code-content .hljs-title\.class_ {
+  color: #61afef;
+}
+
+._pillar-code-content .hljs-attr,
+._pillar-code-content .hljs-attribute {
+  color: #e5c07b;
+}
+
+._pillar-code-content .hljs-variable,
+._pillar-code-content .hljs-template-variable {
+  color: #e06c75;
+}
+
+._pillar-code-content .hljs-comment,
+._pillar-code-content .hljs-quote {
+  color: #7f848e;
+  font-style: italic;
+}
+
+._pillar-code-content .hljs-meta,
+._pillar-code-content .hljs-meta .hljs-keyword {
+  color: #e06c75;
+}
+
+._pillar-code-content .hljs-punctuation {
+  color: #abb2bf;
+}
+
+._pillar-code-content .hljs-params {
+  color: var(--pillar-text-code, #e0e0e0);
+}
+
+._pillar-code-content .hljs-property {
+  color: #e06c75;
+}
+
+._pillar-code-content .hljs-operator {
+  color: #56b6c2;
+}
+
+._pillar-code-content .hljs-selector-class,
+._pillar-code-content .hljs-selector-id {
+  color: #e5c07b;
+}
+
+._pillar-code-content .hljs-symbol,
+._pillar-code-content .hljs-bullet {
+  color: #d19a66;
+}
+
+._pillar-code-content .hljs-link {
+  color: #61afef;
+  text-decoration: underline;
+}
+
+._pillar-code-content .hljs-emphasis {
+  font-style: italic;
+}
+
+._pillar-code-content .hljs-strong {
+  font-weight: 700;
+}

@@ -10,3 +10,7 @@ export {
 } from './ConfirmActionCard';
 
 export { renderChart } from './ChartCard';
+
+export { renderMetric } from './MetricCard';
+
+export { renderTable } from './TableCard';

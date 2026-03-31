@@ -8,6 +8,8 @@ import { APIClient, type SuggestedQuestion } from "../api/client";
 import { EdgeTrigger } from "../components/Button/EdgeTrigger";
 import { MobileTrigger } from "../components/Button/MobileTrigger";
 import { renderChart } from "../components/Cards/ChartCard";
+import { renderMetric } from "../components/Cards/MetricCard";
+import { renderTable } from "../components/Cards/TableCard";
 import { DebugPanel } from "../components/DebugPanel";
 import { Panel } from "../components/Panel/Panel";
 import { TextSelectionManager } from "../components/TextSelection/TextSelectionManager";
@@ -3112,6 +3114,20 @@ export class Pillar {
       this._definedTools.set('render_chart', {
         name: 'render_chart',
         description: 'Render an interactive chart or graph inline',
+        type: 'inline_ui',
+      } as ToolSchema);
+
+      this.registerCard('render_table', renderTable);
+      this._definedTools.set('render_table', {
+        name: 'render_table',
+        description: 'Render a sortable data table inline',
+        type: 'inline_ui',
+      } as ToolSchema);
+
+      this.registerCard('render_metric', renderMetric);
+      this._definedTools.set('render_metric', {
+        name: 'render_metric',
+        description: 'Render key metric / KPI cards inline',
         type: 'inline_ui',
       } as ToolSchema);
 

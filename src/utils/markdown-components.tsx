@@ -6,8 +6,9 @@
  */
 
 import { h, ComponentChildren, VNode } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef, useEffect, useMemo } from 'preact/hooks';
 import { debug } from './debug';
+import { highlightCode } from './syntax-highlight';
 
 // ============================================================================
 // CollapsibleSection - Replaces ProgressRow + ReasoningDisclosure
@@ -152,6 +153,7 @@ export interface CodeBlockProps {
 
 export function CodeBlock({ language, children }: CodeBlockProps): VNode {
   const [copied, setCopied] = useState(false);
+  const highlightedHtml = useMemo(() => highlightCode(children, language), [children, language]);
 
   const handleCopy = async () => {
     try {
@@ -165,22 +167,25 @@ export function CodeBlock({ language, children }: CodeBlockProps): VNode {
 
   return (
     <div class="_pillar-code-block pillar-code-block">
-      {language && (
-        <div class="_pillar-code-header pillar-code-header">
+      <div class="_pillar-code-toolbar pillar-code-toolbar">
+        {language && (
           <span class="_pillar-code-language pillar-code-language">
             {language}
           </span>
-          <button
-            type="button"
-            class="_pillar-code-copy pillar-code-copy"
-            onClick={handleCopy}
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          class="_pillar-code-copy pillar-code-copy"
+          onClick={handleCopy}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
       <pre class={`_pillar-code-pre pillar-code-pre language-${language || 'text'}`}>
-        <code class="_pillar-code-content pillar-code-content">{children}</code>
+        <code
+          class="_pillar-code-content pillar-code-content"
+          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+        />
       </pre>
     </div>
   );

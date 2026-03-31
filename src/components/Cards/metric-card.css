@@ -1,0 +1,79 @@
+/* Metric Card — inline KPI / key-metric display */
+
+.pillar-metric-card {
+  margin-top: 4px;
+}
+
+.pillar-metric-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pillar-text, #0f172a);
+  margin: 0 0 10px 0;
+  letter-spacing: -0.01em;
+}
+
+.pillar-metric-card__grid {
+  display: grid;
+  gap: 1px;
+  background: var(--pillar-border, rgba(148, 163, 184, 0.18));
+  border: 1px solid var(--pillar-border, rgba(148, 163, 184, 0.18));
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pillar-metric-card__grid[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+.pillar-metric-card__grid[data-count="2"],
+.pillar-metric-card__grid[data-count="3"],
+.pillar-metric-card__grid[data-count="4"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.pillar-metric-card__item {
+  padding: 14px 16px;
+  background: var(--pillar-bg, #ffffff);
+}
+
+.pillar-metric-card__value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--pillar-text, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
+
+.pillar-metric-card__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pillar-text-secondary, #94a3b8);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.pillar-metric-card__trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pillar-metric-card__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.pillar-metric-card__change-label {
+  font-size: 11px;
+  color: var(--pillar-text-secondary, #94a3b8);
+  white-space: nowrap;
+}
